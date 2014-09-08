@@ -5,12 +5,12 @@ Implicit solvation model in VASP
 
 http://vaspsol.mse.cornell.edu/
 
-**For discussions and feedback**:
+**For discussions and feedback:**
 
  https://groups.google.com/forum/#!forum/vaspsol 
 
 
-For the model details please see: 
+**For the model details please see:** 
 
 http://scitation.aip.org/content/aip/journal/jcp/140/8/10.1063/1.4865107
 
