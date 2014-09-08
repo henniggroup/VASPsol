@@ -34,9 +34,10 @@ MODULE POT_K
  INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
  REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,kappab_k,CORE_C,tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE                 :: esm_alpha, esm_z0, esm_z1, esm_z2
  TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
- LOGICAL, SAVE                          :: LSOL = .FALSE.
+ LOGICAL, SAVE                          :: LSOL = .FALSE., LESM = .FALSE.
  LOGICAL, SAVE                          :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE                          :: LJDFTX = .FALSE.
 
@@ -144,7 +145,10 @@ MODULE POT_K
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Calling vcorr_lpcm minimization'
 #endif
-     CALL Vcorrection_lpcm(SP_IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vdiel,Adiel,sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,sigma_rc_k,tau,EDIFFSOL)
+     CALL Vcorrection_lpcm(SP_IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,&
+                           & Vcorr,Vdiel,Adiel,sigma_nc_k,sigma_k,nc_k,eb_k,&
+                           & kappab_k,CORE_C,sigma_rc_k,tau,EDIFFSOL, &
+                           & LESM, esm_alpha, esm_z0, esm_z1, esm_z2)
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Return from vcorr_lpcm minimization'
 #endif
@@ -615,6 +619,132 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
       ENDIF
 
 !---------------------------------------------------------------
+!LESM
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LESM','=','#',';','L',IDUM,RDUM,CDUM,LESM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''LESM'', ESM on/off'
+
+
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'LESM = ', LESM          
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : LESM (ESM on/off) = ', LESM 
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''LESM''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!ESM_ALPHA
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'ESM_ALPHA','=','#',';','F',IDUM,ESM_ALPHA,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''ESM_ALPHA'', alpha in the exponent'
+
+
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'ESM_ALPHA = ', ESM_ALPHA          
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : ESM_ALPHA (alpha in the exponent) = ', ESM_ALPHA 
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''ESM_ALPHA''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!ESM_Z0
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'ESM_Z0','=','#',';','F',IDUM,ESM_Z0,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''ESM_Z0'', Z0'
+
+
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'ESM_Z0 = ', ESM_Z0         
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : ESM_Z0 (Z0) = ', ESM_Z0
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''ESM_Z0''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!ESM_Z1
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'ESM_Z1','=','#',';','F',IDUM,ESM_Z1,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''ESM_Z1'', Z1'
+
+
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'ESM_Z1 = ', ESM_Z1         
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : ESM_Z1 (Z1) = ', ESM_Z1
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''ESM_Z1''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!ESM_Z2
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'ESM_Z2','=','#',';','F',IDUM,ESM_Z2,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''ESM_Z2'', Z2'
+
+
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'ESM_Z2 = ', ESM_Z2         
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : ESM_Z2 (Z2) = ', ESM_Z2
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''ESM_Z2''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+
+!---------------------------------------------------------------
 !LJDFTX
 !---------------------------------------------------------------
 #ifdef jdftx   
@@ -675,7 +805,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !>==========================SUBROUTINE SET_SOL_IO============================
 !!
 !!gets the IO object and ediff from main, sets LSOL to .TRUE. 
-!!and initializes the solvennt parameters(eb_k,nc_k,sigma_k,tau, by callingsol_reader)
+!!and initializes the solvennt parameters(eb_k,kappab_k,nc_k,sigma_k,tau, by callingsol_reader)
 !!called from main.F(called only if INFO%LSOL is true)
 !!
 !!===========================================================================
@@ -696,7 +826,20 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
 !   nc_k = 0.00473_q
   nc_k = 0.0025_q
   eb_k = 80.0_q
+!kappab_k =  eb_k * (1/debye screeing lenth in ang)**2
+! to convert to au, mulitply by 0.5292**2
+!debye screening length = 3 Ang
+!(1./3^2) * (0.5292)^2 = 0.03
+  kappab_k = eb_k * (1._q/9._q)
   tau = 5.25E-4_q
+
+!default values for ESM
+ esm_alpha = 1.0
+ esm_z0 = 10 !exp fun starts from here, z0 is set to be 2 angstrom from the surface
+ esm_z1 = 15 !cubic polynomial starts from here and ends at z2
+ esm_z2 = 17 !end of cubic polynomial
+
+
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
 #endif
@@ -707,7 +850,7 @@ END SUBROUTINE SET_SOL_IO
 
 !>==========================SUBROUTINE SOL_READER============================
 !!
-!!Reads in the linear pcm model parameters(eb_k,nc_k,sigma_k,tau,ediffsol))
+!!Reads in the linear pcm model parameters(eb_k,kappab_k,nc_k,sigma_k,tau,ediffsol))
 !!for the solvent from INCAR
 !!
 !!===========================================================================
@@ -801,6 +944,34 @@ END SUBROUTINE SET_SOL_IO
          STOP
       ENDIF
 
+!--------------------------------------------------------------------
+!kappab_k = (1/debye screening length)^2 : the user input from INCAR
+!in the code, kappab_k = eb_k * (1/debye screening length)^2 
+!--------------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'KAPPAB_K','=','#',';','F',IDUM,kappab_k,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''KAPPAB_K'', = EB_k * (1/debye screening length)^2'
+
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'kappab_k = ', kappab_k          
+         
+      ELSE IF (IERR == 0 ) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : kappab_k (1/debye screening length^2) = ', kappab_k 
+
+         kappab_k = eb_k * kappab_k
+
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'kappab_k  = eb_k * (1/debye screening length^2) = ', kappab_k 
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''KAPPAB_K''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
 !---------------------------------------------------------------
 !tau
 !---------------------------------------------------------------
@@ -853,7 +1024,7 @@ END SUBROUTINE SOL_READER
 
 !>==========================SUBROUTINE SOL_WRITER============================
 !!
-!!Writes the linear pcm model parameters(eb_k,nc_k,sigma_k,tau))
+!!Writes the linear pcm model parameters(eb_k,kappab_k,nc_k,sigma_k,tau))
 !!for the solvent to outcar
 !!
 !!===========================================================================
@@ -863,12 +1034,13 @@ SUBROUTINE SOL_WRITER()
  IMPLICIT NONE
  
  IF (SP_IO%IU6>=0) THEN
-   WRITE(SP_IO%IU6,100) eb_k, sigma_k, nc_k, tau
+   WRITE(SP_IO%IU6,100) eb_k, kappab_k, sigma_k, nc_k, tau
  ENDIF
 
 100   FORMAT( &
              ' Solvation parameters'/ &
              '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
+             '   KAPPAB_K    =',F10.6,  '     eb_k * inverse of the debye screening length square' /&
              '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
              '   NC_K    =',F10.6,  '     cutoff charge density' /&
              '   TAU     =',F10.6,  '     cavity surface tension' /)

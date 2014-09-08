@@ -40,7 +40,9 @@ MODULE POT_LPCM_K
  REAL(q), PRIVATE, SAVE                 :: CHGMIN = 1E-10_q
  COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE :: Sol_phi(:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,kappab_k,CORE_C, tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE                 :: esm_alpha, esm_z0, esm_z1, esm_z2
+ LOGICAL, SAVE                          :: LESM = .FALSE.
  TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
 
  CONTAINS
@@ -51,7 +53,11 @@ MODULE POT_LPCM_K
 !!
 !!======================================================================
 
-SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vel,Atot,sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,sigma_rc_k1,tau1,ediffs)
+SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,&
+                            & Vcorr,Vel,Atot,sigma_nc_k1,sigma_k1,nc_k1,eb_k1,&
+                            & kappab_k1,CORE_C1,sigma_rc_k1,tau1,ediffs,&
+                           & LESM1, esm_alpha1, esm_z01, esm_z11, esm_z21)
+
 
  IMPLICIT NONE
 
@@ -65,14 +71,16 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
  COMPLEX(q),ALLOCATABLE :: phi_tilda(:),phi(:),Vcav(:)
  COMPLEX(q),INTENT(OUT) :: Vel(SP_GRIDC%MPLWV)
  COMPLEX(q),INTENT(IN) ::TOTN(SP_GRIDC%MPLWV),PS_TOTN(SP_GRIDC%MPLWV) 
- REAL(q),ALLOCATABLE :: SP_d_eps(:)
+ REAL(q),ALLOCATABLE :: SP_d_eps(:), SP_kappa(:)
  RGRID,ALLOCATABLE :: RWORK(:)
  INTEGER :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
- REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
+ REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappab_k1,CORE_C1,tau1,ediffs
+ REAL(q) :: esm_alpha1, esm_z01, esm_z11, esm_z21
+ LOGICAL :: LESM1
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
 
- ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)),RWORK(DIMREAL(SP_GRIDC%MPLWV)))
+ ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)),SP_kappa(DIMREAL(SP_GRIDC%MPLWV)),RWORK(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV),phi(SP_GRIDC%MPLWV))
  ALLOCATE(Vcav(SP_GRIDC%MPLWV))
       
@@ -85,10 +93,26 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
  sigma_k =  sigma_k1
  nc_k =  nc_k1
  eb_k =  eb_k1
+ kappab_k =  kappab_k1
  CORE_C =  CORE_C1
  sigma_rc_k =  sigma_rc_k1
  tau = tau1
  EDIFFSOL = ediffs
+
+!!ESM params
+ LESM = LESM1
+ esm_alpha = esm_alpha1
+ esm_z0 = esm_z01
+ esm_z1 = esm_z11
+ esm_z2 = esm_z21
+
+!not solving linear PBZ when ESM is activated
+ IF (LESM) THEN
+    kappab_k = 0._q
+ ELSE
+    kappab_k =  kappab_k1
+ ENDIF
+
 
  Ecorr1 = 0.0_q
  Ecorr2 = 0.0_q
@@ -104,12 +128,12 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
 !ps_totn is unscaled and in real space after this call
 !returns Vcav(cavitaion pot in rec space) and Acav
 !-------------------------------------------------------------
- CALL CREATECAVITY(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,PS_TOTN,SP_d_eps,Vcav,Acav)
+ CALL CREATECAVITY(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,PS_TOTN,SP_d_eps,SP_kappa,Vcav,Acav)
 
 !-------------------------------------------------------------
 !Solves the generalized poisson eqn using CG, returns phi_tilda scaled by edeps/cell vol
 !-------------------------------------------------------------
- CALL MINIMIZE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_d_eps,TOTN,phi_tilda,NCGSOL)
+ CALL MINIMIZE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_d_eps,SP_kappa,TOTN,phi_tilda,NCGSOL)
 
 !-------------------------------------------------------------
 !compute the interface contribution to the local pot, Vel
@@ -117,8 +141,14 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
 !-------------------------------------------------------------
  CALL UNPACK_C2R(PS_TOTN,1.0_q,PS_TOTN,0.0_q,RWORK,SP_GRIDC)
 
- CALL EPS_POT(SP_GRIDC,SP_LATT_CUR,SP_T_INFO,SP_P,RWORK,phi_tilda,SP_d_eps,Vel)
-
+!! 09/03/14
+! Vel =0  since in esm model epsilon is not a functional of the charge density
+ IF (LESM) THEN
+   Vel = 0._q
+ ELSE
+   CALL EPS_POT(SP_GRIDC,SP_LATT_CUR,SP_T_INFO,SP_P,RWORK,phi_tilda,SP_d_eps,SP_kappa,Vel)
+ ENDIF
+!! 09/03/14
 !-------------------------------------------------------------
 ! multiply by 0.5*e/permittivity of free space
 !-------------------------------------------------------------
@@ -170,7 +200,6 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
  333 FORMAT('SOL:',' ',I3,'  ',E12.5,'   ',E12.5,'   ',E12.5,'   ',I3)
 
  IF (SP_IO%IU0>=0) THEN
-
    WRITE(17,333)  PK_COUNTER,Ael,Acav,Atot,NCGSOL
    WRITE(SP_IO%IU0,333)  PK_COUNTER,Ael,Acav,Atot,NCGSOL
 
@@ -178,7 +207,7 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
 
  PK_COUNTER = PK_COUNTER + 1
       
- DEALLOCATE(SP_d_eps,phi_tilda,phi,Vcav,RWORK)
+ DEALLOCATE(SP_d_eps,SP_kappa,phi_tilda,phi,Vcav,RWORK)
 
  RETURN
 
@@ -192,7 +221,7 @@ END SUBROUTINE Vcorrection_lpcm
 !!
 !!======================================================================
 
-SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,Vcav,Acav)  
+SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,CE_kappa,Vcav,Acav)  
 
  IMPLICIT NONE
 
@@ -202,7 +231,7 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
  TYPE(latt),INTENT(IN)      :: CE_LATT_CUR
 
  COMPLEX(q)             :: CE_PS_TOTN(CE_GRIDC%MPLWV), Vcav(CE_GRIDC%MPLWV)
- REAL(q),INTENT(OUT)    :: CE_d_eps(DIMREAL(CE_GRIDC%MPLWV))
+ REAL(q),INTENT(OUT)    :: CE_d_eps(DIMREAL(CE_GRIDC%MPLWV)),CE_kappa(DIMREAL(CE_GRIDC%MPLWV))
 
  REAL(q),ALLOCATABLE        :: CE_S(:), VWORK(:) ! shape func & Vcav
  REAL(q),ALLOCATABLE        :: CE_gn(:,:), CE_gn2_tmp(:) !\nabla n and |\naba n|^2
@@ -217,6 +246,13 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
  REAL(q), EXTERNAL      :: ERRFC !compimentary error function implemented in errf.F in vasp.5.lib
  INTEGER(q)             :: I, J, NPC, NPR, RLNP, RCNP
  REAL(q)                :: Acav,CE_qs,dv,tmp,tmp1,tmp2
+!! test 7/8/14
+ INTEGER(q)             :: NG, NC, N1, N2, N3, NX, NY, NZ
+ REAL(q)                :: R(3)
+!! test 7/8/14
+!09/03/14
+ REAL(q)                :: esm_x0, esm_x1, esm_x2, esm_x3, esm_p, esm_q, esm_a, esm_b, esm_c, esm_d 
+!09/03/14
 
  NPC =  CE_GRIDC%MPLWV
  RLNP = CE_GRIDC%RL%NP
@@ -231,6 +267,36 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
  ALLOCATE(CE_ggn2(NPR), CE_ggn(3, RLNP) )
  ALLOCATE(CE_divn(NPR), CE_term1(RLNP))
  ALLOCATE(RWORK(NPR), VWORK(NPR))
+
+!!09/03/14
+! parameters used for ESM, the main paramters are z0, z1 and z2
+! z0 to z1 : exponential function
+! z1 to z2 : third order polynomial
+! everywhere else epsilon= 1
+! z0, z1, z2 are in angstroms and alpa = 1/angstrom
+! esm_alpha = 1.0
+! esm_z0 = 12.84 !exp fun starts from here, z0 is set to be 2 angstrom from the surface
+! esm_z1 = 17.84 !cubic polynomial starts from here and ends at z2
+! esm_z2 = 19.84 !end of cubic polynomial
+
+ esm_x0 = esm_z1 - esm_z0
+ esm_x1 = esm_z2 - esm_z0
+ esm_x2 = esm_x0 - esm_x1
+ esm_x3 = esm_x0 + esm_x1
+
+ esm_q = esm_alpha * EXP(esm_alpha * esm_x0)
+ esm_p = EXP(esm_alpha * esm_x0)
+
+ esm_a = ( (esm_p - 1)/esm_x2 - esm_q/2 ) / ( ( esm_x0 * esm_x1 + esm_x1**2 -2*(esm_x0**2) ) + 3 * esm_x3 * esm_x2/2 )
+ esm_b = (esm_q/esm_x2 - 3*esm_a*esm_x3) / 2
+ esm_c = -3*esm_a*(esm_x1**2) - 2*esm_b*esm_x1
+ esm_d = 1 - ( esm_a*(esm_x1**3) + esm_b*(esm_x1**2) + esm_c*esm_x1 )
+ 
+#ifdef debugsol
+   IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'ESM a,b,c,d', esm_a, esm_b, esm_c, esm_d
+#endif
+
+!!09/03/14
 
 !volume element
  dv = CE_LATT_CUR%OMEGA / CE_GRIDC%NPLWV
@@ -272,10 +338,63 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
 !-------------------------------------------------------------
 ! epsilon  = 1.0 + (eb_k - 1) * shape function
 !-------------------------------------------------------------
- DO I=1, CE_GRIDC%RL%NP
-   CE_S(I) = ERRFC( log(MAX(REAL(RWORK(I),KIND=q),CHGMIN)/nc_k) / SQRT(2._q)/sigma_k ) / 2._q
-   CE_d_eps(I)= 1._q + (eb_k - 1._q) * CE_S(I)
- END DO
+! DO I=1, CE_GRIDC%RL%NP
+!   CE_S(I) = ERRFC( log(MAX(REAL(RWORK(I),KIND=q),CHGMIN)/nc_k) / SQRT(2._q)/sigma_k ) / 2._q
+!   CE_d_eps(I)= 1._q + (eb_k - 1._q) * CE_S(I)
+! END DO
+
+!! test 7/8/14
+ NG = 0
+
+col: DO NC = 1, CE_GRIDC%RL%NCOL
+     N2 = CE_GRIDC%RL%I2(NC)
+     N3 = CE_GRIDC%RL%I3(NC)
+     row: DO N1 = 1, CE_GRIDC%RL%NROW
+        NG = NG + 1
+        IF (CE_GRIDC%RL%NFAST == 3) THEN
+            NX = N2
+            NY = N3
+            NZ = N1
+         ELSE
+            NX = N1
+            NY = N2
+            NZ = N3
+          ENDIF
+! 09/04/14
+         ! R(1) = MOD( (REAL(NX,q)-1)/CE_GRIDC%NGX+10.5_q, 1._q ) - 0.5_q
+         ! R(2) = MOD( (REAL(NY,q)-1)/CE_GRIDC%NGY+10.5_q, 1._q ) - 0.5_q
+         ! R(3) = MOD( (REAL(NZ,q)-1)/CE_GRIDC%NGZ+10.5_q, 1._q ) - 0.5_q
+
+          R(1) = (REAL(NX,q)-1)/CE_GRIDC%NGX
+          R(2) = (REAL(NY,q)-1)/CE_GRIDC%NGY
+          R(3) = (REAL(NZ,q)-1)/CE_GRIDC%NGZ
+! 09/04/14
+
+!direct to cartesian
+          CALL DIRKAR(1, R, CE_LATT_CUR%A)
+
+!! 09/03/14
+          !WRITE(*,*) 'Z = ',R(3)
+          IF ( (R(3) >= esm_z0) .AND. (R(3) < esm_z1) ) THEN
+               CE_d_eps(NG) = EXP(R(3) - esm_z0)
+          ELSE IF ( (R(3) >= esm_z1) .AND. (R(3) < esm_z2) )THEN
+               CE_d_eps(NG) = esm_a*((R(3)-esm_z0)**3) + esm_b*((R(3)-esm_z0)**2) + esm_c*(R(3)-esm_z0) + esm_d 
+          ELSE
+               CE_d_eps(NG) = 1._q
+          ENDIF
+!old terms
+!          CE_S(NG) = ERRFC( log(MAX(REAL(RWORK(NG),KIND=q),CHGMIN)/nc_k) / SQRT(2._q)/sigma_k ) / 2._q
+!          CE_d_eps(NG) = 1._q + (eb_k - 1._q) * CE_S(NG)
+!!09/03/14
+
+!square of the inverse of the debye screening length
+!kappab_k = eb_k * (1/debye length)**2
+          CE_kappa(NG) = kappab_k * CE_S(NG)
+
+
+     ENDDO row
+ ENDDO col
+!! test 7/8/14
 
 !quantum surface area
  CE_qs = 0._q
@@ -354,7 +473,7 @@ END SUBROUTINE CREATECAVITY
 !!
 !!======================================================================
 
-SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
+SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_kappa,MN_TOTN,&
                     &MN_phi,NCGSOL)
 
  IMPLICIT NONE
@@ -371,12 +490,14 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  COMPLEX(q),ALLOCATABLE :: MN_Lp(:)
 !parameters in CG
  REAL(q) :: MN_beta,MN_alpha,GX,GY,GZ,rinvLr,eps_bar,r2
- REAL(q),INTENT(IN) ::  MN_d_eps(DIMREAL(MN_GRIDC%MPLWV))
+ REAL(q),INTENT(IN) ::  MN_d_eps(DIMREAL(MN_GRIDC%MPLWV)),MN_kappa(DIMREAL(MN_GRIDC%MPLWV))
  COMPLEX(q),ALLOCATABLE :: MN_GSQU(:)
 
  COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
+
+ COMPLEX(q),ALLOCATABLE :: phi_work(:)
 
  INTEGER :: I,NC,N1,N2,N3
  INTEGER :: flag,count
@@ -391,7 +512,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  ALLOCATE(MN_d(MN_GRIDC%MPLWV))
 
  ALLOCATE(gradphi_x_in(MN_GRIDC%MPLWV),gradphi_y_in(MN_GRIDC%MPLWV))
- ALLOCATE(gradphi_z_in(MN_GRIDC%MPLWV))
+ ALLOCATE(gradphi_z_in(MN_GRIDC%MPLWV), phi_work(MN_GRIDC%MPLWV))
 
 
  count=0
@@ -402,7 +523,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  rinvLr=0._q
  r2 = 0._q
  
-I = 0
+ I = 0
 
 !-------------------------------------------------------------
 !calculating 1/G^2 for preconditioning
@@ -411,25 +532,42 @@ I = 0
          N2= MN_GRIDC%RC%I2(NC)
          N3= MN_GRIDC%RC%I3(NC)
          row: DO N1=1,MN_GRIDC%RC%NROW
-I = I +1
+                 I = I +1
 !GX,GY,GZ
-   GX=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
-   GY=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
-   GZ=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
-!set G=0 component 0
-   IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
-      &(MN_GRIDC%LPCTZ(N3)==0)) THEN
-    MN_GSQU(I)=(0.0_q,0.0_q)
-   ELSE
-! 1/G^2
-    MN_GSQU(I)=1/(GX*GX+GY*GY+GZ*GZ)/(TPI**2)
-   ENDIF
+                 GX = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
+                      &_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
+
+                 GY = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
+                     &_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
+
+                 GZ = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
+                      &_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
+
+!set G=0 component to 1/kappab_k
+                 IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
+                     &(MN_GRIDC%LPCTZ(N3)==0)) THEN
+!if kappa is zero then set the value of the pre-conditioner at g=0 to zero
+!this also makes sure that when LESM = true, the proper preconditioner is used
+                     IF (kappab_k < 1E-10) THEN
+                        MN_GSQU(I)=  (0.0_q,0.0_q) !1._q/kappab_k, 09/03/14
+                     ELSE
+                        MN_GSQU(I)=  1._q/kappab_k  !09/03/14
+                     ENDIF
+
+                 ELSE
+
+! 1/(eb_k * G^2 + kappab_k)
+!09/03/14
+                     IF (kappab_k < 1E-10) THEN                     
+                        MN_GSQU(I)=1/((GX*GX+GY*GY+GZ*GZ) * (TPI**2))
+                     ELSE
+                        MN_GSQU(I)=1/((GX*GX+GY*GY+GZ*GZ) * (TPI**2) + kappab_k)
+                     ENDIF
+
+                 ENDIF
  
- ENDDO row
-ENDDO col
+              ENDDO row
+      ENDDO col
 
 !*********************************************************
 ! start of Pre-conditioned Conjugate Gradient
@@ -437,6 +575,7 @@ ENDDO col
 
 !-------------------------------------------------------------
 !intial guess for phi
+!phi0 = totn / (eb_k * G^2 + kappab_k)
 !-------------------------------------------------------------
  IF (PK_counter ==1) THEN
    DO I=1,MN_GRIDC%RC%NP
@@ -451,32 +590,32 @@ ENDDO col
 !epsilon is in real space
 !Lp = - A*phi
 !-------------------------------------------------------------
- CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_phi,MN_d_eps,gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
+ CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_phi,MN_d_eps,MN_kappa,gradphi_x_in,gradphi_y_in,gradphi_z_in,phi_work,MN_Lp)
 
 !-------------------------------------------------------------
 ! the residue
-!r=A*phi+CHTOT+N
+!r = A*phi + (CHTOT + N)
 !-------------------------------------------------------------
- DO I=1,MN_GRIDC%RC%NP
-   MN_RESID(I)=MN_Lp(I) + MN_TOTN(I)
+ DO I = 1, MN_GRIDC%RC%NP
+   MN_RESID(I) = MN_Lp(I) + MN_TOTN(I)
  ENDDO
 
 !-------------------------------------------------------------
 !preconditioning of the residue, MN_Z = invL(r)
-!z=r/G^2
+!z = precond * r
 !-------------------------------------------------------------
- MN_Z=0._q
+ MN_Z = 0._q
 
- DO I=1,MN_GRIDC%RC%NP
-   MN_Z(I)=REAL(MN_GSQU(I))*MN_RESID(I)
+ DO I = 1,MN_GRIDC%RC%NP
+   MN_Z(I) = REAL(MN_GSQU(I)) * MN_RESID(I)
  ENDDO
 
 !-------------------------------------------------------------
 !without preconditioning
 !-------------------------------------------------------------
-!MN_Z=MN_RESID
+!MN_Z = MN_RESID
 
-! rinvLr = DOT_PRODUCT(MN_RESID,MN_Z)
+! rinvLr = DOT_PRODUCT(MN_RESID, MN_Z)
  CALL MY_D_PROD(rinvLr, MN_RESID, MN_Z, MN_GRIDC)
 
  CALLMPI( M_sum_d(MN_GRIDC%COMM,rinvLr,1))
@@ -499,7 +638,7 @@ ENDDO col
 
  DO WHILE ( (count < 20000) .AND. (sqrt(r2) > EDIFFSOL).AND. (sqrt(rinvLr) > 1e-10) )
 
-   CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_d,MN_d_eps,gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
+   CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_d,MN_d_eps,MN_kappa,gradphi_x_in,gradphi_y_in,gradphi_z_in,phi_work,MN_Lp)
 
 !   MN_alpha = DOT_PRODUCT(MN_d,MN_Lp)
    CALL MY_D_PROD(MN_alpha, MN_d, MN_Lp, MN_GRIDC)
@@ -518,7 +657,7 @@ ENDDO col
      MN_Z(I) = (REAL(MN_GSQU(I)))*MN_RESID(I)
    ENDDO
 
-   MN_beta = 1/rinvLr
+   MN_beta = 1._q/rinvLr
 
    CALL MY_D_PROD(rinvLr, MN_RESID, MN_Z, MN_GRIDC)
 
@@ -565,7 +704,7 @@ IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
 !-------------------------------------------------------------
  DEALLOCATE(MN_RESID,MN_Z,MN_Lp,MN_GSQU)
  DEALLOCATE(MN_d)
- DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in)
+ DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in,phi_work)
 
  RETURN
 END SUBROUTINE MINIMIZE
@@ -577,8 +716,8 @@ END SUBROUTINE MINIMIZE
 !!
 !!=======================================================================
 
-SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,&
-                &gradphi_x_in,gradphi_y_in,gradphi_z_in,LPS_Lp)
+SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,LPS_kappa,&
+                &gradphi_x_in,gradphi_y_in,gradphi_z_in,phi_work,LPS_Lp)
 
  IMPLICIT NONE
 
@@ -586,19 +725,20 @@ SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,&
  TYPE (type_info) LPS_T_INFO
  TYPE (latt) LPS_LATT_CUR
 
- REAL(q),INTENT(IN) ::  LPS_d_eps(DIMREAL(LPS_GRIDC%MPLWV))
- COMPLEX(q),INTENT(IN) ::  LPS_phi(LPS_GRIDC%MPLWV)
+ REAL(q),INTENT(IN) ::  LPS_d_eps(DIMREAL(LPS_GRIDC%MPLWV)),LPS_kappa(DIMREAL(LPS_GRIDC%MPLWV))
+ COMPLEX(q),INTENT(INOUT) ::  LPS_phi(LPS_GRIDC%MPLWV)
  COMPLEX(q),INTENT(OUT) :: LPS_Lp(LPS_GRIDC%MPLWV)
- REAL(q) RINPL,GX,GY,GZ
+ REAL(q) :: RINPL,GX,GY,GZ
 
  COMPLEX(q),INTENT(INOUT) :: gradphi_x_in(LPS_GRIDC%MPLWV)
  COMPLEX(q),INTENT(INOUT) :: gradphi_y_in(LPS_GRIDC%MPLWV)
  COMPLEX(q),INTENT(INOUT) :: gradphi_z_in(LPS_GRIDC%MPLWV)
 
- INTEGER(q) N
- INTEGER I,J,k,N1,N2,N3,NC
+ COMPLEX(q),INTENT(INOUT) :: phi_work(LPS_GRIDC%MPLWV)
+
+ INTEGER(q) :: N,I,J,k,N1,N2,N3,NC
       
- N=LPS_GRIDC%NPLWV
+ N = LPS_GRIDC%NPLWV
 
 
 !-------------------------------------------------------------------------
@@ -632,21 +772,37 @@ SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,&
  CALL FFT3D(gradphi_z_in,LPS_GRIDC,1) 
 
 !-------------------------------------------------------------------------
+!phi to real space
+!-------------------------------------------------------------------------
+ CALL FFT3D(LPS_phi, LPS_GRIDC, 1) 
+
+!-------------------------------------------------------------------------
 !multiply grad phi with epsilon in real space
 !-------------------------------------------------------------------------
 #ifdef realmode
-k =1
- DO j=1,DIMREAL(LPS_GRIDC%MPLWV),2
-   gradphi_x_in(k) = CMPLX(REAL(gradphi_x_in(k),KIND=q)*LPS_d_eps(j),AIMAG(gradphi_x_in(k))*LPS_d_eps(j+1),KIND=q)
-   gradphi_y_in(k) = CMPLX(REAL(gradphi_y_in(k),KIND=q)*LPS_d_eps(j),AIMAG(gradphi_y_in(k))*LPS_d_eps(j+1),KIND=q)
-   gradphi_z_in(k) = CMPLX(REAL(gradphi_z_in(k),KIND=q)*LPS_d_eps(j),AIMAG(gradphi_z_in(k))*LPS_d_eps(j+1),KIND=q)
-k = k+1
+
+ k = 1
+
+ DO j = 1, DIMREAL(LPS_GRIDC%MPLWV), 2
+   gradphi_x_in(k) = CMPLX(REAL(gradphi_x_in(k),KIND=q)*LPS_d_eps(j), AIMAG(gradphi_x_in(k))*LPS_d_eps(j+1),KIND=q)
+   gradphi_y_in(k) = CMPLX(REAL(gradphi_y_in(k),KIND=q)*LPS_d_eps(j), AIMAG(gradphi_y_in(k))*LPS_d_eps(j+1),KIND=q)
+   gradphi_z_in(k) = CMPLX(REAL(gradphi_z_in(k),KIND=q)*LPS_d_eps(j), AIMAG(gradphi_z_in(k))*LPS_d_eps(j+1),KIND=q)
+!phi_work = phi * kappa, both phi and kappa in real space
+   phi_work(k) = CMPLX(REAL(LPS_phi(k),KIND=q)*LPS_kappa(j), AIMAG(LPS_phi(k))*LPS_kappa(j+1),KIND=q)
+
+   k = k+1
+
  ENDDO
+
 #else
- DO j=1,LPS_GRIDC%RL%NP
+
+ DO j = 1,LPS_GRIDC%RL%NP
    gradphi_x_in(j) = gradphi_x_in(j)*LPS_d_eps(j)
    gradphi_y_in(j) = gradphi_y_in(j)*LPS_d_eps(j)
    gradphi_z_in(j) = gradphi_z_in(j)*LPS_d_eps(j)
+!phi_work = phi * kappa, both phi and kappa in real space
+   phi_work(j) = LPS_phi(j) * LPS_kappa(j)
+
  ENDDO
 #endif
 !-------------------------------------------------------------------------
@@ -661,16 +817,35 @@ k = k+1
  CALL SETUNB(gradphi_z_in,LPS_GRIDC)   
 
 !-------------------------------------------------------------------------
+!phi_work in kspace
+!-------------------------------------------------------------------------
+ CALL FFT3D(phi_work, LPS_GRIDC, -1)   
+
+ CALL SETUNB(phi_work, LPS_GRIDC)   
+
+!-------------------------------------------------------------------------
+!phi to k space
+!-------------------------------------------------------------------------
+ CALL FFT3D(LPS_phi, LPS_GRIDC, -1) 
+ CALL SETUNB(LPS_phi, LPS_GRIDC)   
+
+!-------------------------------------------------------------------------
 !scaling
 !-------------------------------------------------------------------------
  DO I=1,LPS_GRIDC%RC%NP
    gradphi_x_in(I) = gradphi_x_in(I)/N
    gradphi_y_in(I) = gradphi_y_in(I)/N
    gradphi_z_in(I) = gradphi_z_in(I)/N
+
+   phi_work(I) = phi_work(I)/N
+
+   LPS_phi(I) = LPS_phi(I)/N
+
  ENDDO
 
 !-------------------------------------------------------------------------
 !div(epsilon*grad phi) in kspace
+!add the kappa contrib, -phi_work
 !-------------------------------------------------------------------------
  DO I=1,LPS_GRIDC%RC%NP
    N1= MOD((I-1),LPS_GRIDC%RC%NROW) +1
@@ -686,7 +861,7 @@ k = k+1
         &LPS_LATT_CUR%B(3,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(3,3))
 
    LPS_Lp(I)= CITPI*(GX*gradphi_x_in(I) + GY*gradphi_y_in(I) + &
-              &GZ*gradphi_z_in(I))
+              &GZ*gradphi_z_in(I)) - phi_work(I)
 
  ENDDO
  
@@ -700,7 +875,7 @@ k = k+1
 !!
 !!====================================================================
 
-SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi,EPP_deps,EPP_CWORK)
+SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi,EPP_deps,EPP_kappa,EPP_CWORK)
 
  IMPLICIT NONE
 
@@ -711,20 +886,22 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi
 
  COMPLEX(q),INTENT(OUT) :: EPP_CWORK(EPP_GRIDC%MPLWV)
  RGRID,INTENT(IN)       :: EPP_PS_TOTN(DIMREAL(EPP_GRIDC%MPLWV))
- COMPLEX(q),INTENT(IN)  :: EPP_phi(EPP_GRIDC%MPLWV)
+ COMPLEX(q),INTENT(INOUT)  :: EPP_phi(EPP_GRIDC%MPLWV)
  REAL(q),INTENT(IN)     :: EPP_deps(EPP_GRIDC%MPLWV)
+ REAL(q),INTENT(IN)     :: EPP_kappa(EPP_GRIDC%MPLWV)
 
- REAL(q), ALLOCATABLE   :: eprime(:)
+ REAL(q), ALLOCATABLE   :: eprime(:), kprime(:)
  REAL(q),ALLOCATABLE    :: phisq(:), RWORK(:)
  REAL(q)                :: EPP_CWORK_temp
  INTEGER(q)             :: I,J  
 
- ALLOCATE(eprime(EPP_GRIDC%RL%NP), phisq(DIMREAL(EPP_GRIDC%MPLWV)), RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
+ ALLOCATE(eprime(EPP_GRIDC%RL%NP), kprime(EPP_GRIDC%RL%NP), phisq(DIMREAL(EPP_GRIDC%MPLWV)), RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
 
 !-------------------------------------------------------------------------
 !SHAPE_GRADN returns eprime, the derivative of shape function wrt the charge density in real space
 !-------------------------------------------------------------------------
    CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, EPP_PS_TOTN, eprime)
+   kprime = eprime * kappab_k
    eprime = eprime * (eb_k - 1._q)
 
 !-------------------------------------------------------------------------
@@ -735,19 +912,38 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi
    CALL NABLAN(EPP_phi,EPP_GRIDC,EPP_LATT_CUR,phisq)
 
 !-------------------------------------------------------------------------
+!phi to real space
+!-------------------------------------------------------------------------
+ CALL FFT3D(EPP_phi, EPP_GRIDC, 1) 
+
+!-------------------------------------------------------------------------
 ! eps potential in real space
 !-------------------------------------------------------------------------
    EPP_CWORK_temp = 0._q
 
 !-------------------------------------------------------------------------
 !multiply eprime and phisq in real space
+!add kappa term, kprime * phi^2 in real space
 !-------------------------------------------------------------------------
    RWORK = 0._q
 
    DO I=1, EPP_GRIDC%RL%NP
-      EPP_CWORK_temp = (eprime(I)) * (phisq(I))
+      EPP_CWORK_temp = (eprime(I)) * (phisq(I)) + kprime(I) * EPP_phi(I) * EPP_phi(I)
       RWORK(I) = EPP_CWORK_temp
    ENDDO
+
+!-------------------------------------------------------------------------
+!phi to k space
+!-------------------------------------------------------------------------
+ CALL FFT3D(EPP_phi, EPP_GRIDC, -1) 
+
+!-------------------------------------------------------------------------
+!scale phi
+!-------------------------------------------------------------------------
+ DO I=1,EPP_GRIDC%RC%NP
+   EPP_phi(I) = EPP_phi(I)/EPP_GRIDC%NPLWV
+ ENDDO
+
 
  CALL PACK_R2C(RWORK, EPP_CWORK, EPP_GRIDC)
    
@@ -758,7 +954,7 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi
    CALL SETUNB(EPP_CWORK,EPP_GRIDC)
    EPP_CWORK = EPP_CWORK/EPP_GRIDC%NPLWV
 
- DEALLOCATE(eprime,phisq,RWORK)
+ DEALLOCATE(eprime,kprime,phisq,RWORK)
  
  RETURN
 
