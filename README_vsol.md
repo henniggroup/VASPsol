@@ -23,8 +23,8 @@ INSTALL
 
 1. Apply the interface patch to the original VASP source code.
    
-	cd <VASP src directory>
-	patch -p1 <path to the interface patch file>
+    cd <VASP src directory>
+    patch -p1 <path to the interface patch file>
 
 2. After applying the patch, copy the other 2 files to the VASP src directory:
 
