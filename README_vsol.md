@@ -1,4 +1,4 @@
-Implicit solvation model in VASP
+ESM solvation model in VASP
 =====================================
 
 **Authors:** Kiran Mathew and Richard Hennig
@@ -9,10 +9,6 @@ http://vaspsol.mse.cornell.edu/
 
  https://groups.google.com/forum/#!forum/vaspsol 
 
-
-**For the model details please see:** 
-
-http://scitation.aip.org/content/aip/journal/jcp/140/8/10.1063/1.4865107
 
 CONTENTS
 =============
