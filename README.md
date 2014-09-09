@@ -25,7 +25,7 @@ The patch file, *interface_patch_535*, links *.F files to the original VASP code
 
 PREREQUISITES
 =============
-VASP.5.3.5 source code.
+[VASP](http://www.vasp.at/).5.3.5 source code.
 
 Compiler and library requirements are the same as VASP.5.3.5. ([vasp wiki] (http://cms.mpi.univie.ac.at/wiki/index.php/Installing_VASP))
 
