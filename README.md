@@ -27,7 +27,7 @@ PREREQUISITES
 =============
 VASP.5.3.5 source code.
 
-Compiler and library requirements are the same as VASP.5.3.5.
+Compiler and library requirements are the same as VASP.5.3.5. ([vasp wiki] (http://cms.mpi.univie.ac.at/wiki/index.php/Installing_VASP))
 
 INSTALL
 ========
