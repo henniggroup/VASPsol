@@ -3,14 +3,15 @@ Implicit solvation model for VASP
 
 **Authors:** Kiran Mathew and Richard Hennig
 
+http://theory.mse.cornell.edu/
+
 **Collaborators:** Ravishankar Sundararaman, Kendra Letchworth-Weaver, Tomas Arias
 
-http://vaspsol.mse.cornell.edu/
+http://muchomas.lassp.cornell.edu/
 
 **For discussions and feedback:**
 
  https://groups.google.com/forum/#!forum/vaspsol 
-
 
 **For the model details please see:** 
 
