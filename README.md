@@ -36,9 +36,6 @@ INSTALL
     patch -p1 < <path to the interface patch file>
 ```
 - After applying the patch, copy the other 2 files to the VASP src directory:
-```
-   	 git clone https://github.com/matk86/VASPsol <path to VASP src directory>
-```
 - In the original VASP Makefile, put pot_lpcm_cav_k.o and pot_k.o object file names before pot.o in that order.
 - ``` make clean ```
 - ``` make ```
