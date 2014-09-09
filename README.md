@@ -1,7 +1,9 @@
-VASPsol: Implicit solvation model for VASP
+Implicit solvation model for VASP
 ==========================================
 
 **Authors:** Kiran Mathew and Richard Hennig
+
+**Collaborators:** Ravishankar Sundararaman, Kendra Letchworth-Weaver, Tomas Arias
 
 http://vaspsol.mse.cornell.edu/
 
@@ -16,9 +18,9 @@ http://scitation.aip.org/content/aip/journal/jcp/140/8/10.1063/1.4865107
 
 CONTENTS
 =============
-The 2 files, *_k.F, form the crux of the solvation model. 
+The two *.F files form the crux of the solvation model. 
 
-The file interface_patch_535 is the patch file for linking *_k.F files to the original VASP code version 5.3.5.
+The patch file, *interface_patch_535*, links *.F files to the original VASP code version 5.3.5.
 
 
 PREREQUISITES
@@ -42,3 +44,6 @@ INSTALL
 
 
 After installation, please see the test files available at http://vaspsol.mse.cornell.edu/
+
+If you have used our code for your work, please cite our paper:
+http://scitation.aip.org/content/aip/journal/jcp/140/8/10.1063/1.4865107
