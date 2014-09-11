@@ -1385,70 +1385,76 @@ END SUBROUTINE UNPACK_C2R
 !!
 !!==============================================================
 
-      SUBROUTINE WRITE_TO_FILE(GRIDC, IU, LLONG, CVTOT)
-      USE prec
-      USE mgrid
-      IMPLICIT REAL(q) (A-H,O-Z)
+SUBROUTINE WRITE_TO_FILE(GRIDC, IU, LLONG, CVTOT)
 
-      TYPE (grid_3d) GRIDC
-      RGRID CVTOT(GRIDC%RL%NP)
-      LOGICAL LLONG
-      CHARACTER (40) FORM
-! local variables
-      INTEGER NALLOC,NZ, NWRITE, NWRITTEN
-      REAL(q),ALLOCATABLE ::  WORK(:)
-      INTEGER ISTAT
+ USE prec
+ USE mgrid
 
-      NODE_ME=0
-      IONODE =0
+ IMPLICIT NONE
+
+ TYPE (grid_3d) GRIDC
+ RGRID CVTOT(GRIDC%RL%NP)
+
+ LOGICAL LLONG
+ CHARACTER (40) FORM
+ REAL(q),ALLOCATABLE ::  WORK(:)
+ INTEGER :: ISTAT, NODE_ME, IONODE
+ INTEGER :: NALLOC, NZ, NWRITE, NWRITTEN, N
+
+ NODE_ME = 0
+ IONODE = 0
+
 #ifdef MPI
-      NODE_ME=GRIDC%COMM%NODE_ME
-      IONODE =GRIDC%COMM%IONODE
+ NODE_ME = GRIDC%COMM%NODE_ME
+ IONODE = GRIDC%COMM%IONODE
 #endif
 
-      NALLOC=GRIDC%NGX*GRIDC%NGY
+ NALLOC = GRIDC%NGX*GRIDC%NGY
 
-      ALLOCATE(WORK(NALLOC),STAT=ISTAT)
-      IF (ISTAT>0) RETURN ! can not write the potential immediate exit
+ ALLOCATE(WORK(NALLOC), STAT=ISTAT)
 
-      IF (GRIDC%NPLWV/= GRIDC%NGX*GRIDC%NGY*GRIDC%NGZ) THEN
-        WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatibel', &
+ IF (ISTAT>0) RETURN ! can not write the potential immediate exit
+
+ IF (GRIDC%NPLWV/= GRIDC%NGX*GRIDC%NGY*GRIDC%NGZ) THEN
+    WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatibel', &
      &   ' with  GRIDC%NGX,GRIDC%NGY,NGZC'
-        WRITE(*,*)'   ',GRIDC%NPLWV,GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
-        STOP
-      ENDIF
+    WRITE(*,*)'   ',GRIDC%NPLWV,GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
+    STOP
+ ENDIF
 
-      IF (LLONG) THEN
-        FORM='(1(1X,E17.11))'
-        NWRITE=5
-      ELSE
-        FORM='(1G11.5)'
-        NWRITE=10
-      ENDIF
+ IF (LLONG) THEN
+    FORM='(1(1X,E17.11))'
+    NWRITE=5
+ ELSE
+    FORM='(1G11.5)'
+    NWRITE=10
+ ENDIF
 
-      do_io WRITE(IU,'(3I5)') GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
+ do_io WRITE(IU,'(3I5)') GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
 
-      NWRITTEN=0
-      DO NZ=1,GRIDC%NGZ
-         CALL MRG_GRID_RL_PLANE(GRIDC, WORK, CVTOT, NZ)
-         io_begin
-         DO N=1,NALLOC
-            NWRITTEN=NWRITTEN+1
-            IF ( MOD(NWRITTEN,NWRITE)==0 ) THEN
-               WRITE(IU,FORM) WORK(N)
-            ELSE
-               WRITE(IU,FORM,ADVANCE='NO') WORK(N)
-            ENDIF
-         ENDDO
-         io_end
-      ENDDO
-      IF ( MOD(NWRITTEN,NWRITE)/=0 ) WRITE(IU,*)' '
+ NWRITTEN = 0
 
-      DEALLOCATE(WORK)
+ DO NZ = 1, GRIDC%NGZ
+    CALL MRG_GRID_RL_PLANE(GRIDC, WORK, CVTOT, NZ)
+    io_begin
+    DO N = 1, NALLOC
+       NWRITTEN=NWRITTEN+1
+       IF ( MOD(NWRITTEN,NWRITE)==0 ) THEN
+          WRITE(IU, FORM) WORK(N)
+       ELSE
+          WRITE(IU, FORM, ADVANCE='NO') WORK(N)
+       ENDIF
+    ENDDO
+    io_end
+ ENDDO
 
-      RETURN
-      END SUBROUTINE WRITE_TO_FILE
+ IF ( MOD(NWRITTEN,NWRITE)/=0 ) WRITE(IU,*)' '
 
+ DEALLOCATE(WORK)
+
+ RETURN
+
+END SUBROUTINE WRITE_TO_FILE
 
 END MODULE POT_LPCM_K
 !***********************************************************************************
