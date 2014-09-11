@@ -40,18 +40,25 @@ MODULE POT_LPCM_K
  REAL(q), PRIVATE, SAVE                 :: CHGMIN = 1E-10_q
  COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE :: Sol_phi(:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,&
+                                           & kappa2b_k,CORE_C, tau,EDIFFSOL
  TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
 
  CONTAINS
 
-!>==========================SUBROUTINE Vcorrection_lpcm======================
+!>==========================SUBROUTINE Vcorrection_lpcm==========================
 !!
-!!Solves the poisson's eqn, returns Vcorr and Ecorr
+!!Solves the poisson's eqn, returns Vcorr, Vdiel and Atot
+!! Vcorr = phi_tilda - phi, only the electrostatic contrib.
+!! Vdiel = epsilon and kappa derivative terms + pot. due to cavitation
+!! Atot  = Ael + Acav = electrostatic contribution to the solv. energy + cavitation 
 !!
-!!======================================================================
+!!================================================================================
 
-SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vel,Atot,sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,sigma_rc_k1,tau1,ediffs)
+SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN,&
+                            & PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k1, sigma_k1,&
+                            & nc_k1, eb_k1, kappa2b_k1, CORE_C1, sigma_rc_k1,&
+                            & tau1, ediffs )
 
  IMPLICIT NONE
 
@@ -63,38 +70,45 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
 
  COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
  COMPLEX(q),ALLOCATABLE :: phi_tilda(:),phi(:),Vcav(:)
- COMPLEX(q),INTENT(OUT) :: Vel(SP_GRIDC%MPLWV)
+ COMPLEX(q),INTENT(OUT) :: Vdiel(SP_GRIDC%MPLWV)
  COMPLEX(q),INTENT(IN) ::TOTN(SP_GRIDC%MPLWV),PS_TOTN(SP_GRIDC%MPLWV) 
- REAL(q),ALLOCATABLE :: SP_d_eps(:)
+ REAL(q),ALLOCATABLE :: SP_d_eps(:), SP_kappa2(:)
  RGRID,ALLOCATABLE :: RWORK(:)
  INTEGER :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
- REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
+ REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1,CORE_C1,tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
 
- ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)),RWORK(DIMREAL(SP_GRIDC%MPLWV)))
- ALLOCATE(phi_tilda(SP_GRIDC%MPLWV),phi(SP_GRIDC%MPLWV))
- ALLOCATE(Vcav(SP_GRIDC%MPLWV))
+ ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)), SP_kappa2(DIMREAL(SP_GRIDC%MPLWV)))
+ ALLOCATE(phi_tilda(SP_GRIDC%MPLWV), phi(SP_GRIDC%MPLWV))
+ ALLOCATE(Vcav(SP_GRIDC%MPLWV), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
       
  IF (PK_COUNTER == 1)  THEN
    ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
    Sol_phi = 0._q
  ENDIF
 
+!---------------------------------------------------------------
+!set values to the parameters
+!---------------------------------------------------------------
  sigma_nc_k = sigma_nc_k1 
  sigma_k =  sigma_k1
  nc_k =  nc_k1
  eb_k =  eb_k1
+ kappa2b_k =  kappa2b_k1
  CORE_C =  CORE_C1
  sigma_rc_k =  sigma_rc_k1
  tau = tau1
  EDIFFSOL = ediffs
 
+!---------------------------------------------------------------
+! initialize
+!---------------------------------------------------------------
  Ecorr1 = 0.0_q
  Ecorr2 = 0.0_q
  phi_tilda = 0._q
  phi = 0._q
- Vel = 0._q
+ Vdiel = 0._q
  Vcorr = 0._q
  Vcav = 0._q
  SP_IO = IO
@@ -104,31 +118,42 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
 !ps_totn is unscaled and in real space after this call
 !returns Vcav(cavitaion pot in rec space) and Acav
 !-------------------------------------------------------------
- CALL CREATECAVITY(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,PS_TOTN,SP_d_eps,Vcav,Acav)
+ CALL CREATECAVITY(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, PS_TOTN,&
+                  & SP_d_eps, SP_kappa2, Vcav, Acav)
 
 !-------------------------------------------------------------
-!Solves the generalized poisson eqn using CG, returns phi_tilda scaled by edeps/cell vol
+!Solves the generalized poisson eqn using CG, 
+!returns phi_tilda scaled by edeps/cell vol
 !-------------------------------------------------------------
- CALL MINIMIZE(SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_d_eps,TOTN,phi_tilda,NCGSOL)
+ CALL MINIMIZE(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_d_eps,&
+             & SP_kappa2, TOTN, phi_tilda, NCGSOL)
 
 !-------------------------------------------------------------
-!compute the interface contribution to the local pot, Vel
+!ps_totn is unscaled and in real space
+!unpack ps_totn from complex array to real array
+!-------------------------------------------------------------
+ CALL UNPACK_C2R(PS_TOTN, 1.0_q, PS_TOTN, 0.0_q, RWORK, SP_GRIDC)
+
+!-------------------------------------------------------------
+!compute the interface contribution to the local pot, Vdiel
+!basically the terms involving the derivatives wrt the charge density
+!Vdiel includes the terms containing the epsilon derivative and
+!the kappa derivative
 !ps_totn is unscaled and in real space
 !-------------------------------------------------------------
- CALL UNPACK_C2R(PS_TOTN,1.0_q,PS_TOTN,0.0_q,RWORK,SP_GRIDC)
-
- CALL EPS_POT(SP_GRIDC,SP_LATT_CUR,SP_T_INFO,SP_P,RWORK,phi_tilda,SP_d_eps,Vel)
+ CALL EPS_POT(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, SP_P,RWORK, phi_tilda,&
+            & SP_d_eps, SP_kappa2, Vdiel)
 
 !-------------------------------------------------------------
 ! multiply by 0.5*e/permittivity of free space
 !-------------------------------------------------------------
- Vel = 0.5 * Vel / EDEPS
+ Vdiel = 0.5 * Vdiel / EDEPS
 
 !-------------------------------------------------------------
 !compute phi, pot due to (n+N) with epsilon=1
 !returns properly scaled phi
 !-------------------------------------------------------------
- CALL SimplePoisson(SP_GRIDC,SP_LATT_CUR,TOTN,phi,1)
+ CALL SimplePoisson(SP_GRIDC, SP_LATT_CUR, TOTN, phi, 1)
 
 !-----------------------------------------------------------------------------
 !compute V_correction,Vcorr
@@ -136,49 +161,59 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
 !-----------------------------------------------------------------------------
  Vcorr = phi_tilda - phi
 
+!-----------------------------------------------------------------------------
 !add the cavitation correction
-! Vcorr = Vcorr + Vcav
-!both Vel and Vcav are the derivatives of the free enrgy wrt the n_cavity=n+pseudo core
-!the reason for seperating Vcorr(coulomb) and Vel is becasue for the force corrections due Vcorr we need to multiply by the derivative of total charge density with respect to the positions wheras for Vel we need to multiply by the derivativer of the n_cavity wrt the positions
- Vel = Vel + Vcav
+!! Vcorr = Vcorr + Vcav
+!both Vdiel and Vcav are the derivatives of the free enrgy wrt n_cavity
+!where n_cavity=n+pseudo core
+!the reason for seperating Vcorr(coulomb) and Vdiel is becasue for the 
+!force corrections due Vcorr we need to multiply by the derivative of total charge 
+!density with respect to the positions wheras for Vdiel we need to multiply by 
+!the derivativer of the n_cavity wrt the positions
+!-----------------------------------------------------------------------------
+ Vdiel = Vdiel + Vcav
 
 !-------------------------------------------------------------
 !compute the components of E_correction, Ecorr
-!all energies are computed with chargedensities scaled by the lattice volme inorder to be consistent with vasp
+!all energies are computed with chargedensities scaled by the 
+!lattice volume inorder to be consistent with vasp
 !-------------------------------------------------------------
-!0.5*phi_tilda*(n+N)
+!  Ecorr1 = 0.5*phi_tilda*(n+N), where phi_tilda is the CG soln
 !-------------------------------------------------------------
-! Ecorr1 = 0.5*DOT_PRODUCT(TOTN,phi_tilda)
  CALL MY_D_PROD(Ecorr1, TOTN, phi_tilda, SP_GRIDC)
  Ecorr1 = Ecorr1 * 0.5_q
  CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr1,1))
 
-!-------------------------------------------------------------
-!0.5*phi*(n+N)
-!-------------------------------------------------------------
-!  Ecorr2 = 0.5*DOT_PRODUCT(TOTN,phi)
+!---------------------------------------------------------------
+!Ecorr2 = 0.5*phi*(n+N), where phi is the soln with epsilon = 1
+!---------------------------------------------------------------
  CALL MY_D_PROD(Ecorr2, TOTN, phi, SP_GRIDC)
  Ecorr2 = Ecorr2 * 0.5_q
  CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr2,1))
 
-!electrostatic contribution
+!---------------------------------------------------------------
+!Electrostatic contribution to the solvation energy
+!---------------------------------------------------------------
  Ael = Ecorr1 - Ecorr2
 
+!---------------------------------------------------------------
 !add the cavitaion energy
+!Atot = total solavtion energy
+!---------------------------------------------------------------
  Atot = Ael + Acav
  
  333 FORMAT('SOL:',' ',I3,'  ',E12.5,'   ',E12.5,'   ',E12.5,'   ',I3)
-
+!---------------------------------------------------------------
+! write to OUTCAR and stdout
+!---------------------------------------------------------------
  IF (SP_IO%IU0>=0) THEN
-
-   WRITE(17,333)  PK_COUNTER,Ael,Acav,Atot,NCGSOL
-   WRITE(SP_IO%IU0,333)  PK_COUNTER,Ael,Acav,Atot,NCGSOL
-
+   WRITE(17,333)  PK_COUNTER, Ael, Acav, Atot, NCGSOL
+   WRITE(SP_IO%IU0,333)  PK_COUNTER, Ael, Acav, Atot, NCGSOL
  ENDIF
 
  PK_COUNTER = PK_COUNTER + 1
       
- DEALLOCATE(SP_d_eps,phi_tilda,phi,Vcav,RWORK)
+ DEALLOCATE(SP_d_eps, SP_kappa2, phi_tilda, phi, Vcav, RWORK)
 
  RETURN
 
@@ -192,7 +227,8 @@ END SUBROUTINE Vcorrection_lpcm
 !!
 !!======================================================================
 
-SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,Vcav,Acav)  
+SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
+                      & CE_d_eps,CE_kappa2,Vcav,Acav)  
 
  IMPLICIT NONE
 
@@ -202,7 +238,7 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
  TYPE(latt),INTENT(IN)      :: CE_LATT_CUR
 
  COMPLEX(q)             :: CE_PS_TOTN(CE_GRIDC%MPLWV), Vcav(CE_GRIDC%MPLWV)
- REAL(q),INTENT(OUT)    :: CE_d_eps(DIMREAL(CE_GRIDC%MPLWV))
+ REAL(q),INTENT(OUT)    :: CE_d_eps(DIMREAL(CE_GRIDC%MPLWV)),CE_kappa2(DIMREAL(CE_GRIDC%MPLWV))
 
  REAL(q),ALLOCATABLE        :: CE_S(:), VWORK(:) ! shape func & Vcav
  REAL(q),ALLOCATABLE        :: CE_gn(:,:), CE_gn2_tmp(:) !\nabla n and |\naba n|^2
@@ -217,13 +253,18 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
  REAL(q), EXTERNAL      :: ERRFC !compimentary error function implemented in errf.F in vasp.5.lib
  INTEGER(q)             :: I, J, NPC, NPR, RLNP, RCNP
  REAL(q)                :: Acav,CE_qs,dv,tmp,tmp1,tmp2
+!! test 7/8/14
+ INTEGER(q)             :: NG, NC, N1, N2, N3, NX, NY, NZ
+ REAL(q)                :: R(3)
+!! test 7/8/14
 
  NPC =  CE_GRIDC%MPLWV
  RLNP = CE_GRIDC%RL%NP
  RCNP = CE_GRIDC%RC%NP
  NPR =  DIMREAL(CE_GRIDC%MPLWV) !NPR = NPC, in complex mode
 
- IF (SP_IO%IU0>=0) print *, 'NPLWV, MPLWV, RL%NP, RC%NP', CE_GRIDC%NPLWV, CE_GRIDC%MPLWV, CE_GRIDC%RL%NP, CE_GRIDC%RC%NP
+ IF (SP_IO%IU0>=0) print *, 'NPLWV, MPLWV, RL%NP, RC%NP',&
+                   & CE_GRIDC%NPLWV, CE_GRIDC%MPLWV, CE_GRIDC%RL%NP, CE_GRIDC%RC%NP
 
  ALLOCATE(CE_gn2(NPC)) !complex
  ALLOCATE(CE_S(RLNP))
@@ -232,56 +273,91 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
  ALLOCATE(CE_divn(NPR), CE_term1(RLNP))
  ALLOCATE(RWORK(NPR), VWORK(NPR))
 
+!-------------------------------------------------------------
 !volume element
+!-------------------------------------------------------------
  dv = CE_LATT_CUR%OMEGA / CE_GRIDC%NPLWV
 
+!-------------------------------------------------------------
 !remove the scaling in the reciprocal charge density
+!-------------------------------------------------------------
  CE_PS_TOTN = CE_PS_TOTN / CE_LATT_CUR%OMEGA
 
+!-------------------------------------------------------------
 !charge density in rec space, returns \nabla n and |\nabla n|^2 in real space
+!-------------------------------------------------------------
  CALL NABLAN(CE_PS_TOTN, CE_GRIDC, CE_LATT_CUR, CE_gn2_tmp, CE_gn)
 
+!-------------------------------------------------------------
 !charge density in rec space, returns laplacian of n, Lap(n)
 !Lap(n) = (\nabla \dot \nabla n) in real space
+!-------------------------------------------------------------
  CALL LAPLN(CE_PS_TOTN, CE_GRIDC, CE_LATT_CUR, CE_divn)
 
+!-------------------------------------------------------------
 !cavitaion pot in real space
+!-------------------------------------------------------------
  Vcav = 0._q
  VWORK = 0._q
 
+!-------------------------------------------------------------
 !add -Lap(n)/|\nabla n| to Vcav and copy \sqrt(|\nabla n|^2) to CE_gn2_tmp
+!-------------------------------------------------------------
  DO I=1,DIMREAL(CE_GRIDC%MPLWV)
    tmp = SQRT(MAX(REAL(CE_gn2_tmp(I),KIND=q),CHGMIN))
    VWORK(I) = VWORK(I) - (CE_divn(I))/tmp
    CE_gn2_tmp(I) = tmp
  ENDDO
 
+!-------------------------------------------------------------
 !CE_PS_TOTN to the real space
+!-------------------------------------------------------------
  CALL FFT3D(CE_PS_TOTN,CE_GRIDC,1)
 
+!-------------------------------------------------------------
 !unpack complex array to a real array
 !in complex mode, just copies CE_PS_TOTN to RWORK
+!-------------------------------------------------------------
  CALL UNPACK_C2R(CE_PS_TOTN, 1.0_q, CE_PS_TOTN, 0.0_q, RWORK, CE_GRIDC)
 
+!-------------------------------------------------------------
 !charge density must be in real space(unscaled), 
 !returns derivative of shape function wrt the charge density in the real space,
 ! CE_term1 = gamma*A / n, where
 ! gamma * A = exp( -( log(n/n_c) )^2 / (2 sigma^2) ) / ( sigma * sqrt(2*pi) )
+!-------------------------------------------------------------
  CALL SHAPE_GRADN(CE_GRIDC, CE_T_INFO, CE_P, CE_LATT_CUR, RWORK, CE_term1)
 
 !-------------------------------------------------------------
-! epsilon  = 1.0 + (eb_k - 1) * shape function
+! CE_S = shapefunction = N_lq/N_b, density of the solvent as a 
+! function of n(r) over the bulk solvent density.
+! shapefunction value varies from 0 in the solute to 1
+! in the solvent
+!
+! CE_d_eps = epsilon  = 1.0 + (eb_k - 1) * shape function
+!
+! CE_kappa2 = kappa2  = kappa2b_k * shape function
+! kappa2b_k: inverse of the square of debye length in angstroms
 !-------------------------------------------------------------
  DO I=1, CE_GRIDC%RL%NP
+
    CE_S(I) = ERRFC( log(MAX(REAL(RWORK(I),KIND=q),CHGMIN)/nc_k) / SQRT(2._q)/sigma_k ) / 2._q
-   CE_d_eps(I)= 1._q + (eb_k - 1._q) * CE_S(I)
+
+   CE_d_eps(I) = 1._q + (eb_k - 1._q) * CE_S(I)
+
+   CE_kappa2(I) = kappa2b_k * CE_S(I)
+
  END DO
 
+!-------------------------------------------------------------
 !quantum surface area
+!-------------------------------------------------------------
  CE_qs = 0._q
 
+!-------------------------------------------------------------
 !quantum surface area, integral of (gamma*A / n) * |\nabla n| 
 != CE_term1 * \sqrt(CE_gn2_tmp)
+!-------------------------------------------------------------
  DO I=1, CE_GRIDC%RL%NP
    CE_qs = CE_qs + (CE_term1(I)) * (CE_gn2_tmp(I))
  ENDDO
@@ -290,7 +366,9 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
 
  CALLMPI( M_sum_d(CE_GRIDC%COMM,CE_qs,1))
 
+!-------------------------------------------------------------
 !cavitation energy
+!-------------------------------------------------------------
  Acav = tau * CE_qs
 
 #ifdef debugsol
@@ -301,7 +379,9 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
  ENDIF
 #endif
 
+!-------------------------------------------------------------
 !1/ |nabla n|
+!-------------------------------------------------------------
  DO I=1, DIMREAL(CE_GRIDC%MPLWV)
    CE_gn2_tmp(I) = 1._q / ( MAX(CE_gn2_tmp(I), CHGMIN) ) 
  ENDDO
@@ -313,29 +393,40 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
 !in complex mode, same as  CE_gn2 = CMPLX(CE_gn2_tmp)
  CALL PACK_R2C(CE_gn2_tmp,CE_gn2,CE_GRIDC)
 
+!-------------------------------------------------------------
 !1/ |nabla n| to reciprocal space to take the gradient
+!-------------------------------------------------------------
  CALL FFT3D(CE_gn2,CE_GRIDC,-1)
  CALL SETUNB(CE_gn2,CE_GRIDC)
  CE_gn2 = CE_gn2/CE_GRIDC%NPLWV
 
+!-------------------------------------------------------------
 !\nabla(1 / |\nabla n|), CE_ggn in real space
+!-------------------------------------------------------------
  CALL NABLAN(CE_gn2, CE_GRIDC, CE_LATT_CUR, CE_ggn2, CE_ggn)
 
+!-------------------------------------------------------------
 !add -(\nabla n . \nabla(1/ |\nabla n|)) to Vcav in real space
 !and multiply by CE_term1 = gamma*A/n in real space
+!-------------------------------------------------------------
  DO I=1, CE_GRIDC%RL%NP
-  tmp = ( CE_gn(1,I)*CE_ggn(1,I) + CE_gn(2,I)*CE_ggn(2,I) + CE_gn(3,I)*CE_ggn(3,I) ) * (CE_term1(I))
+  tmp = ( CE_gn(1,I)*CE_ggn(1,I) + CE_gn(2,I)*CE_ggn(2,I) +&
+        & CE_gn(3,I)*CE_ggn(3,I) ) * (CE_term1(I))
   VWORK(I) = VWORK(I) - tmp
  ENDDO
 
  CALL PACK_R2C(VWORK, Vcav, CE_GRIDC)
 
+!-------------------------------------------------------------
 !Vcav to reciprocal space
+!-------------------------------------------------------------
  CALL FFT3D(Vcav,CE_GRIDC,-1)
  CALL SETUNB(Vcav,CE_GRIDC)
  Vcav = Vcav/CE_GRIDC%NPLWV
 
+!-------------------------------------------------------------
 !multiply by the surface tension
+!-------------------------------------------------------------
  Vcav = Vcav * tau
 
  DEALLOCATE(CE_S, RWORK, VWORK)
@@ -354,8 +445,8 @@ END SUBROUTINE CREATECAVITY
 !!
 !!======================================================================
 
-SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
-                    &MN_phi,NCGSOL)
+SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
+                  & MN_kappa2, MN_TOTN, MN_phi, NCGSOL)
 
  IMPLICIT NONE
 
@@ -371,12 +462,14 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  COMPLEX(q),ALLOCATABLE :: MN_Lp(:)
 !parameters in CG
  REAL(q) :: MN_beta,MN_alpha,GX,GY,GZ,rinvLr,eps_bar,r2
- REAL(q),INTENT(IN) ::  MN_d_eps(DIMREAL(MN_GRIDC%MPLWV))
+ REAL(q),INTENT(IN) ::  MN_d_eps(DIMREAL(MN_GRIDC%MPLWV)),MN_kappa2(DIMREAL(MN_GRIDC%MPLWV))
  COMPLEX(q),ALLOCATABLE :: MN_GSQU(:)
 
  COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
+
+ COMPLEX(q),ALLOCATABLE :: phi_work(:)
 
  INTEGER :: I,NC,N1,N2,N3
  INTEGER :: flag,count
@@ -391,7 +484,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  ALLOCATE(MN_d(MN_GRIDC%MPLWV))
 
  ALLOCATE(gradphi_x_in(MN_GRIDC%MPLWV),gradphi_y_in(MN_GRIDC%MPLWV))
- ALLOCATE(gradphi_z_in(MN_GRIDC%MPLWV))
+ ALLOCATE(gradphi_z_in(MN_GRIDC%MPLWV), phi_work(MN_GRIDC%MPLWV))
 
 
  count=0
@@ -402,7 +495,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  rinvLr=0._q
  r2 = 0._q
  
-I = 0
+ I = 0
 
 !-------------------------------------------------------------
 !calculating 1/G^2 for preconditioning
@@ -411,25 +504,38 @@ I = 0
          N2= MN_GRIDC%RC%I2(NC)
          N3= MN_GRIDC%RC%I3(NC)
          row: DO N1=1,MN_GRIDC%RC%NROW
-I = I +1
+                 I = I +1
 !GX,GY,GZ
-   GX=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
-   GY=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
-   GZ=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
-!set G=0 component 0
-   IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
-      &(MN_GRIDC%LPCTZ(N3)==0)) THEN
-    MN_GSQU(I)=(0.0_q,0.0_q)
-   ELSE
-! 1/G^2
-    MN_GSQU(I)=1/(GX*GX+GY*GY+GZ*GZ)/(TPI**2)
-   ENDIF
+                 GX = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1)+MN_GRIDC%LPCTY(N2)*&
+                     & MN_LATT_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
+
+                 GY = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2)*&
+                     & MN_LATT_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
+
+                 GZ = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2)*&
+                     & MN_LATT_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
+
+!set G=0 component to 1/kappa2b_k if kappa2b_k is not zero
+                 IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
+                     &(MN_GRIDC%LPCTZ(N3)==0)) THEN
+
+                    IF (kappa2b_k<1E-10) THEN
+
+                        MN_GSQU(I)= (0.0_q,0.0_q)
+
+                    ELSE
+
+                        MN_GSQU(I)= 1._q/kappa2b_k 
+
+                    ENDIF
+
+                 ELSE
+! 1/(G^2 + kappa2b_k)
+                    MN_GSQU(I) = 1._q/((GX*GX+GY*GY+GZ*GZ) * (TPI**2) + kappa2b_k)
+                 ENDIF
  
- ENDDO row
-ENDDO col
+              ENDDO row
+      ENDDO col
 
 !*********************************************************
 ! start of Pre-conditioned Conjugate Gradient
@@ -437,57 +543,57 @@ ENDDO col
 
 !-------------------------------------------------------------
 !intial guess for phi
+!phi0 = (totn*EDEPS/omega) / (G^2 + kappa2b_k)
+!unscaled charge density used
 !-------------------------------------------------------------
  IF (PK_counter ==1) THEN
    DO I=1,MN_GRIDC%RC%NP
-     MN_phi(I) = REAL(MN_GSQU(I))*(MN_TOTN(I))
+     MN_phi(I) = REAL(MN_GSQU(I)) * (MN_TOTN(I) * EDEPS / MN_LATT_CUR%OMEGA)
    ENDDO
  ELSE
    MN_phi = Sol_phi !phi from previous vasp iteration, unscaled
  ENDIF
 
 !-------------------------------------------------------------
-!Leps returns Laplasian Lp=div ( epsilon * grad ) phi in k space
-!epsilon is in real space
+!Leps returns  MN_Lp
+!MN_Lp = div ( epsilon * grad ) phi - kappa^2 * phi
+!in k space
+!Both kappa^2 and epsilon are in real space
 !Lp = - A*phi
 !-------------------------------------------------------------
- CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_phi,MN_d_eps,gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
+ CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_phi, MN_d_eps, MN_kappa2,&
+         & gradphi_x_in, gradphi_y_in, gradphi_z_in, phi_work, MN_Lp)
 
 !-------------------------------------------------------------
 ! the residue
-!r=A*phi+CHTOT+N
+!r = A*phi + (CHTOT + N)
 !-------------------------------------------------------------
- DO I=1,MN_GRIDC%RC%NP
-   MN_RESID(I)=MN_Lp(I) + MN_TOTN(I)
+ DO I = 1, MN_GRIDC%RC%NP
+   MN_RESID(I) = MN_Lp(I) + MN_TOTN(I) * EDEPS / MN_LATT_CUR%OMEGA
  ENDDO
 
 !-------------------------------------------------------------
 !preconditioning of the residue, MN_Z = invL(r)
-!z=r/G^2
+!z = precond * r
 !-------------------------------------------------------------
- MN_Z=0._q
+ MN_Z = 0._q
 
- DO I=1,MN_GRIDC%RC%NP
-   MN_Z(I)=REAL(MN_GSQU(I))*MN_RESID(I)
+ DO I = 1, MN_GRIDC%RC%NP
+   MN_Z(I) = REAL(MN_GSQU(I)) * MN_RESID(I)
  ENDDO
 
 !-------------------------------------------------------------
-!without preconditioning
+!rinvLr = transpose(r) . z
 !-------------------------------------------------------------
-!MN_Z=MN_RESID
-
-! rinvLr = DOT_PRODUCT(MN_RESID,MN_Z)
  CALL MY_D_PROD(rinvLr, MN_RESID, MN_Z, MN_GRIDC)
-
- CALLMPI( M_sum_d(MN_GRIDC%COMM,rinvLr,1))
+ CALLMPI( M_sum_d(MN_GRIDC%COMM, rinvLr, 1))
 
 !-------------------------------------------------------------
 !square of the residue
-!r^2
+!r2 = r^2
 !-------------------------------------------------------------
-! r2 = DOT_PRODUCT(MN_RESID,MN_RESID)
  CALL MY_D_PROD(r2, MN_RESID, MN_RESID, MN_GRIDC)
- CALLMPI( M_sum_d(MN_GRIDC%COMM,r2,1))
+ CALLMPI( M_sum_d(MN_GRIDC%COMM, r2, 1))
 
  r20 = r2
 
@@ -499,12 +605,13 @@ ENDDO col
 
  DO WHILE ( (count < 20000) .AND. (sqrt(r2) > EDIFFSOL).AND. (sqrt(rinvLr) > 1e-10) )
 
-   CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_d,MN_d_eps,gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
+   CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_d, MN_d_eps, MN_kappa2,&
+           & gradphi_x_in, gradphi_y_in, gradphi_z_in, phi_work, MN_Lp)
 
 !   MN_alpha = DOT_PRODUCT(MN_d,MN_Lp)
    CALL MY_D_PROD(MN_alpha, MN_d, MN_Lp, MN_GRIDC)
 
-   CALLMPI( M_sum_d(MN_GRIDC%COMM,MN_alpha,1))
+   CALLMPI( M_sum_d(MN_GRIDC%COMM, MN_alpha, 1))
 
    MN_alpha = 1._q/MN_alpha
 
@@ -514,28 +621,25 @@ ENDDO col
 
    MN_RESID = MN_RESID +  (MN_alpha*MN_Lp)
 
-   DO I=1,MN_GRIDC%RC%NP
-     MN_Z(I) = (REAL(MN_GSQU(I)))*MN_RESID(I)
+   DO I = 1, MN_GRIDC%RC%NP
+     MN_Z(I) = (REAL(MN_GSQU(I))) * MN_RESID(I)
    ENDDO
 
-   MN_beta = 1/rinvLr
+   MN_beta = 1._q/rinvLr
 
    CALL MY_D_PROD(rinvLr, MN_RESID, MN_Z, MN_GRIDC)
 
-   CALLMPI( M_sum_d(MN_GRIDC%COMM,rinvLr,1))
+   CALLMPI( M_sum_d(MN_GRIDC%COMM, rinvLr, 1))
 
    MN_beta = MN_beta * rinvLr
 
-   MN_d = MN_Z + MN_beta*MN_d
+   MN_d = MN_Z + MN_beta * MN_d
 
    r2 = 0._q
 
    CALL MY_D_PROD(r2, MN_RESID, MN_RESID, MN_GRIDC)
-!   DO I=1,MN_GRIDC%RC%NP
-!     r2 = r2 + MN_RESID(I)*CONJG(MN_RESID(I))
-!   ENDDO
 
-   CALLMPI( M_sum_d(MN_GRIDC%COMM,r2,1))
+   CALLMPI( M_sum_d(MN_GRIDC%COMM, r2, 1))
 
 #ifdef debugsol
    IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) SQRT(rinvLr), SQRT(r2)
@@ -547,27 +651,38 @@ ENDDO col
 !end of CG loop
 !-------------------------------------------------------------
 NCGSOL = count
+
 #ifdef debugsol
 IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
 #endif
+
 !-------------------------------------------------------------
 !save phi for the intial guess for the next iteration
 !-------------------------------------------------------------
  Sol_phi = MN_phi 
 
 !-------------------------------------------------------------
-!multiply by 1/epsilon_0and divide by volume for CHTOT
+!multiply by e/epsilon_0 and divide by volume for CHTOT: not neeeded
+! already taken care of in totn above
 !-------------------------------------------------------------
- MN_phi = MN_phi * EDEPS / MN_LATT_CUR%OMEGA
+!! MN_phi = MN_phi !!* EDEPS / MN_LATT_CUR%OMEGA
+
+!test
+!MN_phi(1) = 0._q
+#ifdef debugsol
+   IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) MN_phi(1)
+#endif
+!test
 
 !-------------------------------------------------------------
-!dealloacte all the work arrays
+!deallocate all the work arrays
 !-------------------------------------------------------------
  DEALLOCATE(MN_RESID,MN_Z,MN_Lp,MN_GSQU)
  DEALLOCATE(MN_d)
- DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in)
+ DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in,phi_work)
 
  RETURN
+
 END SUBROUTINE MINIMIZE
 
 !>======================SUBROUTINE Leps==================================
@@ -577,8 +692,8 @@ END SUBROUTINE MINIMIZE
 !!
 !!=======================================================================
 
-SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,&
-                &gradphi_x_in,gradphi_y_in,gradphi_z_in,LPS_Lp)
+SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kappa2,&
+                &gradphi_x_in, gradphi_y_in, gradphi_z_in, phi_work, LPS_Lp)
 
  IMPLICIT NONE
 
@@ -586,19 +701,20 @@ SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,&
  TYPE (type_info) LPS_T_INFO
  TYPE (latt) LPS_LATT_CUR
 
- REAL(q),INTENT(IN) ::  LPS_d_eps(DIMREAL(LPS_GRIDC%MPLWV))
- COMPLEX(q),INTENT(IN) ::  LPS_phi(LPS_GRIDC%MPLWV)
+ REAL(q),INTENT(IN) ::  LPS_d_eps(DIMREAL(LPS_GRIDC%MPLWV)),LPS_kappa2(DIMREAL(LPS_GRIDC%MPLWV))
+ COMPLEX(q),INTENT(INOUT) ::  LPS_phi(LPS_GRIDC%MPLWV)
  COMPLEX(q),INTENT(OUT) :: LPS_Lp(LPS_GRIDC%MPLWV)
- REAL(q) RINPL,GX,GY,GZ
+ REAL(q) :: RINPL,GX,GY,GZ
 
  COMPLEX(q),INTENT(INOUT) :: gradphi_x_in(LPS_GRIDC%MPLWV)
  COMPLEX(q),INTENT(INOUT) :: gradphi_y_in(LPS_GRIDC%MPLWV)
  COMPLEX(q),INTENT(INOUT) :: gradphi_z_in(LPS_GRIDC%MPLWV)
 
- INTEGER(q) N
- INTEGER I,J,k,N1,N2,N3,NC
+ COMPLEX(q),INTENT(INOUT) :: phi_work(LPS_GRIDC%MPLWV)
+
+ INTEGER(q) :: N,I,J,k,N1,N2,N3,NC
       
- N=LPS_GRIDC%NPLWV
+ N = LPS_GRIDC%NPLWV
 
 
 !-------------------------------------------------------------------------
@@ -632,21 +748,43 @@ SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,&
  CALL FFT3D(gradphi_z_in,LPS_GRIDC,1) 
 
 !-------------------------------------------------------------------------
+!phi to real space
+!-------------------------------------------------------------------------
+ CALL FFT3D(LPS_phi, LPS_GRIDC, 1) 
+
+!-------------------------------------------------------------------------
 !multiply grad phi with epsilon in real space
+! Also compute:
+!!phi_work = phi * eb_k * kappa^2, both phi and kappa2 in real space
 !-------------------------------------------------------------------------
 #ifdef realmode
-k =1
- DO j=1,DIMREAL(LPS_GRIDC%MPLWV),2
-   gradphi_x_in(k) = CMPLX(REAL(gradphi_x_in(k),KIND=q)*LPS_d_eps(j),AIMAG(gradphi_x_in(k))*LPS_d_eps(j+1),KIND=q)
-   gradphi_y_in(k) = CMPLX(REAL(gradphi_y_in(k),KIND=q)*LPS_d_eps(j),AIMAG(gradphi_y_in(k))*LPS_d_eps(j+1),KIND=q)
-   gradphi_z_in(k) = CMPLX(REAL(gradphi_z_in(k),KIND=q)*LPS_d_eps(j),AIMAG(gradphi_z_in(k))*LPS_d_eps(j+1),KIND=q)
-k = k+1
+
+ k = 1
+
+ DO j = 1, DIMREAL(LPS_GRIDC%MPLWV), 2
+   gradphi_x_in(k) = CMPLX( REAL(gradphi_x_in(k),KIND=q)*LPS_d_eps(j),&
+                          & AIMAG(gradphi_x_in(k))*LPS_d_eps(j+1),KIND=q)
+   gradphi_y_in(k) = CMPLX( REAL(gradphi_y_in(k),KIND=q)*LPS_d_eps(j),&
+                         & AIMAG(gradphi_y_in(k))*LPS_d_eps(j+1),KIND=q)
+   gradphi_z_in(k) = CMPLX( REAL(gradphi_z_in(k),KIND=q)*LPS_d_eps(j),&
+                          & AIMAG(gradphi_z_in(k))*LPS_d_eps(j+1),KIND=q)
+
+   phi_work(k) = CMPLX( REAL(LPS_phi(k),KIND=q) * eb_k * LPS_kappa2(j),&
+                     & AIMAG(LPS_phi(k)) * eb_k * LPS_kappa2(j+1), KIND=q )
+
+   k = k+1
+
  ENDDO
+
 #else
- DO j=1,LPS_GRIDC%RL%NP
+
+ DO j = 1,LPS_GRIDC%RL%NP
    gradphi_x_in(j) = gradphi_x_in(j)*LPS_d_eps(j)
    gradphi_y_in(j) = gradphi_y_in(j)*LPS_d_eps(j)
    gradphi_z_in(j) = gradphi_z_in(j)*LPS_d_eps(j)
+!phi_work = phi * eb_k * kappa^2, both phi and kappa2 in real space
+   phi_work(j) = LPS_phi(j) * eb_k * LPS_kappa2(j)
+
  ENDDO
 #endif
 !-------------------------------------------------------------------------
@@ -661,16 +799,35 @@ k = k+1
  CALL SETUNB(gradphi_z_in,LPS_GRIDC)   
 
 !-------------------------------------------------------------------------
+!phi_work in kspace
+!-------------------------------------------------------------------------
+ CALL FFT3D(phi_work, LPS_GRIDC, -1)   
+
+ CALL SETUNB(phi_work, LPS_GRIDC)   
+
+!-------------------------------------------------------------------------
+!phi to k space
+!-------------------------------------------------------------------------
+ CALL FFT3D(LPS_phi, LPS_GRIDC, -1) 
+ CALL SETUNB(LPS_phi, LPS_GRIDC)   
+
+!-------------------------------------------------------------------------
 !scaling
 !-------------------------------------------------------------------------
  DO I=1,LPS_GRIDC%RC%NP
    gradphi_x_in(I) = gradphi_x_in(I)/N
    gradphi_y_in(I) = gradphi_y_in(I)/N
    gradphi_z_in(I) = gradphi_z_in(I)/N
+
+   phi_work(I) = phi_work(I)/N
+
+   LPS_phi(I) = LPS_phi(I)/N
+
  ENDDO
 
 !-------------------------------------------------------------------------
 !div(epsilon*grad phi) in kspace
+!add the kappa^2 contrib, -phi_work
 !-------------------------------------------------------------------------
  DO I=1,LPS_GRIDC%RC%NP
    N1= MOD((I-1),LPS_GRIDC%RC%NROW) +1
@@ -686,7 +843,7 @@ k = k+1
         &LPS_LATT_CUR%B(3,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(3,3))
 
    LPS_Lp(I)= CITPI*(GX*gradphi_x_in(I) + GY*gradphi_y_in(I) + &
-              &GZ*gradphi_z_in(I))
+              &GZ*gradphi_z_in(I)) - phi_work(I)
 
  ENDDO
  
@@ -694,13 +851,15 @@ k = k+1
 
 !>===========================SUBROUTINE  EPS_POT=======================
 !!
-!!subroutine that evaluates the V_epsilon
-!!returns -(depsilon(n)/dn)*|grad phi|^2 in fourier space
-!!though the multiplication is done in real space
+!!subroutine that evaluates the V
+!!returns -(depsilon(n)/dn)*|grad phi|^2 - eb_k*(dkappa^2(n)/dn)*(phi)^2
+!! in fourier space
+!! Both terms are computed in real space first and then FFT to k space
 !!
 !!====================================================================
 
-SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi,EPP_deps,EPP_CWORK)
+SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
+                  & EPP_phi, EPP_deps, EPP_kappa2, EPP_CWORK)
 
  IMPLICIT NONE
 
@@ -711,20 +870,27 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi
 
  COMPLEX(q),INTENT(OUT) :: EPP_CWORK(EPP_GRIDC%MPLWV)
  RGRID,INTENT(IN)       :: EPP_PS_TOTN(DIMREAL(EPP_GRIDC%MPLWV))
- COMPLEX(q),INTENT(IN)  :: EPP_phi(EPP_GRIDC%MPLWV)
+ COMPLEX(q),INTENT(INOUT)  :: EPP_phi(EPP_GRIDC%MPLWV)
  REAL(q),INTENT(IN)     :: EPP_deps(EPP_GRIDC%MPLWV)
+ REAL(q),INTENT(IN)     :: EPP_kappa2(EPP_GRIDC%MPLWV)
 
- REAL(q), ALLOCATABLE   :: eprime(:)
+ REAL(q), ALLOCATABLE   :: eprime(:), kprime(:)
  REAL(q),ALLOCATABLE    :: phisq(:), RWORK(:)
  REAL(q)                :: EPP_CWORK_temp
  INTEGER(q)             :: I,J  
 
- ALLOCATE(eprime(EPP_GRIDC%RL%NP), phisq(DIMREAL(EPP_GRIDC%MPLWV)), RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
+ ALLOCATE(eprime(EPP_GRIDC%RL%NP), kprime(EPP_GRIDC%RL%NP) )
+ ALLOCATE(phisq(DIMREAL(EPP_GRIDC%MPLWV)), RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
 
 !-------------------------------------------------------------------------
-!SHAPE_GRADN returns eprime, the derivative of shape function wrt the charge density in real space
+!SHAPE_GRADN returns eprime, the derivative of shape function wrt the charge 
+!density in real space
+! shapefunction = erfc = 1 - erf
+! ==> -d erfc/dx = d erf/dx
+! eprime = d erf/dx, so the minus sign in the potenials are taken care of
 !-------------------------------------------------------------------------
    CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, EPP_PS_TOTN, eprime)
+   kprime = eprime * kappa2b_k
    eprime = eprime * (eb_k - 1._q)
 
 !-------------------------------------------------------------------------
@@ -735,19 +901,39 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi
    CALL NABLAN(EPP_phi,EPP_GRIDC,EPP_LATT_CUR,phisq)
 
 !-------------------------------------------------------------------------
+!phi to real space
+!-------------------------------------------------------------------------
+ CALL FFT3D(EPP_phi, EPP_GRIDC, 1) 
+
+!-------------------------------------------------------------------------
 ! eps potential in real space
 !-------------------------------------------------------------------------
    EPP_CWORK_temp = 0._q
 
 !-------------------------------------------------------------------------
 !multiply eprime and phisq in real space
+!add kappa^2 term, eb_k * kprime * phi^2 in real space
 !-------------------------------------------------------------------------
    RWORK = 0._q
 
    DO I=1, EPP_GRIDC%RL%NP
-      EPP_CWORK_temp = (eprime(I)) * (phisq(I))
+      EPP_CWORK_temp = (eprime(I)) * (phisq(I)) + &
+                      & eb_k * kprime(I) * EPP_phi(I) * EPP_phi(I)
       RWORK(I) = EPP_CWORK_temp
    ENDDO
+
+!-------------------------------------------------------------------------
+!phi to k space
+!-------------------------------------------------------------------------
+ CALL FFT3D(EPP_phi, EPP_GRIDC, -1) 
+
+!-------------------------------------------------------------------------
+!scale phi
+!-------------------------------------------------------------------------
+ DO I=1,EPP_GRIDC%RC%NP
+   EPP_phi(I) = EPP_phi(I)/EPP_GRIDC%NPLWV
+ ENDDO
+
 
  CALL PACK_R2C(RWORK, EPP_CWORK, EPP_GRIDC)
    
@@ -758,7 +944,7 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi
    CALL SETUNB(EPP_CWORK,EPP_GRIDC)
    EPP_CWORK = EPP_CWORK/EPP_GRIDC%NPLWV
 
- DEALLOCATE(eprime,phisq,RWORK)
+ DEALLOCATE(eprime,kprime,phisq,RWORK)
  
  RETURN
 
@@ -770,7 +956,8 @@ END SUBROUTINE EPS_POT
 !!
 !!=====================================================================
 
-SUBROUTINE SHAPE_GRADN(EPR_GRIDC, EPR_T_INFO, EPR_P, EPR_LATT_CUR, EPR_PS_TOTN, eprime)
+SUBROUTINE SHAPE_GRADN(EPR_GRIDC, EPR_T_INFO, EPR_P, EPR_LATT_CUR,&
+                     & EPR_PS_TOTN, eprime)
 
  IMPLICIT NONE
 
@@ -836,7 +1023,8 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    N2= D_GRIDC%RC%I2(NC)
    N3= D_GRIDC%RC%I3(NC)
 
-   GX = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(1,1)+D_GRIDC%LPCTY(N2)*D_LATT_CUR%B(1,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(1,3))
+   GX = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(1,1)+D_GRIDC%LPCTY(N2)*&
+        & D_LATT_CUR%B(1,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(1,3))
 
    CR(I) = D_PHI(I) * GX * CITPI
  ENDDO
@@ -1192,6 +1380,6 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 END SUBROUTINE UNPACK_C2R
 
 END MODULE POT_LPCM_K
-!*******************************************************************************************
-!*****************************************END OF MODULE POT_LPCM_K ******************************
-!*******************************************************************************************
+!***********************************************************************************
+!****************************END OF MODULE POT_LPCM_K ******************************
+!***********************************************************************************
