@@ -1379,11 +1379,12 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 
 END SUBROUTINE UNPACK_C2R
 
-!>==========================SUBROUTINE WRITE_TO_FILE=================
+!>==========================SUBROUTINE WRITE_TO_FILE============================
 !!
 !! write real space quantities to file
+!! writes poscar first and then CVTOT(could be any quantity defined on RL grid)
 !!
-!!==============================================================
+!!=============================================================================
 
 SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
