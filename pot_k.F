@@ -19,6 +19,7 @@
 !***********************************************************************
 
 #include "symbol.inc"
+#define sol_io    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)
 
 !>==========================MODULE POT_K========================================
 !!
@@ -114,8 +115,8 @@ MODULE POT_K
     Atot = 0._q
 
 #ifdef debugsol
-    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Begin Solvation calculations'
-    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the charge densities'
+    sol_io 'Begin Solvation calculations'
+    sol_io 'Setting up the charge densities'
 #endif
 !-------------------------------------------------------------
 !Gaussian ionic charge in fourier space
@@ -146,7 +147,7 @@ MODULE POT_K
 !   PS_TOTN = SP_CHTOT + SP_N
 
 #ifdef debugsol
-    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Begin minimization'
+    sol_io 'Begin minimization'
 #endif
 
 !-------------------------------------------------------------
@@ -160,7 +161,7 @@ MODULE POT_K
    IF (LDEFAULTPCM) THEN
 
 #ifdef debugsol
-        IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Calling vcorr_lpcm minimization'
+   sol_io 'Calling vcorr_lpcm minimization'
 #endif
 
 !-------------------------------------------------------------
@@ -174,7 +175,7 @@ MODULE POT_K
                          & tau, EDIFFSOL)
 
 #ifdef debugsol
-        IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Return from vcorr_lpcm minimization'
+        sol_io 'Return from vcorr_lpcm minimization'
 #endif
 
 !-------------------------------------------------------------
@@ -194,7 +195,7 @@ MODULE POT_K
 !-------------------------------------------------------------    
 
 #ifdef debugsol
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'End minimization'
+   sol_io 'End minimization'
 #endif
 
    CALL SETUNB(Vcorr,SP_GRIDC)
@@ -204,23 +205,19 @@ MODULE POT_K
 !Ecorr3 = Vcorr*n(just electrostatic correction)
 !-------------------------------------------------------------
 !test
-write(*,*) 'Vcorr(1), just electr = ', Vcorr(1)
+   sol_io 'Vcorr(1), electrostatic corr. = ', Vcorr(1)
 !test
 
    CALL MY_D_PROD(Ecorr3, SP_CHTOT(1,1), Vcorr, SP_GRIDC)
 !   CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr3,1))
    CALLMPI( M_sum_s(SP_GRIDC%COMM,1,Ecorr3,0,0,0))
-#ifdef debugsol
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) SP_CHTOT(1,1), Ecorr3
-!STOP
-#endif
 
 !-------------------------------------------------------------
 !Ecorr4 = Vdiel*n, 
 !where Vdiel = epsilon and kappa2 derivative terms + cavity pot
 !-------------------------------------------------------------
 !test
-write(*,*) 'Vdiel(1), just electr = ', Vdiel(1)
+    sol_io 'Vdiel(1), the rest = ', Vdiel(1)
 !test
 
    CALL MY_D_PROD(Ecorr4, SP_CHTOT(1,1), Vdiel, SP_GRIDC)
@@ -240,7 +237,7 @@ write(*,*) 'Vdiel(1), just electr = ', Vdiel(1)
    Vcorr = Vcorr + Vdiel
 
 #ifdef debugsol
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Atot, Ecorr3, Ecorr4 ', Atot, Ecorr3, Ecorr4
+   sol_io 'Atot, Ecorr3, Ecorr4 ', Atot, Ecorr3, Ecorr4
 #endif
 
 !-------------------------------------------------------------
@@ -266,14 +263,14 @@ write(*,*) 'Vdiel(1), just electr = ', Vdiel(1)
 !if LSOL = .FALSE., sets Vcorr and Ecorr to 0._q
 !-------------------------------------------------------------
   ELSE
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'LSOL not set. No solvation for you'
+   sol_io 'LSOL not set. No solvation for you'
    Vcorr = 0._q
    Ecorr = 0._q
 
   ENDIF
 
 #ifdef debugsol
-  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'End Solvation calculations'
+  sol_io 'End Solvation calculations'
 #endif
 
   RETURN
@@ -441,7 +438,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !      CALLMPI( M_sum_d(SP_GRIDC%COMM, EIFOR_SOL(1,1),SP_T_INFO%NIONS*3))
       CALL  DIRKAR(SP_T_INFO%NIONS,EIFOR_SOL,SP_LATT_CUR%B)
 #ifdef debugsol
-      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*)'FORCE CORRECTIONS'
+      sol_io 'FORCE CORRECTIONS'
       IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,SP_T_INFO%NIONS)
 #endif
 !STOP
@@ -498,14 +495,14 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
  IF (PK_COUNTER == 1) THEN
    ALLOCATE(sigma_rc_k(T_INFO%NTYP))
 #ifdef debugsol
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the paramters.'
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Unless  explicity specified in the INCAR file these values will be used as the defaults'
+   sol_io 'Setting up the paramters.'
+   sol_io 'Unless  explicity specified in the INCAR file these values will be used as the defaults'
 #endif
 
 !   delta_grd = ((LATT_CUR%OMEGA)/(GRIDC%NPLWV))**(1._q/3._q)
    delta_grd = MAXVAL(LATT_CUR%ANORM/GRIDC%NGPTAR)
 #ifdef debugsol      
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'delta_grd = ', delta_grd      
+   sol_io 'delta_grd = ', delta_grd      
 #endif
 
 !---------------------------------------------------------------
@@ -528,7 +525,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 
 !   sigma_rc_k = MINVAL(RCS)*2.0/4.0_q 
 #ifdef debugsol
-  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'RCOREs = ', RCS      
+   sol_io 'RCOREs = ', RCS      
 #endif
 !STOP
    sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
@@ -553,18 +550,18 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 #ifdef debugsol      
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_NC_K'',the width of ionic gaussians, not specified, using the default'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_nc_k = ',sigma_nc_k          
+         sol_io '''SIGMA_NC_K'',the width of ionic gaussians, not specified, using the default'
+         sol_io 'sigma_nc_k = ',sigma_nc_k          
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_nc_k(width of ionic gaussians) = ',sigma_nc_k 
+         sol_io 'Found : sigma_nc_k(width of ionic gaussians) = ',sigma_nc_k 
 
       ENDIF
 #endif
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_NC_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''SIGMA_NC_K''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -575,12 +572,12 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_RC_K'',the width of pseudo-core gaussians, not specified, using the default'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_rc_k = ',sigma_rc_k          
+         sol_io '''SIGMA_RC_K'',the width of pseudo-core gaussians, not specified, using the default'
+         sol_io 'sigma_rc_k = ',sigma_rc_k          
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_rc_k(width of pseudo-core gaussians) = ',sigma_rc_k0
+         sol_io 'Found : sigma_rc_k(width of pseudo-core gaussians) = ',sigma_rc_k0
          DO I=1,T_INFO%NTYP
             sigma_rc_k(I) = sigma_rc_k0
          ENDDO
@@ -589,8 +586,8 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_RC_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''SIGMA_RC_K''from INCAR.'
+         sol_io  ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -601,21 +598,20 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''CORE_C'', magnitude of pseudo-core charge, not specified, using the default'
+         sol_io '''CORE_C'', magnitude of pseudo-core charge, not specified, using the default'
 
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'CORE_C = ', CORE_C          
+         sol_io 'CORE_C = ', CORE_C          
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : CORE_C (magnitude of pseudo-core charge) = ', CORE_C 
+         sol_io 'Found : CORE_C (magnitude of pseudo-core charge) = ', CORE_C 
          
       ENDIF
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''CORE_C''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''CORE_C''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -723,7 +719,7 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   kappa2b_k = 0._q !(1._q/9._q)
 
 #ifdef debugsol
-  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
+  sol_io 'Reading in solvation model parameters from INCAR. If not present, default values will be used'
 #endif
 
 !---------------------------------------------------------------
@@ -768,19 +764,19 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_K'',the width of dielectric cavity, not specified, using the default(fit parameter for solvent = water)'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_k = ',sigma_k          
+         sol_io '''SIGMA_K'',the width of dielectric cavity, not specified, using the default(fit parameter for solvent = water)'
+         sol_io 'sigma_k = ',sigma_k          
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_k(width of dielectric cavity) = ',sigma_k 
+         sol_io 'Found : sigma_k(width of dielectric cavity) = ',sigma_k 
          
       ENDIF
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''SIGMA_K''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -791,20 +787,20 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water)'
+         sol_io '''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water)'
 
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'nc_k = ', nc_k          
+         sol_io 'nc_k = ', nc_k          
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : nc_k (cavity turn-on charge density) = ', nc_k 
+         sol_io 'Found : nc_k (cavity turn-on charge density) = ', nc_k 
          
       ENDIF
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''NC_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''NC_K''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -815,20 +811,20 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EB_K'', relative permittivity of the bulk solvent, not specified, using the default(for solvent = water)'
+         sol_io '''EB_K'', relative permittivity of the bulk solvent, not specified, using the default(for solvent = water)'
 
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'eb_k = ', eb_k          
+         sol_io 'eb_k = ', eb_k          
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : eb_k (relative permittivity of the bulk solvent) = ', eb_k 
+         sol_io 'Found : eb_k (relative permittivity of the bulk solvent) = ', eb_k 
          
       ENDIF
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EB_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''EB_K''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -841,25 +837,25 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''LAMBDA_D_K'', debye screening length not specified'
+         sol_io '''LAMBDA_D_K'', debye screening length not specified'
 
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'kappa2b_k = ', kappa2b_k
+         sol_io 'kappa2b_k = ', kappa2b_k
          
       ELSE IF (IERR == 0 ) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : lambda_d_k (debye screening length) = ', lambda_d_k
+         sol_io 'Found : lambda_d_k (debye screening length) = ', lambda_d_k
 
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'lambda_d_k  = (debye screening length) = ', lambda_d_k
+         sol_io 'lambda_d_k  = (debye screening length) = ', lambda_d_k
 
          kappa2b_k = 1._q / (lambda_d_k ** 2)
 
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
+         sol_io 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
          
       ENDIF
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''LAMBDA_D_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''LAMBDA_D_K''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -870,19 +866,19 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''TAU'',cavity surface tension, not specified, using the default'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'tau = ',tau
+         sol_io '''TAU'',cavity surface tension, not specified, using the default'
+         sol_io 'tau = ',tau
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : tau(cavity surface tension) = ',tau
+         sol_io 'Found : tau(cavity surface tension) = ',tau
          
       ENDIF
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''TAU''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''TAU''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -893,20 +889,19 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'EDIFFSOL = ', EDIFFSOL          
+         sol_io '''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
+         sol_io 'EDIFFSOL = ', EDIFFSOL          
          
       ELSE IF (IERR == 0 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : EDIFFSOL = ', EDIFFSOL 
+         sol_io 'Found : EDIFFSOL = ', EDIFFSOL 
          
       ENDIF
 #endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EDIFFSOL''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         sol_io 'Error reading ''EDIFFSOL''from INCAR.'
+         sol_io ' Error code = ', IERR
          STOP
       ENDIF
 
@@ -924,7 +919,7 @@ SUBROUTINE SOL_WRITER()
  IMPLICIT NONE
  
  IF (SP_IO%IU6>=0) THEN
-   WRITE(SP_IO%IU6,100) eb_k, kappa2b_k, sigma_k, nc_k, tau
+   WRITE(SP_IO%IU6, 100) eb_k, kappa2b_k, sigma_k, nc_k, tau
  ENDIF
 
 100   FORMAT( &
@@ -1090,7 +1085,7 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
       DEALLOCATE(GWORK,PCWORK)
 
 #ifdef debugsol
-      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*)'FORCE CORRECTIONS'
+      sol_io 'FORCE CORRECTIONS'
       IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,T_INFO%NIONS)
 #endif
 

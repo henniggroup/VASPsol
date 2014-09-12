@@ -772,7 +772,7 @@ SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kap
    phi_work(k) = CMPLX( REAL(LPS_phi(k),KIND=q) * eb_k * LPS_kappa2(j),&
                      & AIMAG(LPS_phi(k)) * eb_k * LPS_kappa2(j+1), KIND=q )
 
-   k = k+1
+   k = k + 1
 
  ENDDO
 
@@ -876,11 +876,13 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
 
  REAL(q), ALLOCATABLE   :: eprime(:), kprime(:)
  REAL(q),ALLOCATABLE    :: phisq(:), RWORK(:)
+ RGRID, ALLOCATABLE     :: RWORK_1(:)
  REAL(q)                :: EPP_CWORK_temp
- INTEGER(q)             :: I,J  
+ INTEGER(q)             :: I,J,K  
 
  ALLOCATE(eprime(EPP_GRIDC%RL%NP), kprime(EPP_GRIDC%RL%NP) )
  ALLOCATE(phisq(DIMREAL(EPP_GRIDC%MPLWV)), RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
+ ALLOCATE(RWORK_1(DIMREAL(EPP_GRIDC%MPLWV)))
 
 !-------------------------------------------------------------------------
 !SHAPE_GRADN returns eprime, the derivative of shape function wrt the charge 
@@ -889,7 +891,10 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
 ! ==> -d erfc/dx = d erf/dx
 ! eprime = d erf/dx, so the minus sign in the potenials are taken care of
 !-------------------------------------------------------------------------
-   CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, EPP_PS_TOTN, eprime)
+  CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, EPP_PS_TOTN, eprime)
+!test
+  CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'EPRIME', eprime)
+!test
    kprime = eprime * kappa2b_k
    eprime = eprime * (eb_k - 1._q)
 
@@ -898,29 +903,36 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
 ! is in reciprocal space, 
 !NABLAN returns |\nabla phi| ^2 in real space
 !-------------------------------------------------------------------------
-   CALL NABLAN(EPP_phi,EPP_GRIDC,EPP_LATT_CUR,phisq)
+ CALL NABLAN(EPP_phi,EPP_GRIDC,EPP_LATT_CUR,phisq)
 
 !-------------------------------------------------------------------------
 !phi to real space
 !-------------------------------------------------------------------------
  CALL FFT3D(EPP_phi, EPP_GRIDC, 1) 
 
+ CALL UNPACK_C2R(EPP_phi, 1.0_q, EPP_phi, 0.0_q, RWORK_1, EPP_GRIDC)
+
+!test
+ CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'PHI', RWORK_1)
+!test
+
+
 !-------------------------------------------------------------------------
 ! eps potential in real space
 !-------------------------------------------------------------------------
-   EPP_CWORK_temp = 0._q
+ EPP_CWORK_temp = 0._q
 
 !-------------------------------------------------------------------------
 !multiply eprime and phisq in real space
 !add kappa^2 term, eb_k * kprime * phi^2 in real space
 !-------------------------------------------------------------------------
-   RWORK = 0._q
+ RWORK = 0._q
 
-   DO I=1, EPP_GRIDC%RL%NP
-      EPP_CWORK_temp = (eprime(I)) * (phisq(I)) + &
-                      & eb_k * kprime(I) * EPP_phi(I) * EPP_phi(I)
-      RWORK(I) = EPP_CWORK_temp
-   ENDDO
+ DO I = 1, EPP_GRIDC%RL%NP
+    EPP_CWORK_temp = eprime(I) * phisq(I) + &
+                     & eb_k * kprime(I) * RWORK_1(I) * RWORK_1(I)
+    RWORK(I) = EPP_CWORK_temp
+ ENDDO
 
 !-------------------------------------------------------------------------
 !phi to k space
@@ -934,17 +946,16 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
    EPP_phi(I) = EPP_phi(I)/EPP_GRIDC%NPLWV
  ENDDO
 
-
  CALL PACK_R2C(RWORK, EPP_CWORK, EPP_GRIDC)
    
 !-------------------------------------------------------------------------
 !take the eps potential to reciprocal space
 !-------------------------------------------------------------------------
-   CALL FFT3D(EPP_CWORK,EPP_GRIDC,-1)
-   CALL SETUNB(EPP_CWORK,EPP_GRIDC)
-   EPP_CWORK = EPP_CWORK/EPP_GRIDC%NPLWV
+ CALL FFT3D(EPP_CWORK,EPP_GRIDC,-1)
+ CALL SETUNB(EPP_CWORK,EPP_GRIDC)
+ EPP_CWORK = EPP_CWORK/EPP_GRIDC%NPLWV
 
- DEALLOCATE(eprime,kprime,phisq,RWORK)
+ DEALLOCATE(eprime, kprime, phisq, RWORK, RWORK_1)
  
  RETURN
 
@@ -1208,7 +1219,7 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
 
  DO I=1, D_GRIDC%RL%NP
   D_PHI2(I) = D_PHI2(I) + REAL(RWORK(I),KIND=q)
-ENDDO
+ ENDDO
 
  DEALLOCATE(CR,RWORK)
 
@@ -1274,7 +1285,9 @@ SUBROUTINE SimplePoisson(GC_GRIDC,GC_LATT_CUR,GC_IN,GC_OUT,GFLAG)
 
          ENDDO row
  ENDDO col
+
  RETURN
+
 END SUBROUTINE SimplePoisson
 
 !>==========================SUBROUTINE MY_D_PROD=================
@@ -1341,7 +1354,7 @@ SUBROUTINE PACK_R2C(RA,CB,GRIDC)
  ENDDO
 #endif
 
-RETURN
+ RETURN
 
 END SUBROUTINE PACK_R2C
 
@@ -1394,11 +1407,14 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
  IMPLICIT NONE
 
- TYPE (grid_3d) GRIDC
+ TYPE (grid_3d),INTENT(IN) :: GRIDC
+ TYPE(type_info),INTENT(IN) :: T_INFO
+ TYPE (latt),INTENT(IN) :: LATT_CUR
  RGRID CVTOT(GRIDC%RL%NP)
 
  LOGICAL LLONG
- CHARACTER (40) FORM, SZNAM, FNAME
+ CHARACTER (40) FORM, SZNAM
+ CHARACTER (*) FNAME
  REAL(q),ALLOCATABLE ::  WORK(:)
  INTEGER :: ISTAT, NODE_ME, IONODE, IU
  INTEGER :: NALLOC, NZ, NWRITE, NWRITTEN, N
@@ -1419,21 +1435,21 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  ALLOCATE(WORK(NALLOC), STAT=ISTAT)
 
  io_begin
-         OPEN(IU, FILE = FNAME, STATUS = 'UNKNOWN')
-         REWIND IU
-         CALL OUTPOS(IU, .FALSE., SZNAM, T_INFO, LATT_CUR%SCALE, LATT_CUR%A, .FALSE., T_INFO%POSION)
+     OPEN(IU, FILE = FNAME, STATUS = 'UNKNOWN')
+     REWIND IU
+     CALL OUTPOS(IU, .FALSE., SZNAM, T_INFO, LATT_CUR%SCALE, LATT_CUR%A, .FALSE., T_INFO%POSION)
  io_end
 
  IF (ISTAT>0) RETURN ! can not write the potential immediate exit
 
  IF (GRIDC%NPLWV/= GRIDC%NGX*GRIDC%NGY*GRIDC%NGZ) THEN
-    WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatibel', &
+    WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatible', &
      &   ' with  GRIDC%NGX,GRIDC%NGY,NGZC'
     WRITE(*,*)'   ',GRIDC%NPLWV,GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
     STOP
  ENDIF
 
- do_io WRITE(IU,'(3I5)') GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
+ do_io WRITE(IU,'(3I5)') GRIDC%NGX, GRIDC%NGY, GRIDC%NGZ
 
  NWRITTEN = 0
 
@@ -1443,9 +1459,17 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
     DO N = 1, NALLOC
        NWRITTEN=NWRITTEN+1
        IF ( MOD(NWRITTEN,NWRITE)==0 ) THEN
-          WRITE(IU, FORM) WORK(N)
+          IF (ABS(WORK(N)) < 1E-10 ) THEN
+              WRITE(IU, FORM) 0._q
+          ELSE
+              WRITE(IU, FORM) WORK(N)
+          ENDIF
        ELSE
-          WRITE(IU, FORM, ADVANCE='NO') WORK(N)
+          IF (ABS(WORK(N)) < 1E-10 ) THEN
+             WRITE(IU, FORM, ADVANCE='NO') 0._q
+          ELSE
+             WRITE(IU, FORM, ADVANCE='NO') WORK(N)
+          ENDIF
        ENDIF
     ENDDO
     io_end
