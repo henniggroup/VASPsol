@@ -34,8 +34,9 @@ MODULE POT_K
  INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
  REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,tau,EDIFFSOL
- TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
+ REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,CORE_C,tau,EDIFFSOL
+ REAL(q), PUBLIC, SAVE                 :: eb_k
+ TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
  LOGICAL, SAVE                          :: LSOL = .FALSE.
  LOGICAL, SAVE                          :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE                          :: LJDFTX = .FALSE.
