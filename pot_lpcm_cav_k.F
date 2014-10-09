@@ -32,16 +32,16 @@ MODULE POT_LPCM_K
  USE pseudo, ONLY : potcar
 
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD
- PRIVATE :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
- PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
- PRIVATE :: PACK_R2C, UNPACK_C2R
+ PUBLIC :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
+ PUBLIC :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
+ PUBLIC :: PACK_R2C, UNPACK_C2R
 
- INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
- REAL(q), PRIVATE, SAVE                 :: CHGMIN = 1E-10_q
- COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE :: Sol_phi(:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
- TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
+ INTEGER, PUBLIC, SAVE                 :: PK_counter = 1
+ REAL(q), PUBLIC, SAVE                 :: CHGMIN = 1E-10_q
+ COMPLEX(q), PUBLIC, ALLOCATABLE, SAVE :: Sol_phi(:)
+ REAL(q), PUBLIC, SAVE                 :: sigma_rc_k(:)
+ REAL(q), PUBLIC, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
+ TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
 
  CONTAINS
 
@@ -51,7 +51,8 @@ MODULE POT_LPCM_K
 !!
 !!======================================================================
 
-SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vel,Atot,sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,sigma_rc_k1,tau1,ediffs)
+SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
+                            & PS_TOTN, Vcorr, Vel, Atot)
 
  IMPLICIT NONE
 
@@ -69,8 +70,6 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
  RGRID,ALLOCATABLE :: RWORK(:)
  INTEGER :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
- REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
- REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
 
  ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)),RWORK(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV),phi(SP_GRIDC%MPLWV))
@@ -80,15 +79,6 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
    ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
    Sol_phi = 0._q
  ENDIF
-
- sigma_nc_k = sigma_nc_k1 
- sigma_k =  sigma_k1
- nc_k =  nc_k1
- eb_k =  eb_k1
- CORE_C =  CORE_C1
- sigma_rc_k =  sigma_rc_k1
- tau = tau1
- EDIFFSOL = ediffs
 
  Ecorr1 = 0.0_q
  Ecorr2 = 0.0_q
@@ -183,6 +173,35 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
  RETURN
 
 END SUBROUTINE Vcorrection_lpcm
+
+
+!>=======================SUBROUTINE SET_PARAMS_LPCM======================
+!!
+!! Set the solvation paramters
+!! called from pot_k.F 
+!!
+!!======================================================================
+
+ SUBROUTINE SET_PARAMS_LPCM(sigma_nc_k1, sigma_k1, nc_k1, eb_k1, CORE_C1, &
+                            &sigma_rc_k1, tau1, ediffs)
+
+ IMPLICIT NONE
+
+ REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
+ REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
+
+ sigma_nc_k = sigma_nc_k1 
+ sigma_k =  sigma_k1
+ nc_k =  nc_k1
+ eb_k =  eb_k1
+ CORE_C =  CORE_C1
+ sigma_rc_k =  sigma_rc_k1
+ tau = tau1
+ EDIFFSOL = ediffs
+
+ RETURN
+
+ END SUBROUTINE SET_PARAMS_LPCM
 
 !>=======================SUBROUTINE CREATECAVITY======================
 !!
