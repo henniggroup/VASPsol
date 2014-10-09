@@ -1,423 +1,115 @@
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/base.F VASPsol/base.F
---- vasp.5.3.5/base.F	2014-06-12 15:16:16.830632136 -0400
-+++ VASPsol/base.F	2014-07-08 14:41:48.155101708 -0400
-@@ -43,6 +43,7 @@
-         LOGICAL LPOTOK               ! local potential ok ?
-         LOGICAL LMIX                 ! mixing done
-         LOGICAL LMETAGGA             ! metagga 
-+        LOGICAL LSOL                 ! solvation 
-         LOGICAL LASPH                ! aspherical radial PAW 
- ! exchange correlation spin
-         LOGICAL LXLDA                ! calculate LDA exchange only in POTLOK
-@@ -197,6 +198,7 @@
-         REAL(q)    TOTENASPH         ! total energy for aspherical GGA
-         REAL(q)    EBANDSTR          ! bandstructure energy
-         REAL(q)    DENC              ! -1/2 hartree (d.c.)
-+        REAL(q)    Ediel             ! dielectric correction
-         REAL(q)    XCENC             ! -V(xc)+E(xc) (d.c.)
-         REAL(q)    EXCG              ! E(xc) (LDA+GGA)
-         REAL(q)    EXCM              ! E(xc) (metaGGA)
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron.F VASPsol/electron.F
---- vasp.5.3.5/electron.F	2014-06-12 15:16:20.174632256 -0400
-+++ VASPsol/electron.F	2014-07-08 14:41:48.343101699 -0400
-@@ -439,7 +439,7 @@
- ! TOTEN = total free energy of the system
- !=======================================================================
-       E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, W)
--      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+ECORE()
-+      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+ECORE()+E%Ediel
- !-MM- Added to accomodate constrained moment calculations
-       IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
-       io_begin
-@@ -769,11 +769,11 @@
-     ! energy
-       IF (LCORREL()) THEN
-          WRITE(IO%IU6,7241) E%PSCENC,E%TEWEN,E%DENC,E%EXHF,E%XCENC,E%PAWPS,E%PAWAE, &
--                         E%EENTROPY,E%EBANDSTR,INFO%EALLAT+ECORE(),TOTEN, &
-+                         E%EENTROPY,E%EBANDSTR,INFO%EALLAT+ECORE(),+E%Ediel,TOTEN, &
-                          TOTEN-E%EENTROPY,TOTEN-E%EENTROPY/(2+NORDER)   
-       ELSE
-          WRITE(IO%IU6,7240) E%PSCENC,E%TEWEN,E%DENC,E%EXHF,E%XCENC,E%PAWPS,E%PAWAE, &
--                         E%EENTROPY,E%EBANDSTR,INFO%EALLAT,TOTEN, &
-+                         E%EENTROPY,E%EBANDSTR,INFO%EALLAT,+E%Ediel,TOTEN, &
-                          TOTEN-E%EENTROPY,TOTEN-E%EENTROPY/(2+NORDER)
-       ENDIF
-     ! Aspherical and METAGGA energies  
-@@ -794,6 +794,7 @@
-      &        '  entropy T*S    EENTRO = ',F18.8/ &
-      &        '  eigenvalues    EBANDS = ',F18.8/ &
-      &        '  atomic energy  EATOM  = ',F18.8/ &
-+     &        '  Solvation contrib.  Ediel  = ',F18.8/ &
-      &        '  ---------------------------------------------------'/ &
-      &        '  free energy    TOTEN  = ',F18.8,' eV'// &
-      &        '  energy without entropy =',F18.8, &
-@@ -810,6 +811,7 @@
-      &        '  entropy T*S    EENTRO = ',F18.8/ &
-      &        '  eigenvalues    EBANDS = ',F18.8/ &
-      &        '  core contrib.  ECORE  = ',F18.8/ &
-+     &        '  Solvation contrib.  Ediel  = ',F18.8/ &
-      &        '  ---------------------------------------------------'/ &
-      &        '  free energy    TOTEN  = ',F18.8,' eV'// &
-      &        '  energy without entropy =',F18.8, &
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_OEP.F VASPsol/electron_OEP.F
---- vasp.5.3.5/electron_OEP.F	2014-06-12 15:16:19.954632250 -0400
-+++ VASPsol/electron_OEP.F	2014-07-08 14:41:48.355101701 -0400
-@@ -584,7 +584,7 @@
- ! TOTEN = total free energy of the system
- !=======================================================================
-      E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, WXI)
--     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF
-+     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%Ediel
-      IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
- 
-      DESUM(N)=TOTEN-TOTENL
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_all.F VASPsol/electron_all.F
---- vasp.5.3.5/electron_all.F	2014-06-12 15:16:19.818632246 -0400
-+++ VASPsol/electron_all.F	2014-07-08 14:41:48.371101698 -0400
-@@ -389,7 +389,7 @@
- ! calculate old band structure energy
-       E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, W)
- ! old total energy
--      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%EDOTP
-+      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%EDOTP+E%Ediel
- !-MM- Added to accomodate constrained moment calculations
-       IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
-       io_begin
-@@ -489,7 +489,7 @@
-       CALL PEAD_EDOTP(W,P,CQIJ,LATT_CUR,T_INFO,E2)
- 
-       E2%EBANDSTR= BANDSTRUCTURE_ENERGY(WDES, W)
--      TOTEN2=E2%EBANDSTR+E2%DENC+E2%XCENC+E2%TEWEN+E2%PSCENC+E2%EENTROPY+E2%PAWPS+E2%PAWAE+INFO%EALLAT+E2%EXHF+E2%EDOTP
-+      TOTEN2=E2%EBANDSTR+E2%DENC+E2%XCENC+E2%TEWEN+E2%PSCENC+E2%EENTROPY+E2%PAWPS+E2%PAWAE+INFO%EALLAT+E2%EXHF+E2%EDOTP+E2%Ediel
- !-MM- Added to accomodate constrained moment calculations
-       IF (M_CONSTRAINED()) TOTEN2=TOTEN2+E_CONSTRAINT()
-       io_begin
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_lhf.F VASPsol/electron_lhf.F
---- vasp.5.3.5/electron_lhf.F	2014-06-12 15:16:16.646632130 -0400
-+++ VASPsol/electron_lhf.F	2014-07-08 14:41:48.379101701 -0400
-@@ -526,7 +526,7 @@
-      LHFCALC_FORCE=.FALSE.
- 
-      E%EBANDSTR= BANDSTRUCTURE_ENERGY(WDES, W)
--     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF
-+     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%Ediel
- 
-      IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
-      io_begin
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/elinear_response.F VASPsol/elinear_response.F
---- vasp.5.3.5/elinear_response.F	2014-06-12 15:16:16.522632125 -0400
-+++ VASPsol/elinear_response.F	2014-07-08 14:41:48.383101702 -0400
-@@ -433,7 +433,7 @@
-        W1%CELTOT=   WXI%CELTOT
- 
-        TOTENL=TOTEN
--       TOTEN =E1%EBANDSTR+E1%DENC+E1%XCENC+E1%PAWPS+E1%PAWAE+E1%EENTROPY
-+       TOTEN =E1%EBANDSTR+E1%DENC+E1%XCENC+E1%PAWPS+E1%PAWAE+E1%EENTROPY+E1%Ediel
-        DE= (TOTEN-TOTENL)
- 
-        IF (IO%IU0>=0) THEN
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/force.F VASPsol/force.F
 --- vasp.5.3.5/force.F	2014-06-12 15:16:18.806632209 -0400
-+++ VASPsol/force.F	2014-07-08 14:41:48.435101702 -0400
-@@ -1075,6 +1075,9 @@
-     USE vdwforcefield
-     USE fileio
- !tb end
-+!solv start
-+    USE POT_K, ONLY : EIFOR_SOL,LSOL
-+!solv end
-     IMPLICIT NONE
++++ VASPsol/force.F	2014-10-09 13:52:09.569152457 -0400
+@@ -50,7 +50,7 @@
  !=======================================================================
- !  structures
-@@ -1429,6 +1432,14 @@
-       TOTEN=TOTEN+OFIELD_E
-       CALL STOP_TIMING("G",IO%IU6,'OFIELD')
- 
-+!solv start
-+!solvent correction added before symmetrization
-+!the correction, EIFOR_SOL, itself is not symmetrized
-+
-+      IF (LSOL) TIFOR  = TIFOR + EIFOR_SOL
-+
-+!solv end 
-+
- !-----------------------------------------------------------------------
- !tb start
- ! approximate vdW methods:
-@@ -1694,6 +1705,8 @@
-         DO J=1,T_INFO%NIONS
-         DO I=1,3
-           TEIFOR(I)=TEIFOR(I)+EIFOR (I,J)+PARFOR(I,J)+TAUFOR(I,J)
-+!net drfit with sol correction
-+          IF (LSOL) TEIFOR(I)=TEIFOR(I)+EIFOR_SOL(I,J)
-           TEWIFO(I)=TEWIFO(I)+EWIFOR(I,J)
-           TFORNL(I)=TFORNL(I)+EINL (I,J)
-           THARFO(I)=THARFO(I)+HARFOR(I,J)
-@@ -2087,7 +2100,7 @@
-                    NEDOS, 0, 0, DOS, DOSI, PAR, DOSPAR)
- 
-               E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, W)
--              TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+EALLAT+E%EXHF+ECORE()
-+              TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+EALLAT+E%EXHF+ECORE()+E%Ediel
- 
-               IF (IO%IU6>=0) THEN
-                  NORDER=0 ; IF (KPOINTS%ISMEAR>=0) NORDER=KPOINTS%ISMEAR
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/ilinear_response.F VASPsol/ilinear_response.F
---- vasp.5.3.5/ilinear_response.F	2014-06-12 15:16:20.854632283 -0400
-+++ VASPsol/ilinear_response.F	2014-07-08 14:41:48.471101702 -0400
-@@ -624,7 +624,7 @@
-        E1%EENTROPY=(E1%EENTROPY-E2%EENTROPY)*(1/POTIM)
- 
-        TOTENL=TOTEN
--       TOTEN =E1%EBANDSTR+E1%DENC+E1%XCENC+E1%PAWPS+E1%PAWAE+E1%EENTROPY
-+       TOTEN =E1%EBANDSTR+E1%DENC+E1%XCENC+E1%PAWPS+E1%PAWAE+E1%EENTROPY+E1%Ediel
-        DE= (TOTEN-TOTENL)
-        
-        IF (IO%IU0>=0) THEN
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/linear_response.F VASPsol/linear_response.F
---- vasp.5.3.5/linear_response.F	2014-06-12 15:16:22.238632334 -0400
-+++ VASPsol/linear_response.F	2014-07-08 14:41:48.539101700 -0400
-@@ -341,7 +341,7 @@
-              LMDIM,CDIJ,CQIJ, RMS,DESUM,ICOUEV, SV, E%EXHF, IO%IU6,IO%IU0, .FALSE., .TRUE., .FALSE.)
- 
-        E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, W)
--       TOTEN_=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF
-+       TOTEN_=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%Ediel
- 
-        IF (IO%IU0>=0) THEN
-           WRITE(IO%IU0,1000) I, TOTEN_, TOTEN_-TOTEN, DESUM, ICOUEV, RMS
+ ! first caclulate the local potential and its derivative
+ !=======================================================================
+-      CALL POTION(GRIDC,P,LATT_CUR,T_INFO,CWORK1,CWORK2,CSTRF,PSCENC)
++      CALL POTION(GRIDC,P,LATT_CUR,T_INFO,CWORK1,CWORK2,CSTRF,PSCENC, NELECT)
+ !=======================================================================
+ ! there are two contributions to the force on the unit cell,
+ ! one due to the tendency to put the charge density  at the largest
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/main.F VASPsol/main.F
 --- vasp.5.3.5/main.F	2014-06-12 15:16:17.034632144 -0400
-+++ VASPsol/main.F	2014-07-08 14:41:48.571101704 -0400
-@@ -139,6 +139,7 @@
-       USE relativistic
-       USE rhfatm
-       USE meta
-+      USE POT_K, ONLY : SET_SOL_IO, SOL_WRITER
-       USE mkproj
-       USE classicfields
- #ifdef vasp6
-@@ -537,7 +538,7 @@
-           INFO%ENAUG,IO%LORBIT,IO%LELF,T_INFO%ROPT,INFO%ENINI, &
-           NGX,NGY,NGZ,NGXC,NGYC,NGZC,NBANDS,NEDOS,NBLK,LATT_CUR, &
-           LPLANE_WISE,LCOMPAT,LMAX_CALC,SET_LMAX_MIX_TO,WDES%NSIM,LPARD,LPAW,LADDGRID, &
--          WDES%LNONCOLLINEAR,WDES%LSORBIT,WDES%SAXIS,INFO%LMETAGGA, &
-+          WDES%LNONCOLLINEAR,WDES%LSORBIT,WDES%SAXIS,INFO%LMETAGGA,INFO%LSOL, &
-           WDES%LSPIRAL,WDES%LZEROZ,WDES%QSPIRAL,WDES%LORBITALREAL, &
-           INFO%LASPH,INFO%TURBO,INFO%IRESTART,INFO%NREBOOT,INFO%NMIN,INFO%EREF, &
-           INFO%NLSPLINE,ISPECIAL &
-@@ -711,6 +712,7 @@
-       CALL ORBITALMAG_READER(IO%IU5, IO%IU0, T_INFO%NIONS)
-       CALL RHFATM_READER(IO)
-       CALL XC_META_READER(IO,T_INFO%NTYP)
-+      IF (INFO%LSOL) CALL SET_SOL_IO(IO,INFO%EDIFF)
-       CALL CHGFIT_READER(IO,T_INFO%NTYP)
-       CALL STOCKHOLDER_READER(IO)
-       CALL LJ_READER(IO)
-@@ -1167,7 +1169,7 @@
- 
-       WRITE(TIU6,7206) IO%NWRITE,INFO%SZPREC,INFO%ISTART,INFO%ICHARG,WDES%ISPIN,WDES%LNONCOLLINEAR, &
-      &      WDES%LSORBIT, INFO%INIWAV, &
--     &      INFO%LASPH,INFO%LMETAGGA,  &
-+     &      INFO%LASPH,INFO%LMETAGGA,INFO%LSOL,  &
-      &      INFO%ENMAX,INFO%ENMAX/RYTOEV,SQRT(INFO%ENMAX/RYTOEV), &
-      &      XCUTOF,YCUTOF,ZCUTOF,INFO%ENINI, &
-      &      INFO%ENAUG, &
-@@ -1206,6 +1208,7 @@
-      &      QF,QF/AUTOA,QF**2*RYTOEV,QF**2,SQRT(QF/AUTOA/AUTOA*4/PI)
-       WRITE(TIU6,*)
-       WRITE(TIU6,7224) IO%LWAVE,IO%LCHARG,IO%LVTOT,IO%LVHAR,IO%LELF,IO%LORBIT
-+      IF (INFO%LSOL) CALL SOL_WRITER()
- 
-       CALL WRITE_EFIELD(TIU6)
++++ VASPsol/main.F	2014-10-09 13:52:09.613152458 -0400
+@@ -2511,7 +2511,7 @@
+               T_INFO%NIONS,NIOND,T_INFO%ITYP,T_INFO%NITYP,IO%IU6,.TRUE.)
+       ELSE
+          ALLOCATE(CWORK1(GRIDC%MPLWV))
+-         CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK1,E%PSCENC,E%TEWEN,EWIFOR)
++         CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK1,E%PSCENC,E%TEWEN, INFO%NELECT, EWIFOR)
+          DEALLOCATE(CWORK1)
        ENDIF
-@@ -1240,7 +1243,8 @@
-      &       '   LSORBIT = ',L6, '    spin-orbit coupling'/ &
-      &       '   INIWAV = ',I6,  '    electr: 0-lowe 1-rand  2-diag'/ &
-      &       '   LASPH  = ',L6,  '    aspherical Exc in radial PAW'/ &
--     &       '   METAGGA= ',L6,  '    non-selfconsistent MetaGGA calc.'// &
-+     &       '   METAGGA= ',L6,  '    non-selfconsistent MetaGGA calc.'/ &
-+     &       '   LSOL = ',L6,  '    Solvation'// &
-      &       ' Electronic Relaxation 1'/ &
-      &       '   ENCUT  = ', &
-      &              F6.1,' eV ',F6.2,' Ry  ',F6.2,' a.u. ', &
-@@ -4085,7 +4089,7 @@
-      ! for the selfconsistent update set W_F%CELTOT and TOTEN now
-       IF (INFO%LONESW) W_F%CELTOT=W%CELTOT
-       E%EBANDSTR= BANDSTRUCTURE_ENERGY(WDES, W)
--      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY
-+      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%Ediel
- 
-       CALL STOP_TIMING("G",IO%IU6,'EDDIAG')
+       CALL STOP_TIMING("G",TIU6,'FEWALD')
+@@ -3955,7 +3955,7 @@
+               &     T_INFO%NIONS,NIOND,T_INFO%ITYP,T_INFO%NITYP,IO%IU6,.TRUE.)
+       ELSE
+          ALLOCATE(CWORK1(GRIDC%MPLWV))
+-         CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK1,E%PSCENC,E%TEWEN,EWIFOR)
++         CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK1,E%PSCENC,E%TEWEN,INFO%NELECT,EWIFOR)
+          DEALLOCATE(CWORK1)
+       ENDIF
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.878632101 -0400
-+++ VASPsol/pot.F	2014-09-07 13:54:48.196119762 -0400
-@@ -2,6 +2,7 @@
-       MODULE pot
-       USE prec
-       USE charge
-+      USE POT_K, ONLY : Vcorrection, LSOL, SOL_INIT
-       CONTAINS
- !************************ SUBROUTINE POTLOK ****************************
- ! RCS:  $Id: pot.F,v 1.5 2003/06/27 13:22:22 kresse Exp kresse $
-@@ -62,6 +63,12 @@
-       COMPLEX(q), ALLOCATABLE::  CWORK1(:),CWORK(:,:)
-       REAL(q) ELECTROSTATIC
-       LOGICAL, EXTERNAL :: L_NO_LSDA_GLOBAL
-+!start solv
-+      COMPLEX(q), ALLOCATABLE :: Vcorr(:)     
-+      REAL(q) Ecorr
-+      INTEGER :: ierror
-+!end solv
-+
- 
- #ifdef libbeef
-       LOGICAL LBEEFCALCBASIS, LBEEFBAS
-@@ -74,6 +81,9 @@
-       
-       MWORK1=MAX(GRIDC%MPLWV,GRID_SOFT%MPLWV)
-       ALLOCATE(CWORK1(MWORK1),CWORK(GRIDC%MPLWV,WDES%NCDIJ))
-+      IF (LSOL) ALLOCATE(Vcorr(GRIDC%MPLWV))
-+      IF (LSOL) CALL SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
-+
- !-----------------------------------------------------------------------
- !
- !  calculate the exchange correlation potential and the dc. correction
-@@ -302,6 +312,10 @@
-          CALL RL_ADD(CVTOT(1,ISP),RINPL,CVTOT(1,ISP),0.0_q,CVTOT(1,ISP),GRIDC)
-          CALL FFT3D(CVTOT(1,ISP),GRIDC,-1)
-       ENDDO
-+!test
-+write(*,*) 'after EXC, CVTOT(1,ISP) = ', CVTOT(1, 1)
-+!test
-+
- !-----------------------------------------------------------------------
- ! add the hartree potential and the double counting corrections
- !-----------------------------------------------------------------------
-@@ -309,6 +323,30 @@
-       DO I=1,GRIDC%RC%NP
-          CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
-       ENDDO
-+!test
-+write(*,*) 'after hartree, CVTOT(1,ISP) = ', CVTOT(1, 1)
-+!test
-+
-+!-----------------------------------------------------------------------
-+! add the dielectric corrections to CVTOT and the energy
-+!-----------------------------------------------------------------------
-+IF (LSOL) THEN
-+      CALL Vcorrection(GRIDC,P, LATT_CUR,T_INFO,WDES,CHTOT,Vcorr,Ecorr) 
-+!!test
-+         !Vcorr(1) = 0._q
-+         WRITE(*,*) 'Vcorr(1), net correction',Vcorr(1)
-+!!test
-+         DO I=1,GRIDC%RC%NP
-+            CVTOT(I,1) = CVTOT(I,1) + Vcorr(I)
-+         ENDDO
-+         E%ediel = Ecorr
-+ELSE
-+         E%ediel = 0._q
-+ENDIF
-+!test
-+write(*,*) 'after vcorr, CVTOT(1,ISP) = ', CVTOT(1, 1)
-+!test
-+
- !-----------------------------------------------------------------------
++++ VASPsol/pot.F	2014-10-09 13:52:09.625152458 -0400
+@@ -313,9 +313,9 @@
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
-@@ -317,6 +355,10 @@
+       IF(INFO%TURBO==0)THEN
+-         CALL POTION(GRIDC,P,LATT_CUR,T_INFO,CWORK,CWORK1,CSTRF,E%PSCENC)
++         CALL POTION(GRIDC,P,LATT_CUR,T_INFO,CWORK,CWORK1,CSTRF,E%PSCENC, INFO%NELECT)
        ELSE
-          CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK,E%PSCENC,E%TEWEN)
+-         CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK,E%PSCENC,E%TEWEN)
++         CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK,E%PSCENC,E%TEWEN, INFO%NELECT)
        ENDIF
-+!test
-+write(*,*) 'after local pot, CVTOT(1,ISP) = ', CVTOT(1, 1)
-+!test
-+
  
        ELECTROSTATIC=0
-       NG=1
-@@ -349,6 +391,10 @@
-          CALL SETUNB_COMPAT(CVTOT(1,ISP),GRIDC)
-          CALL CP_GRID(GRIDC,GRID_SOFT,SOFT_TO_C,CVTOT(1,ISP),CWORK1)
-          CALL SETUNB(CWORK1,GRID_SOFT)
-+!test
-+write(*,*) 'CVTOT(1,ISP) = ', CVTOT(1, ISP)
-+!test
-+
-          CALL FFT3D(CWORK1,GRID_SOFT, 1)
-          CALL RL_ADD(CWORK1,1.0_q,CWORK1,0.0_q,SV(1,ISP),GRID_SOFT)
+@@ -541,7 +541,7 @@
+ !
+ !***********************************************************************
  
-@@ -363,8 +409,12 @@
- #endif
-          CALL FFT3D(CVTOT(1,ISP),GRIDC,1)
+-      SUBROUTINE POTION_PARTICLE_MESH(GRIDC,P, LATT_CUR, T_INFO, CVPS, PSCENC, TEWEN, FOR)
++      SUBROUTINE POTION_PARTICLE_MESH(GRIDC,P, LATT_CUR, T_INFO, CVPS, PSCENC, TEWEN, NELECT, FOR)
+       USE ini
+       USE prec
+       USE mgrid
+@@ -556,7 +556,7 @@
+       TYPE (potcar) P(T_INFO%NTYP)
+       TYPE (latt) LATT_CUR
+       COMPLEX(q) CVPS(GRIDC%RC%NP)
+-      REAL(q) PSCENC,TEWEN
++      REAL(q) PSCENC,TEWEN, NELECT, ECORR
+       REAL(q), OPTIONAL :: FOR(:,:)
+       ! local variables
+       REAL(q) ZVSUM,G,GX,GY,GZ,TEWEN0
+@@ -574,6 +574,12 @@
+          PSCENC=PSCENC+P(NT)%PSCORE*T_INFO%VCA(NT)*T_INFO%NITYP(NT)*(ZVSUM/LATT_CUR%OMEGA)
        ENDDO
-+!test
-+!stop
-+!test
  
-       DEALLOCATE(CWORK1,CWORK)
-+      IF (LSOL) DEALLOCATE(Vcorr)
-       RETURN
-     END SUBROUTINE POTLOK
- 
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/reader.F VASPsol/reader.F
---- vasp.5.3.5/reader.F	2014-06-12 15:16:18.630632202 -0400
-+++ VASPsol/reader.F	2014-07-08 14:41:48.895101710 -0400
-@@ -16,7 +16,7 @@
-      &        ENAUG,LORBIT,LELF,ROPT,ENINI, &
-      &        NGX,NGY,NGZ,NGXF,NGYF,NGZF,NBANDS,NEDOS,NBLK,LATT_CUR, &
-      &        LPLANE_WISE,LCOMPAT,LMAX_CALC,LMAX_MIX,NSIM,LPARD,LPAW,LADDGRID, &
--     &        LNONCOLLINEAR,LSORBIT,SAXIS,LMETAGGA, &
-+     &        LNONCOLLINEAR,LSORBIT,SAXIS,LMETAGGA,LSOL, &
-      &        LSPIRAL,LZEROZ,QSPIRAL,LORBITALREAL, &
-      &        LASPH,TURBO,IRESTART,NREBOOT,NMIN,EREF, &
-      &        NLSPLINE,ISPECIAL &
-@@ -52,7 +52,7 @@
-       LOGICAL   LDUM,LFOUND,LDIAG,LSUBROT,LREAL,LREALD,LPDENS,LTET,LOPTICS, &
-      &          LCORR,LOPEN,lmusic,LWAVE,LCHARG,LVTOT,LVHAR, &
-      &          LORBIT_,LELF,LCOMPAT,LPARD,LPAW,LADDGRID, &
--     &          LNONCOLLINEAR,LSORBIT,LMETAGGA, &
-+     &          LNONCOLLINEAR,LSORBIT,LMETAGGA, LSOL,&
-      &          LBEEFENS,LBEEFBAS, &
-      &          LPLANE_WISE, &
-      &          LASPH,INTERACTIVE,LORBITALREAL,LVCADER
-@@ -1570,6 +1570,26 @@
-       ENDIF
-       CALL XML_INCAR('LMETAGGA','L',IDUM,RDUM,CDUM,LMETAGGA,CHARAC,N)
- 
-+! read in flag LSOL
-+      LSOL=.FALSE.
-+      CALL RDATAB(LOPEN,'INCAR',IU5,'LSOL','=','#',';','L', &
-+     &            IDUM,RDUM,CDUM,LSOL,CHARAC,N,1,IERR)
-+      IF (((IERR/=0).AND.(IERR/=3)).OR. &
-+     &                    ((IERR==0).AND.(N<1))) THEN
-+         IF (IU0>=0) &
-+         WRITE(IU0,*)'Error reading item ''LSOL'' from file INCAR.'
-+         GOTO 150
-+      ENDIF
-+      CALL XML_INCAR('LSOL','L',IDUM,RDUM,CDUM,LSOL,CHARAC,N)
++!      WRITE(*,*) 'PSCENC(before) = ', PSCENC
++      ECORR = (PSCENC/ZVSUM) * (NELECT - ZVSUM)
++      WRITE(*,*) 'Background correction = ', ECORR
++      PSCENC = PSCENC + ECORR
++!      WRITE(*,*) 'PSCENC(after) = ', PSCENC
 +
-+!#if defined(NGXhalf) ||  defined(NGZhalf)
-+!      IF (LSOL) THEN
-+!         WRITE(*,*) 'ERROR: solvation calculations require that VASP is compiled'
-+!         WRITE(*,*) ' without the flag -DNGXhalf and -DNGZhalf'
-+!         STOP
-+!      ENDIF
-+!#endif
-+
- ! set LASPH if LMETAGGA is chosen (metagga only calculated aspherically)
-       IF (LMETAGGA) LASPH=.TRUE.
+       TEWEN=-PSCENC
+       DO NT=1,T_INFO%NTYP
+          TEWEN=TEWEN-P(NT)%ESELF*T_INFO%VCA(NT)*T_INFO%NITYP(NT)
+@@ -762,7 +768,7 @@
+ !
+ !***********************************************************************
  
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/subrot_scf.F VASPsol/subrot_scf.F
---- vasp.5.3.5/subrot_scf.F	2014-06-12 15:16:17.086632145 -0400
-+++ VASPsol/subrot_scf.F	2014-06-13 14:22:45.289672607 -0400
-@@ -320,7 +320,7 @@
+-      SUBROUTINE POTION(GRIDC,P,LATT_CUR,T_INFO,CVPS,CDVPS,CSTRF,PSCENC)
++      SUBROUTINE POTION(GRIDC,P,LATT_CUR,T_INFO,CVPS,CDVPS,CSTRF,PSCENC,NELECT)
+       USE prec
+ 
+       USE mpimy
+@@ -782,6 +788,7 @@
+ 
+       COMPLEX(q) CSTRF(GRIDC%MPLWV,T_INFO%NTYP)
+       COMPLEX(q) CVPS(GRIDC%RC%NP),CDVPS(GRIDC%RC%NP)
++      REAL(q) NELECT, ECORR
+ 
  !=======================================================================
-       E%EBANDSTR=BANDSTRUCTURE_ENERGY(W%WDES, W)
+ ! calculate the contribution to the total energy from the non-coulomb
+@@ -799,6 +806,18 @@
+          PSCENC=PSCENC+P(NT)%PSCORE*T_INFO%VCA(NT)*T_INFO%NITYP(NT)*(ZVSUM/LATT_CUR%OMEGA)
+       ENDDO
  
--      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF
-+      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%Ediel
- 
- !---- write total energy to OSZICAR file and stdout
-       DESUM(N)=TOTEN-TOTENL
++!      WRITE(*,*) 'PSCENC(before) = ', PSCENC
++!      WRITE(*,*) 'PSCENC/ZVSUM = ', PSCENC/ZVSUM
++!      WRITE(*,*) '\sum \alpha = PSCENC/ZVSUM*OMEGA = ', PSCENC/ZVSUM*LATT_CUR%OMEGA
++
++      ECORR = (PSCENC/ZVSUM) * (NELECT - ZVSUM)
++
++      WRITE(*,*) 'Background correction = ', ECORR
++
++      PSCENC = PSCENC + ECORR
++
++!      WRITE(*,*) 'PSCENC(after) = ', PSCENC
++
+       CVPS =0
+       CDVPS=0
+ !=======================================================================
