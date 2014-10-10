@@ -35,7 +35,7 @@ MODULE POT_K
  REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,tau,EDIFFSOL
- REAL(q), PRIVATE, SAVE                 :: p0_k, eps_infty_k, Nsol_k, kb_k, T_k
+ REAL(q), PRIVATE, SAVE                 :: p0_k, einfty_k, Nsol_k, T_k
  TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
  LOGICAL, SAVE                          :: LSOL = .FALSE.
  LOGICAL, SAVE                          :: LNLSOL = .FALSE.
@@ -60,8 +60,9 @@ MODULE POT_K
   USE mgrid, ONLY : grid_3d
   USE pseudo, ONLY : potcar
   USE wave, ONLY : wavedes
-  USE pot_lpcm_k, ONLY : Vcorrection_lpcm, MY_D_PROD
-  USE pot_nln_k, ONLY : Vcorrection_nln_pcm
+!  USE pot_lpcm_k, ONLY : Vcorrection_lpcm, MY_D_PROD
+  USE pot_nln_k, ONLY : SET_PARAMS_LPCM, Vcorrection_lpcm, MY_D_PROD
+  USE pot_nln_k, ONLY : CONSTRUCTOR_NLN, Vcorrection_nln_pcm, DESTRUCTOR_NLN
 
   IMPLICIT NONE
 
@@ -154,7 +155,7 @@ MODULE POT_K
 #endif
 
      CALL SET_PARAMS_LPCM(sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, &
-                            & sigma_rc_k, tau, ediffsol)
+                            & sigma_rc_k, tau, ediffsol, SP_T_INFO%NTYP)
 
      CALL Vcorrection_lpcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
                            & PS_TOTN, Vcorr, Vdiel, Adiel)
@@ -172,13 +173,14 @@ MODULE POT_K
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Calling vcorr_nln_pcm minimization'
 #endif
 
-     CALL SET_PARAMS_LPCM(sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, &
-                            & sigma_rc_k, tau, ediffsol)
+     CALL CONSTRUCTOR_NLN(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, &
+                          & sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
+                           & p0_k, einfty_k, Nsol_k, T_k)
 
-     CALL SET_PARAMS_NLN(p0_k, eps_infty_k, Nsol_k, kb_k, T_k)
 
-     CALL Vcorrection_nln_pcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
-                              & PS_TOTN, Vcorr, Vdiel, Adiel)
+     CALL VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VDIEL, ADIEL )
+
+     CALL DESTRUCTOR_NLN()
 
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Return from vcorr_nln_pcm minimization'
@@ -733,6 +735,13 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   nc_k = 0.0025_q
   eb_k = 80.0_q
   tau = 5.25E-4_q
+
+!default values for nonlinear sol
+  p0_k = 1.0
+  einfty_k = 1.0
+  Nsol_k = 1.0
+  T_k = 300
+
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
 #endif
@@ -1143,15 +1152,3 @@ END SUBROUTINE GETRCORE
 
 END MODULE POT_K
 
-!*******************************************************************************************
-!
-!********************                 END OF MODULE POT_K                 ******************
-!
-!*******************************************************************************************
-
-!polarization
-!   phi_bnd=phi_tilda - phi
-!compute the bound charge, bnd_chg, in kspace
-!   CALL SimplePoisson(SP_GRIDC,SP_LATT_CUR,phi_bnd,bnd_chg,0)
-!bnd_chg in real space
-!  CALL FFT3D(bnd_chg,SP_GRIDC,1)

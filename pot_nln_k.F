@@ -24,76 +24,105 @@ MODULE POT_NLN_K
 
  USE pot_lpcm_k
 
- PUBLIC :: VCORRECTION_NLN_PCM
+ PUBLIC  :: CONSTRUCTOR_NLN, VCORRECTION_NLN_PCM, DESTRUCTOR_NLN
  PRIVATE :: SET_PARAMS_NLN, COMPUTE_EFIELD_NLN, COMPUTE_LANG_NLN 
  PRIVATE :: COMPUTE_CHI_NLN, COMPUTE_EPSILON_NLN, COMPUTE_RHOB_NLN, GET_V_E_NLN
  PRIVATE :: MINIMIZE_NLN
 
- REAL(q), PRIVATE, SAVE                 :: p0_k, eps_infty_k, Nsol_k, kb_k, T_k
- REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: NDIM_EFIELD(:) !non dimensional electri field in real space
+ TYPE(type_info), PRIVATE, SAVE :: T_INFO_NLN
+ TYPE(potcar), PRIVATE, ALLOCATABLE, SAVE :: P_NLN(:)
+ TYPE (latt), PRIVATE, SAVE :: LATT_CUR_NLN
+ TYPE(grid_3d), PRIVATE, SAVE :: GRIDC_NLN
+ TYPE (in_struct), PRIVATE, SAVE :: IO_NLN
+
+ REAL(q), PRIVATE, SAVE               :: p0_k, einfty_k, Nsol_k, kb_k, T_k, dv
+ REAL(q), PRIVATE, SAVE    :: pkT !p0/k/T
+ COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE  :: PHI_TILDA(:) !soln to the poisson eqn
+ REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: EFIELD(:) !modulus of electri field vector in real space
  REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: R_PS_TOTN(:) !ps_totn in real space
+ REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: GVEC_NLN(:,:) !array og G vectors
+
+ INTEGER(q), PRIVATE, SAVE :: SIZE_REAL, SIZE_REC !array size in real and reciprocal space
+
+
 
  CONTAINS
 
-!>========================== SUBROUTINE VCORRECTION_NLN_PCM ======================
+
+
+!>========================== SUBROUTINE CONSTRUCTOR_NLN ======================
 !!
 !!
 !!
 !!===============================================================================
-
-  SUBROUTINE Vcorrection_nln_pcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, &
-                                 & TOTN, PS_TOTN, Vcorr, Vdiel, Adiel )
+SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k, sigma_k, nc_k, &
+                           & eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
+                           & p0_k1, einfty_k1, Nsol_k1, T_k1)
 
  IMPLICIT NONE
 
- TYPE(type_info),INTENT(IN) :: SP_T_INFO
- TYPE(potcar),INTENT(IN) :: SP_P (SP_T_INFO%NTYP)
- TYPE (latt),INTENT(IN) :: SP_LATT_CUR
- TYPE(grid_3d),INTENT(IN) :: SP_GRIDC
+ TYPE(type_info),INTENT(IN) :: T_INFO
+ TYPE(potcar),INTENT(IN) :: P(T_INFO%NTYP)
+ TYPE (latt),INTENT(IN) :: LATT_CUR
+ TYPE(grid_3d),INTENT(IN) :: GRIDC
  TYPE (in_struct),INTENT(IN) :: IO
 
- COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
- COMPLEX(q),ALLOCATABLE :: phi_tilda(:),phi(:),Vcav(:)
- COMPLEX(q),INTENT(OUT) :: Vel(SP_GRIDC%MPLWV)
- COMPLEX(q),INTENT(IN) ::TOTN(SP_GRIDC%MPLWV),PS_TOTN(SP_GRIDC%MPLWV) 
- REAL(q),ALLOCATABLE :: SP_d_eps(:)
- RGRID,ALLOCATABLE :: RWORK(:)
- INTEGER :: I,J, NCGSOL
- REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
- REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
- REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
+ REAL(q) :: sigma_nc_k, sigma_k, nc_k
+ REAL(q) :: eb_k, CORE_C, sigma_rc_k(T_INFO%NTYP), tau, ediffsol
+ REAL(q) :: p0_k1, einfty_k1, Nsol_k1, T_k1
 
- ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)),RWORK(DIMREAL(SP_GRIDC%MPLWV)))
- ALLOCATE(phi_tilda(SP_GRIDC%MPLWV),phi(SP_GRIDC%MPLWV))
- ALLOCATE(Vcav(SP_GRIDC%MPLWV))
-      
+ INTEGER(q) :: SIZE_REAL, SIZE_REC, SIZE_GVEC
+
+ IO_NLN = IO
+ T_INFO_NLN = T_INFO
+
+ LATT_CUR_NLN = LATT_CUR
+ GRIDC_NLN = GRIDC
+
+ SIZE_REC = GRIDC_NLN%MPLWV
+
+ SIZE_REAL = DIMREAL(GRIDC_NLN%MPLWV)
+
+ SIZE_GVEC = GRIDC_NLN%RC%NCOL * GRIDC_NLN%RC%NROW
+
+ ALLOCATE(P_NLN(T_INFO_NLN%NTYP))
+ ALLOCATE(EFIELD(SIZE_REAL), R_PS_TOTN(SIZE_REAL))
+ ALLOCATE(PHI_TILDA(SIZE_REC), GVEC_NLN(3, SIZE_GVEC))
+
  IF (PK_COUNTER == 1)  THEN
-   ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
-   Sol_phi = 0._q
+   ALLOCATE(SOL_PHI(SIZE_REC))
+   SOL_PHI = 0._q
  ENDIF
 
- Ecorr1 = 0.0_q
- Ecorr2 = 0.0_q
- phi_tilda = 0._q
- phi = 0._q
- Vel = 0._q
- Vcorr = 0._q
- Vcav = 0._q
- SP_IO = IO
+ P_NLN = P
 
+ CALL SET_PARAMS_LPCM(sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, &
+                      & ediffsol, T_INFO_NLN%NTYP)
+ CALL SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 
- CALL SET_PARAMS_NLN(p0_k1, eps_infty_k1, Nsol_k1, T_k1)
-
-! calls compute_epsilon_nln and minimize(from pot_lpcm_k module)
- CALL MINIMIZE_NLN(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, PS_TOTN, TOTN, SP_d_eps, phi_tilda, NCGSOL) 
-
-! returns the potential and the energy contributoins, sets Vcorr and Atot
- CALL GET_V_E_NLN(phi_tilda, phi, Vcorr, Atot) 
-
+ CALL SET_GVEC_NLN()
 
  RETURN
 
-END SUBROUTINE Vcorrection_nln_pcm
+END SUBROUTINE CONSTRUCTOR_NLN
+
+
+
+
+!>========================== SUBROUTINE DESTRUCTOR_NLN ======================
+!!
+!!
+!!
+!!===============================================================================
+SUBROUTINE DESTRUCTOR_NLN()
+
+ IMPLICIT NONE
+
+ DEALLOCATE(EFIELD, R_PS_TOTN, PHI_TILDA, GVEC_NLN)
+
+ RETURN
+
+END SUBROUTINE DESTRUCTOR_NLN
 
 
 
@@ -103,16 +132,20 @@ END SUBROUTINE Vcorrection_nln_pcm
 !! Sets the params specifi to the nonlinear model
 !!
 !!=====================================================================
-SUBROUTINE  SET_PARAMS_NLN(p0_k1, eps_infty_k1, Nsol_k1, T_k1)
+SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 
  IMPLICIT NONE
 
- REAL(q) :: p0_k1, eps_infty_k1, Nsol_k1, kb_k1, T_k1
+ REAL(q) :: p0_k1, einfty_k1, Nsol_k1, kb_k1, T_k1
 
  p0_k = p0_k1 
- eps_infty = eps_infty_k1
+ einfty_k = einfty_k1
  Nsol_k = Nsol_k1
  T_k = T_k1
+ kb_k = 1.0
+ pkT = p0_k/(kb_k * T_k)
+
+ RETURN
 
 END SUBROUTINE  SET_PARAMS_NLN
 
@@ -121,7 +154,7 @@ END SUBROUTINE  SET_PARAMS_NLN
 
 !>========================== FUNCTION SHAPE_FUNC =================
 !!
-!! shape function
+!! shape function in real space
 !!
 !!=======================================================================
 FUNCTION SHAPE_FUNC(I)
@@ -129,8 +162,8 @@ FUNCTION SHAPE_FUNC(I)
  IMPLICIT NONE
 
  INTEGER(q) :: I
- REAL(q) :: SHAPE_FUNC, PS_TOTTN_I
- REAL(q), EXTERNAL :: ERRFC !compimentary error function implemented in errf.F in vasp.5.lib
+ REAL(q) :: SHAPE_FUNC, PS_TOTN_I
+ REAL(q), EXTERNAL :: ERRFC 
 
  PS_TOTN_I = R_PS_TOTN(I)
 
@@ -143,10 +176,38 @@ END FUNCTION SHAPE_FUNC
 
 
 
-!>========================== FUNCTION LANG_NLN =================
+!>========================== FUNCTION SHAPE_FUNC_DER =================
 !!
-!! Compute the langevin function
-!! input: nondimensional electric field, NDIM_E = \frac{p0 * |E|}{k * T}
+!! shape function derivative in real space
+!!
+!!=======================================================================
+FUNCTION SHAPE_FUNC_DER(I)
+
+ IMPLICIT NONE
+
+ INTEGER(q) :: I
+
+ REAL(q) :: EPR_C, EPR_Z, PS_TOTN_I, SHAPE_FUNC_DER
+
+ PS_TOTN_I = R_PS_TOTN(I)
+
+ EPR_C = 1._q / sqrt(2*PI) / sigma_k
+
+ EPR_Z = log(MAX(REAL(PS_TOTN_I,KIND=q),CHGMIN)/nc_k) / sqrt(2._q) / sigma_k
+
+ SHAPE_FUNC_DER = EPR_C * (EXP(-(EPR_Z)**2)) / (MAX(REAL(PS_TOTN_I,KIND=q),CHGMIN))
+
+ RETURN
+
+END FUNCTION SHAPE_FUNC_DER
+
+
+
+
+!>========================== FUNCTION LANG_NLN ==========================
+!!
+!! Compute the langevin function in real space
+!! NDIM_E = \frac{p0 * |E|}{k * T}
 !!
 !!=======================================================================
 FUNCTION LANG_NLN(I)
@@ -156,10 +217,11 @@ FUNCTION LANG_NLN(I)
  INTEGER(q) :: I
  REAL(q) :: NDIM_E, LANG_NLN
 
- NDIM_E = NDIM_EFIELD(I)
+ NDIM_E = EFIELD(I) * pkT
 
 !the calling function/subroutine must ensure that NDIM_E is not zer
- LANG_NLN = COTH(NDIM_E)/NDIM_E  - 1._q / NDIM_E
+!coth(x) - 1/x
+ LANG_NLN = (COSH(NDIM_E)/ SINH(NDIM_E))  - 1._q / NDIM_E
 
  RETURN
 
@@ -168,12 +230,9 @@ END FUNCTION LANG_NLN
 
 
 
-!>========================== FUNCTION CHI_NLN =================
+!>========================== FUNCTION CHI_NLN ===========================
 !!
-!! Compute the electric susceptibiltiy
-!! input: PS_TOTN = valence + pseudo core charge density in real space
-!! input: nondimensional electric field, NDIM_E = \frac{p0 * |E|}{k * T}
-!! output: CHI_NLN
+!! Compute the electric susceptibiltiy in real space
 !!
 !!=======================================================================
 FUNCTION CHI_NLN(I)
@@ -183,12 +242,12 @@ FUNCTION CHI_NLN(I)
  INTEGER(q) :: I
  REAL(q) :: NDIM_E, CHI_NLN
 
- NDIM_E = NDIM_EFIELD(I)
+ NDIM_E = EFIELD(I) * pkT
  
 !if the electric fiedl is non zero
  IF (ABS(NDIM_E) > CHGMIN) THEN
 
-      CHI_NLN = SHAPE_FUNC(I) * ( 3 * (EB_K - EINFTY_K) * LANG_NLN(I)/NDIM_E + (EINFTY - 1._q) )
+      CHI_NLN = SHAPE_FUNC(I) * ( 3 * (EB_K - EINFTY_K) * LANG_NLN(I)/NDIM_E + (EINFTY_K - 1._q) )
 
 !electric field --> 0 , L(x)/x --> 1/3
  ELSE
@@ -215,21 +274,25 @@ END FUNCTION CHI_NLN
 !! used to compute the 0.5 * \int \phi * \rho_b d^3r energy term
 !!
 !!=======================================================================
-FUNCTION RHOB_NLN_G(G, PHI_G, TOTN_G)
+FUNCTION RHOB_NLN_G(I, TOTN_G)
 
  IMPLICIT NONE
 
+ INTEGER(q) :: I
  REAL(q) :: G(3)
- REAL(q) :: G2, PHI_G, TOTN_G, RHOB_NLN_G
+ REAL(q) :: G2
+ COMPLEX(q) :: TOTN_G,PHI_G, RHOB_NLN_G
+
+ PHI_G = PHI_TILDA(I) * EDEPS / LATT_CUR_NLN%OMEGA
+ G = GVEC_NLN(:,I)
 
  G2 = G(1)**2 + G(2)**2 + G(3)**2 
 
-!dont forgert the epsilon_0, permittivity of free space factor 
  RHOB_NLN_G = G2 * PHI_G - TOTN_G
 
  RETURN
 
-END SUBROUTINE COMPUTE_RHOB_NLN
+END FUNCTION RHOB_NLN_G
 
 
 
@@ -241,24 +304,20 @@ END SUBROUTINE COMPUTE_RHOB_NLN
 !! NDIM_EFIELD = |\grad \phi| *p0 / k/ T; non dimensional electricfield in real space
 !!
 !!===========================================================================
-SUBROUTINE UPDATE_EFIELD(GRIDC, LATT_CUR, PHI)
+SUBROUTINE UPDATE_EFIELD()
 
 
  IMPLICIT NONE
 
- TYPE(grid_3d),INTENT(IN)      :: GRIDC
- TYPE(latt),INTENT(IN)         :: LATT_CUR
- COMPLEX(q),INTENT(IN)         :: PHI(D_GRIDC%MPLWV)
- REAL(q), ALLOCATABLE           :: EFIELD(:)
 
  INTEGER(q)                    :: I,N1,N2,N3,NC
  REAL(q)                       :: GX,GY,GZ,tmp
  
-!reurns EFIELD = |\grad \phi|^2
- CALL NABLAN(PHI, GRIDC, LATT_CUR, EFIELD)
+!reurns EFIELD = |\grad \phi|^2 in real space
+ CALL NABLAN(PHI_TILDA, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
 
- DO I = 1, GRIDC%RL%NP
-   NDIM_EFIELD(I) = SQRT(EFIELD(I)) * p0_k / kb_k /T_k
+ DO I = 1, GRIDC_NLN%RL%NP
+   EFIELD(I) = SQRT(EFIELD(I))
  ENDDO
 
  RETURN
@@ -278,13 +337,13 @@ SUBROUTINE COMPUTE_EPSILON_NLN(EPSILON_NLN)
 
  IMPLICIT NONE
 
- REAL(q), INTENT(OUT) ::  EPSILON_NLN(CE_GRIDC%RL%NP)
+ REAL(q), INTENT(OUT) ::  EPSILON_NLN(SIZE_REAL)
 
  INTEGER(q) :: I
- REAL(q) :: CE_a, CE_b, CE_x, CE_n, CE_LG, DCE_LG
 
-
- EPSILON_NLN(I) = 1._q + CHI_NLN(I)
+ DO I = 1, GRIDC_NLN%RL%NP
+    EPSILON_NLN(I) = 1._q + CHI_NLN(I)
+ ENDDO
 
  RETURN
 
@@ -298,22 +357,17 @@ END SUBROUTINE COMPUTE_EPSILON_NLN
 !!  nonlinear minimizer
 !!
 !!===================================================================
-SUBROUTINE MINIMIZE_NLN(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, PS_TOTN, TOTN, SP_d_eps, phi_tilda, NCGSOL)
+SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
 
  IMPLICIT NONE
 
- TYPE(type_info),INTENT(IN) :: SP_T_INFO
- TYPE(potcar),INTENT(IN)    :: SP_P (SP_T_INFO%NTYP)
- TYPE (latt),INTENT(IN)     :: SP_LATT_CUR
- TYPE(grid_3d),INTENT(IN)   :: SP_GRIDC
+ COMPLEX(q),INTENT(IN)     ::TOTN(SIZE_REC)
+ REAL(q), ALLOCATABLE    ::  SP_d_eps(:)
 
- COMPLEX(q),INTENT(IN)     ::TOTN(SP_GRIDC%MPLWV)
- COMPLEX(q)                ::PS_TOTN(SP_GRIDC%MPLWV)
- REAL(q), INTENT(INOUT)    ::  SP_d_eps(SP_GRIDC%MPLWV)
- COMPLEX(q), INTENT(INOUT) ::  Vcav(SP_GRIDC%MPLWV), phi_tilda(SP_GRIDC%MPLWV)
+ INTEGER :: NCGSOL, MIN_COUNTER
+ REAL(q)    :: diffphi
 
- INTEGER(q) :: NCGSOL
- REAL(q)    :: Acav, diffphi
+ ALLOCATE(SP_D_EPS(SIZE_REAL))
 
  diffphi = 1000._q
 
@@ -322,7 +376,7 @@ SUBROUTINE MINIMIZE_NLN(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, PS_TOTN, TOTN, S
 
  CALL UPDATE_EFIELD()
  
- CALL COMPUTE_EPSILON_NLN()
+ CALL COMPUTE_EPSILON_NLN(SP_D_EPS)
 
  DO WHILE ( (sqrt(diffphi) > 1e-6) )
 
@@ -333,17 +387,23 @@ SUBROUTINE MINIMIZE_NLN(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, PS_TOTN, TOTN, S
 !-------------------------------------------------------------
 !Solves the generalized poisson eqn using CG, returns phi_tilda scaled by edeps/cell vol
 !-------------------------------------------------------------
-     CALL MINIMIZE(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_d_eps, TOTN, phi_tilda, NCGSOL, diffphi)
+     CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, SP_d_eps, TOTN, PHI_TILDA, NCGSOL, diffphi)
 
      CALL UPDATE_EFIELD()
  
-     CALL COMPUTE_EPSILON_NLN()
+     CALL COMPUTE_EPSILON_NLN(SP_D_EPS)
+
+     MIN_COUNTER = MIN_COUNTER + 1
 
  ENDDO
+
+ DEALLOCATE(SP_D_EPS)
 
  RETURN
 
 END SUBROUTINE MINIMIZE_NLN
+
+
 
 
 !>==========================SUBROUTINE VACORR_ELECTROSTATIC =================
@@ -351,18 +411,44 @@ END SUBROUTINE MINIMIZE_NLN
 !!  computes the electroststic potential and energy corrections in reciprocal space
 !!
 !!===============================================================================
-SUBROUTINE VACORR_ELECTROSTATIC(Vcorr, Acorr)
+SUBROUTINE VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
  IMPLICIT NONE
 
- REAL(q) :: Ael, Arhob, Acav, Adm, Acorr
+ REAL(q) :: Ael, Arhob, Acav, Adm, ATOT, Ecorr1, Ecorr2
+ COMPLEX(q) :: TOTN(SIZE_REC), VEL(SIZE_REC), VCORR(SIZE_REC)
+ COMPLEX(q), ALLOCATABLE :: PHI(:), VRHOB(:)
 
- CALL EPS_POT(SP_GRIDC,SP_LATT_CUR,SP_T_INFO,SP_P,RWORK,phi_tilda,SP_d_eps,Vrhob)
+ ALLOCATE(PHI(SIZE_REC), VRHOB(SIZE_REC))
 
- Vcorr = Vel + Vrhob
- Acorr = Ael + Arhob
+ CALL VA_RHOB(TOTN, VRHOB, ARHOB)
 
-Arhob = sum_g rhob_g * phi_g
+ CALL SimplePoisson(GRIDC_NLN, LATT_CUR_NLN, TOTN, PHI, 1)
+
+ VEL = PHI_TILDA - PHI
+
+ VCORR = VCORR + VRHOB
+
+ CALL MY_D_PROD(Ecorr1, TOTN, PHI_TILDA, GRIDC_NLN)
+
+ Ecorr1 = Ecorr1 * 0.5_q
+
+ CALLMPI( M_sum_d(GRIDC_NLN%COMM, Ecorr1, 1))
+
+ CALL MY_D_PROD(Ecorr2, TOTN, PHI, GRIDC_NLN)
+
+ Ecorr2 = Ecorr2 * 0.5_q
+
+ CALLMPI( M_sum_d(GRIDC_NLN%COMM, Ecorr2, 1))
+
+ AEL = Ecorr1 - Ecorr2
+
+!net correction
+ ATOT = ATOT + AEL + ARHOB
+
+ DEALLOCATE(PHI, VRHOB)
+
+ RETURN
 
 END SUBROUTINE VACORR_ELECTROSTATIC
 
@@ -371,26 +457,249 @@ END SUBROUTINE VACORR_ELECTROSTATIC
 
 !>==========================SUBROUTINE VACORR_NON_ELECTROSTATIC =================
 !!
-!!  computes the non electroststic potential and energy correctionsin real space
+!!  computes the non electroststic potential and energy correctionsin recip space
 !!
 !!===============================================================================
-SUBROUTINE VACORR_NON_ELECTROSTATIC(Vcorr, Acorr)
+SUBROUTINE VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
 
  IMPLICIT NONE
 
-!Adm , energy of the dielectric medium
- REAL(q) :: Ael, Arhob, Acav, Adm, Acorr
+ REAL(q) :: Acav, Adm, ECORR1, ATOT
+ COMPLEX(q) :: CHTOT
+ COMPLEX(q) :: VCORR(SIZE_REC)
+ COMPLEX(q), ALLOCATABLE :: VCAV(:), VDM(:)
 
+ ALLOCATE(VCAV(SIZE_REC), VDM(SIZE_REC))
 
- CALL CAVITY_POT_A(Vcav, Acav)
- CALL DIELMEDIUM_POT_A(Vdm, Adm)
+ VCAV = 0._q
+ VDM = 0._q
+ VCORR = 0._q
 
- Vcorr = Vcav + Vdm
- Acorr = Acav + Adm - Vcorr*n
+ ACAV = 0._q
+ ADM = 0._q
 
+ CALL VA_CAV(VCAV, ACAV)
+ CALL VA_DMED(VDM, ADM)
+
+ VCORR = VCORR + VCAV + VDM
+
+ ATOT = ATOT + ACAV + ADM
+
+ DEALLOCATE(VCAV, VDM)
+
+ RETURN
 
 END SUBROUTINE VACORR_NON_ELECTROSTATIC
 
+
+
+!>========================== SUBROUTINE VA_RHOB =================
+!!
+!!  computes the potential and energy due to the bound charge
+!! VRHOB = -\frac{\partial \epsilon}{\partial n} |E|^2
+!! ARHOB = 
+!! returns the potential in reciprocal space
+!!
+!!===============================================================
+SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
+
+ IMPLICIT NONE
+
+ INTEGER(q) :: I
+ COMPLEX(q) :: TOTN(SIZE_REC)
+ REAL(q) :: EPSILON_DER_I, ARHOB, NDIM_E
+ REAL(q), ALLOCATABLE :: VRHOB_WORK(:)
+ COMPLEX(q) :: VRHOB(SIZE_REC)
+
+ ALLOCATE(VRHOB_WORK(SIZE_REAL))
+
+ ARHOB = 0._q
+ VRHOB_WORK = 0._q
+
+
+ DO I = 1, SIZE_REAL
+ 
+      NDIM_E = EFIELD(I) * pkT
+
+     EPSILON_DER_I = SHAPE_FUNC_DER(I) * ( 3 * (EB_K - EINFTY_K) * LANG_NLN(I)/NDIM_E + (EINFTY_K - 1._q) )
+
+     VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD(I) * EFIELD(I)
+
+ ENDDO 
+
+ CALL PACK_R2C(VRHOB_WORK, VRHOB, GRIDC_NLN)
+
+!to fourier space
+ CALL FFT3D(VRHOB, GRIDC_NLN, -1)
+
+
+!iterate over the G vectors
+ DO I = 1, SIZE_REC
+
+    ARHOB = ARHOB + 0.5 * RHOB_NLN_G(I, TOTN(I)) * CONJG(PHI_TILDA(I))
+
+ ENDDO
+
+ DEALLOCATE(VRHOB_WORK)
+
+ RETURN
+
+END SUBROUTINE VA_RHOB
+
+
+
+
+!>========================== SUBROUTINE VA_CAV =================
+!!
+!!  computes the potential and energy due to the cavity formation
+!!
+!!===============================================================
+SUBROUTINE VA_CAV(VCAV, ACAV)
+
+ IMPLICIT NONE
+
+ REAL(q) :: ACAV
+ COMPLEX(q) :: VCAV(SIZE_REC)
+
+ VCAV = 0._q
+ ACAV = 0._q
+
+ RETURN
+
+END SUBROUTINE VA_CAV
+
+
+
+
+!>========================== SUBROUTINE VA_DMED =================
+!!
+!!  computes the potential and energy due to the dielectric medium
+!!
+!!===============================================================
+SUBROUTINE VA_DMED(VDM, ADM)
+
+ IMPLICIT NONE
+
+ INTEGER(q) :: I
+ REAL(q) :: NDIM_E, dv, ADM, ADM_1
+ COMPLEX(q) :: VDM(SIZE_REC)
+ REAL(q), ALLOCATABLE :: VDM_WORK(:)
+
+ ALLOCATE(VDM_WORK(SIZE_REAL))
+
+ dv =  LATT_CUR_NLN%OMEGA / GRIDC_NLN%NPLWV
+
+ VDM_WORK = 0._q
+
+ ADM = 0._q
+
+ DO I = 1, SIZE_REAL
+
+    NDIM_E = EFIELD(I) * pkT
+    ADM_1 = Nsol_k * kb_k * T_k *  &
+          & ( ( NDIM_E * LANG_NLN(I) - LOG(SINH(NDIM_E)/NDIM_E) ) + &
+          & (kb_k * T_k / Nsol_k /p0_k/p0_k) * (einfty_k - 1._q *(NDIM_E**2/2) ) )
+    ADM = ADM + SHAPE_FUNC(I) * ADM_1 *dv
+    VDM_WORK(I) = SHAPE_FUNC_DER(I) * ADM_1
+
+ ENDDO
+
+ CALL PACK_R2C(VDM_WORK, VDM, GRIDC_NLN)
+
+ CALL FFT3D(VDM, GRIDC_NLN, -1)
+ 
+ DEALLOCATE(VDM_WORK)
+
+ RETURN
+
+END SUBROUTINE VA_DMED
+
+
+
+!set the the reciprocal lattice vectors
+SUBROUTINE SET_GVEC_NLN()
+
+ IMPLICIT NONE
+
+ INTEGER(q) :: I, NC, N1, N2, N3
+ 
+ I = 0
+
+ col: DO NC = 1, GRIDC_NLN%RC%NCOL
+         N2 = GRIDC_NLN%RC%I2(NC)
+         N3 = GRIDC_NLN%RC%I3(NC)
+         row: DO N1 = 1, GRIDC_NLN%RC%NROW
+
+            I = I +1
+            
+               GVEC_NLN(1, I) = ( GRIDC_NLN%LPCTX(N1) * LATT_CUR_NLN%B(1,1) &
+                                & + GRIDC_NLN%LPCTY(N2) * LATT_CUR_NLN%B(1,2) &
+                                & + GRIDC_NLN%LPCTZ(N3) * LATT_CUR_NLN%B(1,3) )
+
+               GVEC_NLN(2, I) = ( GRIDC_NLN%LPCTX(N1) * LATT_CUR_NLN%B(2,1) &
+                                 & + GRIDC_NLN%LPCTY(N2) * LATT_CUR_NLN%B(2,2) &
+                                 & + GRIDC_NLN%LPCTZ(N3) * LATT_CUR_NLN%B(2,3) )
+
+               GVEC_NLN(3, I) = ( GRIDC_NLN%LPCTX(N1) * LATT_CUR_NLN%B(3,1) &
+                                 & + GRIDC_NLN%LPCTY(N2) * LATT_CUR_NLN%B(3,2) &
+                                 & + GRIDC_NLN%LPCTZ(N3) * LATT_CUR_NLN%B(3,3) )
+ 
+         ENDDO row
+      ENDDO col
+
+ RETURN
+
+END SUBROUTINE SET_GVEC_NLN
+
+
+
+
+!>========================== SUBROUTINE VCORRECTION_NLN_PCM ======================
+!!
+!!
+!!
+!!===============================================================================
+
+SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
+
+ IMPLICIT NONE
+
+ COMPLEX(q), INTENT(OUT) ::  VCORR(SIZE_REC)
+ COMPLEX(q),INTENT(OUT) :: VEL(SIZE_REC)
+ COMPLEX(q),INTENT(IN) :: TOTN(SIZE_REC), PS_TOTN(SIZE_REC) 
+ COMPLEX(q), ALLOCATABLE :: PS_TOTN_TMP(:)
+
+ INTEGER :: I,J, NCGSOL
+ REAL(q)  :: ATOT
+
+ ALLOCATE(PS_TOTN_TMP(SIZE_REC))
+
+ VEL = 0._q
+ VCORR = 0._q
+ ATOT = 0._q
+
+!set R_PS_TOTN
+
+ PS_TOTN_TMP = PS_TOTN / LATT_CUR_NLN%OMEGA
+
+ CALL FFT3D(PS_TOTN_TMP, GRIDC_NLN, 1)
+
+ CALL UNPACK_C2R(PS_TOTN_TMP, 1.0_q, PS_TOTN_TMP, 0.0_q, R_PS_TOTN, GRIDC_NLN)
+!end of setting R_PS_TOTN
+
+ CALL MINIMIZE_NLN(TOTN, NCGSOL) 
+
+ CALL VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
+
+ CALL VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
+
+ PK_COUNTER = PK_COUNTER + 1
+
+ DEALLOCATE(PS_TOTN_TMP)
+
+ RETURN
+
+END SUBROUTINE VCORRECTION_NLN_PCM
 
 
 
