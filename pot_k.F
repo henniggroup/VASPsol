@@ -35,8 +35,10 @@ MODULE POT_K
  REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE                 :: p0_k, einfty_k, Nsol_k, T_k
  TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
  LOGICAL, SAVE                          :: LSOL = .FALSE.
+ LOGICAL, SAVE                          :: LNLSOL = .FALSE.
  LOGICAL, SAVE                          :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE                          :: LJDFTX = .FALSE.
 
@@ -58,7 +60,9 @@ MODULE POT_K
   USE mgrid, ONLY : grid_3d
   USE pseudo, ONLY : potcar
   USE wave, ONLY : wavedes
-  USE pot_lpcm_k, ONLY : Vcorrection_lpcm, MY_D_PROD
+!  USE pot_lpcm_k, ONLY : Vcorrection_lpcm, MY_D_PROD
+  USE pot_nln_k, ONLY : SET_PARAMS_LPCM, Vcorrection_lpcm, MY_D_PROD
+  USE pot_nln_k, ONLY : CONSTRUCTOR_NLN, Vcorrection_nln_pcm, DESTRUCTOR_NLN
 
   IMPLICIT NONE
 
@@ -139,15 +143,49 @@ MODULE POT_K
 !              BEGIN Solvation minimization
 !
 !
-!-------------------------------------------------------------    
-    IF (LDEFAULTPCM) THEN
+!-------------------------------------------------------------
+    
+!-------------------------------------------------------------
+!LINEAR PCM
+!-------------------------------------------------------------
+    IF (LDEFAULTPCM .AND. (.NOT. LNLSOL)) THEN
+
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Calling vcorr_lpcm minimization'
 #endif
-     CALL Vcorrection_lpcm(SP_IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vdiel,Adiel,sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,sigma_rc_k,tau,EDIFFSOL)
+
+     CALL SET_PARAMS_LPCM(sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, &
+                            & sigma_rc_k, tau, ediffsol, SP_T_INFO%NTYP)
+
+     CALL Vcorrection_lpcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
+                           & PS_TOTN, Vcorr, Vdiel, Adiel)
+
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Return from vcorr_lpcm minimization'
 #endif
+
+!-------------------------------------------------------------
+!NON-LINEAR PCM
+!-------------------------------------------------------------
+    ELSEIF (LDEFAULTPCM .AND. LNLSOL) THEN
+
+#ifdef debugsol
+     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Calling vcorr_nln_pcm minimization'
+#endif
+
+     CALL CONSTRUCTOR_NLN(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, &
+                          & sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
+                           & p0_k, einfty_k, Nsol_k, T_k)
+
+
+     CALL VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VDIEL, ADIEL )
+
+     CALL DESTRUCTOR_NLN()
+
+#ifdef debugsol
+     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Return from vcorr_nln_pcm minimization'
+#endif
+
 !-------------------------------------------------------------
 !BEGIN JDFTx
 !-------------------------------------------------------------
@@ -697,6 +735,13 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   nc_k = 0.0025_q
   eb_k = 80.0_q
   tau = 5.25E-4_q
+
+!default values for nonlinear sol
+  p0_k = 1.0
+  einfty_k = 1.0
+  Nsol_k = 1.0
+  T_k = 300
+
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
 #endif
@@ -729,6 +774,29 @@ END SUBROUTINE SET_SOL_IO
   
       
       OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
+
+!---------------------------------------------------------------
+!LNLSOL
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LNLSOL','=','#',';','L',IDUM,RDUM,CDUM,LNLSOL,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''LNLSOL'', switch for nonlinear solvation'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'LNLSOL = ', LNLSOL          
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : LNLSOL(Non-linear solvation) = ', LNLSOL 
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''LNLSOL''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
 
 !---------------------------------------------------------------
 !sigma_k
@@ -863,7 +931,7 @@ SUBROUTINE SOL_WRITER()
  IMPLICIT NONE
  
  IF (SP_IO%IU6>=0) THEN
-   WRITE(SP_IO%IU6,100) eb_k, sigma_k, nc_k, tau
+   WRITE(SP_IO%IU6,100) eb_k, sigma_k, nc_k, tau, LNLSOL
  ENDIF
 
 100   FORMAT( &
@@ -871,7 +939,8 @@ SUBROUTINE SOL_WRITER()
              '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
              '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
              '   NC_K    =',F10.6,  '     cutoff charge density' /&
-             '   TAU     =',F10.6,  '     cavity surface tension' /)
+             '   TAU     =',F10.6,  '     cavity surface tension' /&
+             '   LNLSOL     =',L10,  '    Nonlinear solvation' /)
 
 END SUBROUTINE SOL_WRITER 
 
@@ -1083,15 +1152,3 @@ END SUBROUTINE GETRCORE
 
 END MODULE POT_K
 
-!*******************************************************************************************
-!
-!********************                 END OF MODULE POT_K                 ******************
-!
-!*******************************************************************************************
-
-!polarization
-!   phi_bnd=phi_tilda - phi
-!compute the bound charge, bnd_chg, in kspace
-!   CALL SimplePoisson(SP_GRIDC,SP_LATT_CUR,phi_bnd,bnd_chg,0)
-!bnd_chg in real space
-!  CALL FFT3D(bnd_chg,SP_GRIDC,1)
