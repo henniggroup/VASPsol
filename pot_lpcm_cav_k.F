@@ -375,7 +375,7 @@ END SUBROUTINE CREATECAVITY
 !!======================================================================
 
 SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
-                    &MN_phi,NCGSOL, DIFFPHI)
+                    & MN_phi, NCGSOL, DIFFPHI)
 
  IMPLICIT NONE
 
@@ -1229,6 +1229,3 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 END SUBROUTINE UNPACK_C2R
 
 END MODULE POT_LPCM_K
-!*******************************************************************************************
-!*****************************************END OF MODULE POT_LPCM_K ******************************
-!*******************************************************************************************

@@ -42,7 +42,7 @@ MODULE POT_NLN_K
  REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: R_PS_TOTN(:) !ps_totn in real space
  REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: GVEC_NLN(:,:) !array og G vectors
 
- INTEGER(q), PRIVATE, SAVE :: SIZE_REAL, SIZE_REC !array size in real and reciprocal space
+ INTEGER(q), PRIVATE, SAVE :: SIZE_REAL, SIZE_REC, SIZE_RLNP, SIZE_RCNP !array size in real and reciprocal space
 
 
 
@@ -55,8 +55,8 @@ MODULE POT_NLN_K
 !!
 !!
 !!===============================================================================
-SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k, sigma_k, nc_k, &
-                           & eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
+SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1, nc_k1, &
+                           & eb_k1, CORE_C1, sigma_rc_k1, tau1, ediffsol1, &
                            & p0_k1, einfty_k1, Nsol_k1, T_k1)
 
  IMPLICIT NONE
@@ -67,11 +67,10 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k, sigma_k, 
  TYPE(grid_3d),INTENT(IN) :: GRIDC
  TYPE (in_struct),INTENT(IN) :: IO
 
- REAL(q) :: sigma_nc_k, sigma_k, nc_k
- REAL(q) :: eb_k, CORE_C, sigma_rc_k(T_INFO%NTYP), tau, ediffsol
+ REAL(q) :: sigma_nc_k1, sigma_k1, nc_k1
+ REAL(q) :: eb_k1, CORE_C1, sigma_rc_k1(T_INFO%NTYP), tau1, ediffsol1
  REAL(q) :: p0_k1, einfty_k1, Nsol_k1, T_k1
 
- INTEGER(q) :: SIZE_REAL, SIZE_REC, SIZE_GVEC
 
  IO_NLN = IO
  T_INFO_NLN = T_INFO
@@ -83,11 +82,13 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k, sigma_k, 
 
  SIZE_REAL = DIMREAL(GRIDC_NLN%MPLWV)
 
- SIZE_GVEC = GRIDC_NLN%RC%NCOL * GRIDC_NLN%RC%NROW
+ SIZE_RCNP = GRIDC_NLN%RC%NCOL * GRIDC_NLN%RC%NROW
+
+ SIZE_RLNP = GRIDC_NLN%RL%NCOL * GRIDC_NLN%RL%NROW
 
  ALLOCATE(P_NLN(T_INFO_NLN%NTYP))
  ALLOCATE(EFIELD(SIZE_REAL), R_PS_TOTN(SIZE_REAL))
- ALLOCATE(PHI_TILDA(SIZE_REC), GVEC_NLN(3, SIZE_GVEC))
+ ALLOCATE(PHI_TILDA(SIZE_REC), GVEC_NLN(3, SIZE_RCNP))
 
  IF (PK_COUNTER == 1)  THEN
    ALLOCATE(SOL_PHI(SIZE_REC))
@@ -96,8 +97,8 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k, sigma_k, 
 
  P_NLN = P
 
- CALL SET_PARAMS_LPCM(sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, &
-                      & ediffsol, T_INFO_NLN%NTYP)
+ CALL SET_PARAMS_LPCM(sigma_nc_k1, sigma_k1, nc_k1, eb_k1, CORE_C1, sigma_rc_k1, tau1, &
+                      & ediffsol1, T_INFO_NLN%NTYP)
  CALL SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 
  CALL SET_GVEC_NLN()
@@ -118,7 +119,9 @@ SUBROUTINE DESTRUCTOR_NLN()
 
  IMPLICIT NONE
 
- DEALLOCATE(EFIELD, R_PS_TOTN, PHI_TILDA, GVEC_NLN)
+ DEALLOCATE(P_NLN, EFIELD, R_PS_TOTN, PHI_TILDA, GVEC_NLN)
+
+ PK_COUNTER = PK_COUNTER + 1
 
  RETURN
 
@@ -138,12 +141,14 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 
  REAL(q) :: p0_k1, einfty_k1, Nsol_k1, kb_k1, T_k1
 
- p0_k = p0_k1 
+ p0_k     = p0_k1 
  einfty_k = einfty_k1
- Nsol_k = Nsol_k1
- T_k = T_k1
- kb_k = 1.0
- pkT = p0_k/(kb_k * T_k)
+ Nsol_k   = Nsol_k1
+ T_k      = T_k1
+
+ kb_k     = 1.0
+
+ pkT      = p0_k/(kb_k * T_k)
 
  RETURN
 
@@ -206,8 +211,8 @@ END FUNCTION SHAPE_FUNC_DER
 
 !>========================== FUNCTION LANG_NLN ==========================
 !!
-!! Compute the langevin function in real space
-!! NDIM_E = \frac{p0 * |E|}{k * T}
+!! Compute the langevin function in real space, coth(x) - 1/x
+!! x = NDIM_E = \frac{p0 * |E|}{k * T}
 !!
 !!=======================================================================
 FUNCTION LANG_NLN(I)
@@ -219,9 +224,13 @@ FUNCTION LANG_NLN(I)
 
  NDIM_E = EFIELD(I) * pkT
 
-!the calling function/subroutine must ensure that NDIM_E is not zer
-!coth(x) - 1/x
- LANG_NLN = (COSH(NDIM_E)/ SINH(NDIM_E))  - 1._q / NDIM_E
+#ifdef debugsol
+ IF (NDIM_E < CHGMIN ) WRITE(IO_NLN%IU0, *) 'Encountered NDIM_E less that 1E-10: ', NDIM_E 
+#endif
+
+ NDIM_E = MAX( NDIM_E, CHGMIN )
+
+ LANG_NLN = ( COSH(NDIM_E)/ SINH(NDIM_E) )  - ( 1._q / NDIM_E )
 
  RETURN
 
@@ -243,18 +252,17 @@ FUNCTION CHI_NLN(I)
  REAL(q) :: NDIM_E, CHI_NLN
 
  NDIM_E = EFIELD(I) * pkT
+
+#ifdef debugsol
+ IF (NDIM_E < CHGMIN ) WRITE(IO_NLN%IU0, *) 'Encountered NDIM_E less that 1E-10: ', NDIM_E 
+#endif
+
+ NDIM_E = MAX( NDIM_E, CHGMIN )
  
-!if the electric fiedl is non zero
- IF (ABS(NDIM_E) > CHGMIN) THEN
-
-      CHI_NLN = SHAPE_FUNC(I) * ( 3 * (EB_K - EINFTY_K) * LANG_NLN(I)/NDIM_E + (EINFTY_K - 1._q) )
-
-!electric field --> 0 , L(x)/x --> 1/3
- ELSE
-
-      CHI_NLN = SHAPE_FUNC(I) * ( EB_K - 1._q )
-
- ENDIF
+ CHI_NLN = SHAPE_FUNC(I) * ( &
+                             & 3 * (EB_K - EINFTY_K) * LANG_NLN(I)/ NDIM_E &
+                               + (EINFTY_K - 1._q) &
+                           & )
 
  RETURN
 
@@ -265,13 +273,9 @@ END FUNCTION CHI_NLN
 
 !>========================== FUNCTION RHOB_NLN_G =================
 !!
-!! Compute the bound charge in fourier space
-!! rho_b = -\grad \codt \grad \phi - \rho_s, where \phi is net potential
-!! input: G2, square of G reciprocal lattice vector
-!! input: PHI_G, Gth fourier component of PHI i.e PHI(G)
-!! input: TOTN_G, Gth fourier component of TOTN i.e TOTN(G)
-!! output: RHOB_NLN_G
-!! used to compute the 0.5 * \int \phi * \rho_b d^3r energy term
+!! Gth the bound charge component
+!! bound charge, rho_b = \grad \codt E - \rho_s
+!!    = -\grad \codt \grad \phi - \rho_s, where \phi is net potential
 !!
 !!=======================================================================
 FUNCTION RHOB_NLN_G(I, TOTN_G)
@@ -299,9 +303,9 @@ END FUNCTION RHOB_NLN_G
 
 !>==========================SUBROUTINE UPDATE_EFIELD =======================
 !!
-!! Sets the module private variable NDIM_EFIELD(in real sapce), given the potential
+!! updates EFILED = |E| = |\grad \phi|
+!! EFIELD in real space
 !! input: PHI, potential in reciprocal space
-!! NDIM_EFIELD = |\grad \phi| *p0 / k/ T; non dimensional electricfield in real space
 !!
 !!===========================================================================
 SUBROUTINE UPDATE_EFIELD()
@@ -316,7 +320,7 @@ SUBROUTINE UPDATE_EFIELD()
 !reurns EFIELD = |\grad \phi|^2 in real space
  CALL NABLAN(PHI_TILDA, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
 
- DO I = 1, GRIDC_NLN%RL%NP
+ DO I = 1, SIZE_RLNP
    EFIELD(I) = SQRT(EFIELD(I))
  ENDDO
 
@@ -329,7 +333,7 @@ END SUBROUTINE UPDATE_EFIELD
 
 !>==========================SUBROUTINE COMPUTE_EPSILON_NLN=================
 !!
-!!  
+!!  \espilon = 1 + \chi, in real space
 !!
 !!==========================================================================
 
@@ -341,9 +345,14 @@ SUBROUTINE COMPUTE_EPSILON_NLN(EPSILON_NLN)
 
  INTEGER(q) :: I
 
- DO I = 1, GRIDC_NLN%RL%NP
+ EPSILON_NLN = 0._q
+
+ DO I = 1, SIZE_RLNP
+
     EPSILON_NLN(I) = 1._q + CHI_NLN(I)
+
  ENDDO
+
 
  RETURN
 
@@ -361,8 +370,8 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
 
  IMPLICIT NONE
 
- COMPLEX(q),INTENT(IN)     ::TOTN(SIZE_REC)
- REAL(q), ALLOCATABLE    ::  SP_d_eps(:)
+ COMPLEX(q),INTENT(IN)   :: TOTN(SIZE_REC)
+ REAL(q), ALLOCATABLE    :: SP_d_eps(:)
 
  INTEGER :: NCGSOL, MIN_COUNTER
  REAL(q)    :: diffphi
@@ -473,7 +482,6 @@ SUBROUTINE VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
 
  VCAV = 0._q
  VDM = 0._q
- VCORR = 0._q
 
  ACAV = 0._q
  ADM = 0._q
@@ -508,7 +516,7 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
  INTEGER(q) :: I
  COMPLEX(q) :: TOTN(SIZE_REC)
  REAL(q) :: EPSILON_DER_I, ARHOB, NDIM_E
- REAL(q), ALLOCATABLE :: VRHOB_WORK(:)
+ RGRID, ALLOCATABLE :: VRHOB_WORK(:)
  COMPLEX(q) :: VRHOB(SIZE_REC)
 
  ALLOCATE(VRHOB_WORK(SIZE_REAL))
@@ -517,9 +525,16 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
  VRHOB_WORK = 0._q
 
 
- DO I = 1, SIZE_REAL
+ DO I = 1, SIZE_RLNP
  
       NDIM_E = EFIELD(I) * pkT
+
+#ifdef debugsol
+      IF (NDIM_E < CHGMIN ) WRITE(IO_NLN%IU0, *) 'Encountered NDIM_E less that 1E-10: ', NDIM_E 
+#endif
+
+      NDIM_E = MAX( NDIM_E, CHGMIN )
+
 
      EPSILON_DER_I = SHAPE_FUNC_DER(I) * ( 3 * (EB_K - EINFTY_K) * LANG_NLN(I)/NDIM_E + (EINFTY_K - 1._q) )
 
@@ -531,14 +546,17 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
 
 !to fourier space
  CALL FFT3D(VRHOB, GRIDC_NLN, -1)
-
+ CALL SETUNB(VRHOB, GRIDC_NLN)
+ VRHOB = VRHOB/ GRIDC_NLN%NPLWV
 
 !iterate over the G vectors
- DO I = 1, SIZE_REC
+ DO I = 1, SIZE_RCNP
 
-    ARHOB = ARHOB + 0.5 * RHOB_NLN_G(I, TOTN(I)) * CONJG(PHI_TILDA(I))
+    ARHOB = ARHOB + 0.5 * CONJG( RHOB_NLN_G(I, TOTN(I)) ) * PHI_TILDA(I)
 
  ENDDO
+
+ CALLMPI( M_sum_d(GRIDC_NLN%COMM, ARHOB, 1))
 
  DEALLOCATE(VRHOB_WORK)
 
@@ -583,7 +601,7 @@ SUBROUTINE VA_DMED(VDM, ADM)
  INTEGER(q) :: I
  REAL(q) :: NDIM_E, dv, ADM, ADM_1
  COMPLEX(q) :: VDM(SIZE_REC)
- REAL(q), ALLOCATABLE :: VDM_WORK(:)
+ RGRID, ALLOCATABLE :: VDM_WORK(:)
 
  ALLOCATE(VDM_WORK(SIZE_REAL))
 
@@ -593,9 +611,16 @@ SUBROUTINE VA_DMED(VDM, ADM)
 
  ADM = 0._q
 
- DO I = 1, SIZE_REAL
+ DO I = 1, SIZE_RLNP
 
     NDIM_E = EFIELD(I) * pkT
+
+#ifdef debugsol
+      IF (NDIM_E < CHGMIN ) WRITE(IO_NLN%IU0, *) 'Encountered NDIM_E less that 1E-10: ', NDIM_E 
+#endif
+
+      NDIM_E = MAX( NDIM_E, CHGMIN )
+
     ADM_1 = Nsol_k * kb_k * T_k *  &
           & ( ( NDIM_E * LANG_NLN(I) - LOG(SINH(NDIM_E)/NDIM_E) ) + &
           & (kb_k * T_k / Nsol_k /p0_k/p0_k) * (einfty_k - 1._q *(NDIM_E**2/2) ) )
@@ -604,9 +629,14 @@ SUBROUTINE VA_DMED(VDM, ADM)
 
  ENDDO
 
+ CALLMPI( M_sum_d(GRIDC_NLN%COMM, ADM, 1))
+
  CALL PACK_R2C(VDM_WORK, VDM, GRIDC_NLN)
 
  CALL FFT3D(VDM, GRIDC_NLN, -1)
+ CALL SETUNB(VDM, GRIDC_NLN)
+ VDM = VDM/ GRIDC_NLN%NPLWV
+
  
  DEALLOCATE(VDM_WORK)
 
@@ -630,7 +660,7 @@ SUBROUTINE SET_GVEC_NLN()
          N3 = GRIDC_NLN%RC%I3(NC)
          row: DO N1 = 1, GRIDC_NLN%RC%NROW
 
-            I = I +1
+               I = I +1
             
                GVEC_NLN(1, I) = ( GRIDC_NLN%LPCTX(N1) * LATT_CUR_NLN%B(1,1) &
                                 & + GRIDC_NLN%LPCTY(N2) * LATT_CUR_NLN%B(1,2) &
@@ -674,9 +704,9 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 
  ALLOCATE(PS_TOTN_TMP(SIZE_REC))
 
- VEL = 0._q
+ VEL   = 0._q
  VCORR = 0._q
- ATOT = 0._q
+ ATOT  = 0._q
 
 !set R_PS_TOTN
 
@@ -689,11 +719,11 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 
  CALL MINIMIZE_NLN(TOTN, NCGSOL) 
 
+!poisson diff and thob contributions
  CALL VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
+!cav and dielectric medium
  CALL VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
-
- PK_COUNTER = PK_COUNTER + 1
 
  DEALLOCATE(PS_TOTN_TMP)
 

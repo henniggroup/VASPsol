@@ -177,8 +177,8 @@ MODULE POT_K
                           & sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
                            & p0_k, einfty_k, Nsol_k, T_k)
 
-
-     CALL VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VDIEL, ADIEL )
+!VCORR= just the poisson difference, VDIEL= the rest
+     CALL VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VDIEL, VCORR, ADIEL )
 
      CALL DESTRUCTOR_NLN()
 
@@ -794,6 +794,98 @@ END SUBROUTINE SET_SOL_IO
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''LNLSOL''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!P0_K
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'P0_K','=','#',';','F',IDUM,P0_K,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''P0_K'', dipole moment of the molecule'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'P0_K = ', P0_K          
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : P0_K = ', P0_K
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''P0_K''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!EINFTY_K
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EINFTY_K','=','#',';','F',IDUM,EINFTY_K,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EINFTY_K'', \epsilon_{\infty}'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'EINFTY_K = ', EINFTY_K         
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : EINFTY_K = ', EINFTY_K
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EINFTY_K''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!NSOL_K
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'NSOL_K','=','#',';','F',IDUM,NSOL_K,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NSOL_K'', Number density of the solvent molecules'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'NSOL_K = ', NSOL_K         
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : NSOL_K = ', NSOL_K
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''NSOL_K''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+!---------------------------------------------------------------
+!T_K
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'T_K','=','#',';','F',IDUM,T_K,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''T_K'', Temperature in Kelvin'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'T_K = ', T_K         
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : T_K = ', T_K
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''T_K''from INCAR.'
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
          STOP
       ENDIF
