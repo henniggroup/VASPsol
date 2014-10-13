@@ -25,9 +25,9 @@ MODULE POT_NLN_K
  USE pot_lpcm_k
 
  PUBLIC  :: CONSTRUCTOR_NLN, VCORRECTION_NLN_PCM, DESTRUCTOR_NLN
- PRIVATE :: SET_PARAMS_NLN, COMPUTE_EFIELD_NLN, COMPUTE_LANG_NLN 
- PRIVATE :: COMPUTE_CHI_NLN, COMPUTE_EPSILON_NLN, COMPUTE_RHOB_NLN, GET_V_E_NLN
- PRIVATE :: MINIMIZE_NLN
+ PRIVATE :: SHAPE_FUNC, SHAPE_FUNC_DER, LANG_NLN, CHI_NLN, RHOB_NLN_G
+ PRIVATE :: SET_PARAMS_NLN, UPDATE_EFIELD, MINIMIZE_NLN, COMPUTE_EPSILON_NLN, SET_GVEC_NLN
+ PRIVATE :: VACORR_ELECTROSTATIC, VACORR_NON_ELECTROSTATIC, VA_RHOB, VA_CAV, VA_DMED
 
  TYPE(type_info), PRIVATE, SAVE :: T_INFO_NLN
  TYPE(potcar), PRIVATE, ALLOCATABLE, SAVE :: P_NLN(:)
@@ -35,14 +35,16 @@ MODULE POT_NLN_K
  TYPE(grid_3d), PRIVATE, SAVE :: GRIDC_NLN
  TYPE (in_struct), PRIVATE, SAVE :: IO_NLN
 
- REAL(q), PRIVATE, SAVE               :: p0_k, einfty_k, Nsol_k, kb_k, T_k, dv
+ REAL(q), PRIVATE, SAVE    :: p0_k, einfty_k, Nsol_k, kb_k, T_k, KT, dv
  REAL(q), PRIVATE, SAVE    :: pkT !p0/k/T
+ REAL(q), PRIVATE, PARAMETER    :: HART_TO_EV_K = 2 * RYTOEV
  COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE  :: PHI_TILDA(:) !soln to the poisson eqn
  REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: EFIELD(:) !modulus of electri field vector in real space
  REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: R_PS_TOTN(:) !ps_totn in real space
  REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: GVEC_NLN(:,:) !array og G vectors
 
- INTEGER(q), PRIVATE, SAVE :: SIZE_REAL, SIZE_REC, SIZE_RLNP, SIZE_RCNP !array size in real and reciprocal space
+ INTEGER(q), PRIVATE, SAVE :: SIZE_REAL, SIZE_REC !allocation size
+ INTEGER(q), PRIVATE, SAVE :: SIZE_RLNP, SIZE_RCNP !actual size
 
 
 
@@ -141,14 +143,73 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 
  REAL(q) :: p0_k1, einfty_k1, Nsol_k1, kb_k1, T_k1
 
- p0_k     = p0_k1 
+!-----------------------------------------------------------------
+!dimensionless quatity
+!einfty_k = (refractive index)**2
+!-----------------------------------------------------------------
+
  einfty_k = einfty_k1
- Nsol_k   = Nsol_k1
+
+!-----------------------------------------------------------------
+!number of solvent molecules per unit volume
+!INACR input in mol/liter
+! to convert to molecules per Angstrom^3 multiply by 6.022141 * 1E-4
+! eg:- molar concentration of water = 55.5 mol/L
+! ==> 0.033 molecules/Angstrom^3
+! also multiply by AUTOA**3 to convert to atomic units
+!for the above example the value is approximately 0.005 in atomic units
+!-----------------------------------------------------------------
+
+ Nsol_k   = Nsol_k1 * 6.022141 * 1E-4_q * (AUTOA**3)
+
+!-----------------------------------------------------------------
+!temperature in kelvin
+!-----------------------------------------------------------------
+
  T_k      = T_k1
 
- kb_k     = 1.0
+!-----------------------------------------------------------------
+! boltzmann const in eV/K from constant.inc
+!-----------------------------------------------------------------
 
- pkT      = p0_k/(kb_k * T_k)
+ kb_k     = BOLKEV 
+
+!-----------------------------------------------------------------
+!in atomic units, hartree_to_ev = 2 * rydberg_to_ev
+!-----------------------------------------------------------------
+
+ KT = kb_k * T_k/(2 * RYTOEV)
+
+
+!Note:
+!for the above example, N*k*T = 0.005 * 8.6173857E-5 * 300/ 2 / 13.61 
+! = 4.75e-06 hartree/a0^3, where a0 = bohr radius 
+! ~= 0.9 meV/Angstrom^3
+
+
+!-----------------------------------------------------------------
+!1 Debye = 0.393430 e*a0
+! where the e is the charge of the electron and a0 the bohr radius.
+!in atomic units e=1 and a0=1 so 1 Debye = 0.393430 au
+! p0_k is not independent, it can be computed from eb_k and einfty_k
+! the value of p0_k obtained from the INCAR is not used
+! p0_k     = p0_k1
+!
+!in atomic units \epsilon_0 = 1/4/\pi
+!
+!p0_k in atomic units
+!-----------------------------------------------------------------
+
+ p0_k =  SQRT( (3._q * (eb_k - einfty_k) * KT)/ (4._q * PI * Nsol_k )  )
+
+!-----------------------------------------------------------------
+!multiply by pkT to make the electric field nondimensional
+!in atomic units
+!note: electric field must be in atomic units too
+!-----------------------------------------------------------------
+
+ pkT      = p0_k/KT
+
 
  RETURN
 
@@ -170,6 +231,7 @@ FUNCTION SHAPE_FUNC(I)
  REAL(q) :: SHAPE_FUNC, PS_TOTN_I
  REAL(q), EXTERNAL :: ERRFC 
 
+!R_PS_TOTN has the units of 1/Angstrom^3, so nc_k must be of the same unit
  PS_TOTN_I = R_PS_TOTN(I)
 
  SHAPE_FUNC = ERRFC( log(MAX(REAL(PS_TOTN_I, KIND=q), CHGMIN)/nc_k) / SQRT(2._q)/sigma_k ) / 2._q
@@ -285,14 +347,22 @@ FUNCTION RHOB_NLN_G(I, TOTN_G)
  INTEGER(q) :: I
  REAL(q) :: G(3)
  REAL(q) :: G2
- COMPLEX(q) :: TOTN_G,PHI_G, RHOB_NLN_G
+ COMPLEX(q) :: TOTN_G, TOTN_G_SCALED, PHI_G, RHOB_NLN_G
 
- PHI_G = PHI_TILDA(I) * EDEPS / LATT_CUR_NLN%OMEGA
+!in atomic units and remove the units of energy
+ PHI_G = PHI_TILDA(I) * 4 * PI * AUTOA /  EDEPS
+
  G = GVEC_NLN(:,I)
 
  G2 = G(1)**2 + G(2)**2 + G(3)**2 
 
- RHOB_NLN_G = G2 * PHI_G - TOTN_G
+!to atomic units
+ G2 = G2 * AUTOA * AUTOA
+
+!remove the volume and convert to atomic units
+ TOTN_G_SCALED = TOTN_G * (AUTOA**3) / LATT_CUR_NLN%OMEGA
+
+ RHOB_NLN_G = G2 * PHI_G - TOTN_G_SCALED
 
  RETURN
 
@@ -320,8 +390,10 @@ SUBROUTINE UPDATE_EFIELD()
 !reurns EFIELD = |\grad \phi|^2 in real space
  CALL NABLAN(PHI_TILDA, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
 
+! |E| = |\grad \phi| in real space and in atomic units
+! it doesnt have the units of energy 
  DO I = 1, SIZE_RLNP
-   EFIELD(I) = SQRT(EFIELD(I))
+   EFIELD(I) = SQRT(EFIELD(I)) * 4 * PI * AUTOA * AUTOA / EDEPS
  ENDDO
 
  RETURN
@@ -538,6 +610,9 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
 
      EPSILON_DER_I = SHAPE_FUNC_DER(I) * ( 3 * (EB_K - EINFTY_K) * LANG_NLN(I)/NDIM_E + (EINFTY_K - 1._q) )
 
+!\epsilon_0 d\epsilon/dn in atomic units
+     EPSILON_DER_I = EPSILON_DER_I / (4 * PI * (AUTOA**3) )
+
      VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD(I) * EFIELD(I)
 
  ENDDO 
@@ -552,7 +627,8 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
 !iterate over the G vectors
  DO I = 1, SIZE_RCNP
 
-    ARHOB = ARHOB + 0.5 * CONJG( RHOB_NLN_G(I, TOTN(I)) ) * PHI_TILDA(I)
+    ARHOB = ARHOB + 0.5 * CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
+                    & * ( PHI_TILDA(I) * 4 * PI * AUTOA / EDEPS )
 
  ENDDO
 
@@ -607,6 +683,9 @@ SUBROUTINE VA_DMED(VDM, ADM)
 
  dv =  LATT_CUR_NLN%OMEGA / GRIDC_NLN%NPLWV
 
+!to atomic units
+ dv = dv / (AUTOA**3)
+
  VDM_WORK = 0._q
 
  ADM = 0._q
@@ -621,10 +700,10 @@ SUBROUTINE VA_DMED(VDM, ADM)
 
       NDIM_E = MAX( NDIM_E, CHGMIN )
 
-    ADM_1 = Nsol_k * kb_k * T_k *  &
+    ADM_1 = Nsol_k * KT *  &
           & ( ( NDIM_E * LANG_NLN(I) - LOG(SINH(NDIM_E)/NDIM_E) ) + &
-          & (kb_k * T_k / Nsol_k /p0_k/p0_k) * (einfty_k - 1._q *(NDIM_E**2/2) ) )
-    ADM = ADM + SHAPE_FUNC(I) * ADM_1 *dv
+          & ( (einfty_k - 1._q) / 3._q / (eb_k - einfty_k) ) * (NDIM_E**2/2) ) 
+    ADM = ADM + SHAPE_FUNC(I) * ADM_1 * dv
     VDM_WORK(I) = SHAPE_FUNC_DER(I) * ADM_1
 
  ENDDO
@@ -686,7 +765,8 @@ END SUBROUTINE SET_GVEC_NLN
 
 !>========================== SUBROUTINE VCORRECTION_NLN_PCM ======================
 !!
-!!
+!! inputs TOTN and PS_TOTN are in reciprocal space and has the volume scaling 
+!!returns VEL, just the poiss diff, and VCORR, the rest of the pot, in reciprocal space
 !!
 !!===============================================================================
 
@@ -714,16 +794,25 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 
  CALL FFT3D(PS_TOTN_TMP, GRIDC_NLN, 1)
 
+ R_PS_TOTN = 0._q
+
+!r_ps_totn in the units of 1/Angstrom^3
  CALL UNPACK_C2R(PS_TOTN_TMP, 1.0_q, PS_TOTN_TMP, 0.0_q, R_PS_TOTN, GRIDC_NLN)
+
 !end of setting R_PS_TOTN
 
  CALL MINIMIZE_NLN(TOTN, NCGSOL) 
 
-!poisson diff and thob contributions
+!poisson diff and rhob contributions
  CALL VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
 !cav and dielectric medium
  CALL VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
+
+!to eV
+ VEL = VEL * HART_TO_EV_K
+ VCORR = VCORR * HART_TO_EV_K
+ ATOT = ATOT * HART_TO_EV_K
 
  DEALLOCATE(PS_TOTN_TMP)
 
