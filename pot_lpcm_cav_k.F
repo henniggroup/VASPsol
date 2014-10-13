@@ -32,15 +32,15 @@ MODULE POT_LPCM_K
  USE pseudo, ONLY : potcar
 
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD
- PRIVATE :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
- PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
- PRIVATE :: PACK_R2C, UNPACK_C2R
+ PUBLIC :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
+ PUBLIC :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
+ PUBLIC :: PACK_R2C, UNPACK_C2R
 
- INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
- REAL(q), PRIVATE, SAVE                 :: CHGMIN = 1E-10_q
- COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE :: Sol_phi(:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
+ INTEGER, PUBLIC, SAVE                 :: PK_counter = 1
+ REAL(q), PUBLIC, SAVE                 :: CHGMIN = 1E-10_q
+ COMPLEX(q), PUBLIC, ALLOCATABLE, SAVE :: Sol_phi(:)
+ REAL(q), PUBLIC, ALLOCATABLE, SAVE    :: sigma_rc_k(:)
+ REAL(q), PUBLIC, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
  TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
 
  CONTAINS
@@ -51,7 +51,8 @@ MODULE POT_LPCM_K
 !!
 !!======================================================================
 
-SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vel,Atot,sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,sigma_rc_k1,tau1,ediffs)
+SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
+                            & PS_TOTN, Vcorr, Vel, Atot)
 
  IMPLICIT NONE
 
@@ -69,8 +70,6 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
  RGRID,ALLOCATABLE :: RWORK(:)
  INTEGER :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
- REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
- REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
 
  ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)),RWORK(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV),phi(SP_GRIDC%MPLWV))
@@ -80,15 +79,6 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
    ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
    Sol_phi = 0._q
  ENDIF
-
- sigma_nc_k = sigma_nc_k1 
- sigma_k =  sigma_k1
- nc_k =  nc_k1
- eb_k =  eb_k1
- CORE_C =  CORE_C1
- sigma_rc_k =  sigma_rc_k1
- tau = tau1
- EDIFFSOL = ediffs
 
  Ecorr1 = 0.0_q
  Ecorr2 = 0.0_q
@@ -183,6 +173,36 @@ SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,
  RETURN
 
 END SUBROUTINE Vcorrection_lpcm
+
+
+!>=======================SUBROUTINE SET_PARAMS_LPCM======================
+!!
+!! Set the solvation paramters
+!! called from pot_k.F 
+!!
+!!======================================================================
+
+ SUBROUTINE SET_PARAMS_LPCM(sigma_nc_k1, sigma_k1, nc_k1, eb_k1, CORE_C1, &
+                            &sigma_rc_k1, tau1, ediffs, NTYP)
+
+ IMPLICIT NONE
+
+ INTEGER :: NTYP
+ REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
+ REAL(q), INTENT(IN) :: sigma_rc_k1(NTYP)
+
+ sigma_nc_k = sigma_nc_k1 
+ sigma_k =  sigma_k1
+ nc_k =  nc_k1
+ eb_k =  eb_k1
+ CORE_C =  CORE_C1
+ sigma_rc_k =  sigma_rc_k1
+ tau = tau1
+ EDIFFSOL = ediffs
+
+ RETURN
+
+ END SUBROUTINE SET_PARAMS_LPCM
 
 !>=======================SUBROUTINE CREATECAVITY======================
 !!
@@ -355,7 +375,7 @@ END SUBROUTINE CREATECAVITY
 !!======================================================================
 
 SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
-                    &MN_phi,NCGSOL)
+                    & MN_phi, NCGSOL, DIFFPHI)
 
  IMPLICIT NONE
 
@@ -383,6 +403,9 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  INTEGER,INTENT(OUT) :: NCGSOL
  REAL(q) :: sum_c,sum_n,sum_t,step,phi_diff,r20,maximum,maximum1,rand
  REAL(q) :: max_lp_r,max_lp_i,max_n_r,max_n_i
+ REAL(q), OPTIONAL :: DIFFPHI
+ COMPLEX(q),ALLOCATABLE :: DIFFPHI_WORK(:)
+
 
 ! ALLOCATING the local arrays
  ALLOCATE(MN_RESID(MN_GRIDC%MPLWV),MN_Z(MN_GRIDC%MPLWV))
@@ -392,6 +415,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
 
  ALLOCATE(gradphi_x_in(MN_GRIDC%MPLWV),gradphi_y_in(MN_GRIDC%MPLWV))
  ALLOCATE(gradphi_z_in(MN_GRIDC%MPLWV))
+ IF (PRESENT(DIFFPHI)) ALLOCATE(DIFFPHI_WORK(MN_GRIDC%MPLWV))
 
 
  count=0
@@ -550,6 +574,17 @@ NCGSOL = count
 #ifdef debugsol
 IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
 #endif
+
+ IF (PRESENT(DIFFPHI)) THEN
+   DIFFPHI_WORK = Sol_phi - MN_phi
+   
+   CALL MY_D_PROD(DIFFPHI, DIFFPHI_WORK, DIFFPHI_WORK, MN_GRIDC)
+   CALLMPI( M_sum_d(MN_GRIDC%COMM, diffphi, 1))
+
+#ifdef debugsol
+ IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"diffphi = ", DIFFPHI
+#endif
+ ENDIF
 !-------------------------------------------------------------
 !save phi for the intial guess for the next iteration
 !-------------------------------------------------------------
@@ -566,8 +601,10 @@ IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
  DEALLOCATE(MN_RESID,MN_Z,MN_Lp,MN_GSQU)
  DEALLOCATE(MN_d)
  DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in)
+ IF (PRESENT(DIFFPHI)) DEALLOCATE(DIFFPHI_WORK)
 
  RETURN
+
 END SUBROUTINE MINIMIZE
 
 !>======================SUBROUTINE Leps==================================
@@ -1192,6 +1229,3 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 END SUBROUTINE UNPACK_C2R
 
 END MODULE POT_LPCM_K
-!*******************************************************************************************
-!*****************************************END OF MODULE POT_LPCM_K ******************************
-!*******************************************************************************************
