@@ -384,16 +384,19 @@ SUBROUTINE UPDATE_EFIELD()
  IMPLICIT NONE
 
 
- INTEGER(q)                    :: I,N1,N2,N3,NC
- REAL(q)                       :: GX,GY,GZ,tmp
+ INTEGER(q)   :: I,N1,N2,N3,NC
+ REAL(q)      :: GX,GY,GZ,tmp
  
 !reurns EFIELD = |\grad \phi|^2 in real space
  CALL NABLAN(PHI_TILDA, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
 
 ! |E| = |\grad \phi| in real space and in atomic units
-! it doesnt have the units of energy 
  DO I = 1, SIZE_RLNP
-   EFIELD(I) = SQRT(EFIELD(I)) * 4 * PI * AUTOA * AUTOA / EDEPS
+#ifdef debugsol
+    IF (EFIELD(I)< 0) WRITE(IO_NLN%IU0,*) 'encountered negative EFILED(I) ', EFIELD(I)
+#endif
+!we only need the magnitude of the electric field
+    EFIELD(I) = SQRT(ABS(EFIELD(I))) * 4 * PI * AUTOA * AUTOA / EDEPS
  ENDDO
 
  RETURN
@@ -443,12 +446,12 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
  IMPLICIT NONE
 
  COMPLEX(q),INTENT(IN)   :: TOTN(SIZE_REC)
- REAL(q), ALLOCATABLE    :: SP_d_eps(:)
+ REAL(q), ALLOCATABLE    :: D_EPS(:)
 
  INTEGER :: NCGSOL, MIN_COUNTER
  REAL(q)    :: diffphi
 
- ALLOCATE(SP_D_EPS(SIZE_REAL))
+ ALLOCATE(D_EPS(SIZE_REAL))
 
  diffphi = 1000._q
 
@@ -457,28 +460,28 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
 
  CALL UPDATE_EFIELD()
  
- CALL COMPUTE_EPSILON_NLN(SP_D_EPS)
+ CALL COMPUTE_EPSILON_NLN(D_EPS)
 
  DO WHILE ( (sqrt(diffphi) > 1e-6) )
 
 #ifdef debugsol
-     IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) "PK_counter, MIN_counter", PK_counter, MIN_counter
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "PK_counter, MIN_counter", PK_counter, MIN_counter
 #endif
 
 !-------------------------------------------------------------
 !Solves the generalized poisson eqn using CG, returns phi_tilda scaled by edeps/cell vol
 !-------------------------------------------------------------
-     CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, SP_d_eps, TOTN, PHI_TILDA, NCGSOL, diffphi)
+     CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, TOTN, PHI_TILDA, NCGSOL, diffphi)
 
      CALL UPDATE_EFIELD()
  
-     CALL COMPUTE_EPSILON_NLN(SP_D_EPS)
+     CALL COMPUTE_EPSILON_NLN(D_EPS)
 
      MIN_COUNTER = MIN_COUNTER + 1
 
  ENDDO
 
- DEALLOCATE(SP_D_EPS)
+ DEALLOCATE(D_EPS)
 
  RETURN
 
@@ -577,7 +580,7 @@ END SUBROUTINE VACORR_NON_ELECTROSTATIC
 !!
 !!  computes the potential and energy due to the bound charge
 !! VRHOB = -\frac{\partial \epsilon}{\partial n} |E|^2
-!! ARHOB = 
+!! ARHOB = 0.5 \int \phi \rho_b
 !! returns the potential in reciprocal space
 !!
 !!===============================================================
@@ -585,7 +588,7 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
 
  IMPLICIT NONE
 
- INTEGER(q) :: I
+ INTEGER(q) :: I, FACT_K
  COMPLEX(q) :: TOTN(SIZE_REC)
  REAL(q) :: EPSILON_DER_I, ARHOB, NDIM_E
  RGRID, ALLOCATABLE :: VRHOB_WORK(:)
@@ -596,6 +599,11 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
  ARHOB = 0._q
  VRHOB_WORK = 0._q
 
+#ifdef realmode
+ FACT_K = 2
+#elif
+ FACT_K = 1
+#endif
 
  DO I = 1, SIZE_RLNP
  
@@ -627,8 +635,8 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
 !iterate over the G vectors
  DO I = 1, SIZE_RCNP
 
-    ARHOB = ARHOB + 0.5 * CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
-                    & * ( PHI_TILDA(I) * 4 * PI * AUTOA / EDEPS )
+    ARHOB = ARHOB + 0.5_q * FACT_K *CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
+                    & * ( PHI_TILDA(I) * 4_q * PI * AUTOA / EDEPS )
 
  ENDDO
 
@@ -725,7 +733,13 @@ END SUBROUTINE VA_DMED
 
 
 
-!set the the reciprocal lattice vectors
+
+!>========================== SUBROUTINE SET_GVEC_NLN ======================
+!!
+!! set the the reciprocal lattice vectors
+!!
+!!===============================================================================
+
 SUBROUTINE SET_GVEC_NLN()
 
  IMPLICIT NONE

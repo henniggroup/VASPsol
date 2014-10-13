@@ -737,10 +737,10 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   tau = 5.25E-4_q
 
 !default values for nonlinear sol
-  p0_k = 1.0
-  einfty_k = 1.0
-  Nsol_k = 1.0
-  T_k = 300
+  p0_k = 1.0 ! not used
+  einfty_k = 1.33 * 1.33 ! square of water refractive index 
+  Nsol_k = 55.5 !mol/L, for water
+  T_k = 300 ! temperature i kelvin
 
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
