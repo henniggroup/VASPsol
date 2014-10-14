@@ -393,7 +393,7 @@ SUBROUTINE UPDATE_EFIELD()
 ! |E| = |\grad \phi| in real space and in atomic units
  DO I = 1, SIZE_RLNP
 #ifdef debugsol
-    IF (EFIELD(I)< 0) WRITE(IO_NLN%IU0,*) 'encountered negative EFILED(I) ', EFIELD(I)
+    IF (EFIELD(I)< 0) WRITE(IO_NLN%IU0,*) 'negative value for EFILED(I) ', EFIELD(I)
 #endif
 !we only need the magnitude of the electric field
     EFIELD(I) = SQRT(ABS(EFIELD(I))) * 4 * PI * AUTOA * AUTOA / EDEPS
@@ -499,7 +499,7 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
  IMPLICIT NONE
 
- REAL(q) :: Ael, Arhob, Acav, Adm, ATOT, Ecorr1, Ecorr2
+ REAL(q) :: AEL, ARHOB, ACAV, ADM, ATOT, Ecorr1, Ecorr2
  COMPLEX(q) :: TOTN(SIZE_REC), VEL(SIZE_REC), VCORR(SIZE_REC)
  COMPLEX(q), ALLOCATABLE :: PHI(:), VRHOB(:)
 
@@ -507,27 +507,48 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
  CALL VA_RHOB(TOTN, VRHOB, ARHOB)
 
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ARHOB(in a.u) = ", ARHOB
+#endif
+
  CALL SimplePoisson(GRIDC_NLN, LATT_CUR_NLN, TOTN, PHI, 1)
 
- VEL = PHI_TILDA - PHI
+!in atomic units
+ VEL = (PHI_TILDA - PHI) * 4 * PI * AUTOA / EDEPS
 
  VCORR = VCORR + VRHOB
 
+!TOTN has the volume factor in it
  CALL MY_D_PROD(Ecorr1, TOTN, PHI_TILDA, GRIDC_NLN)
 
- Ecorr1 = Ecorr1 * 0.5_q
+!in atomic units
+ Ecorr1 = Ecorr1 * 0.5_q * 4 * PI * AUTOA / EDEPS
 
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, Ecorr1, 1))
 
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "Ecorr1(in a.u) = ", Ecorr1
+#endif
+
  CALL MY_D_PROD(Ecorr2, TOTN, PHI, GRIDC_NLN)
 
- Ecorr2 = Ecorr2 * 0.5_q
+!in atomic units
+ Ecorr2 = Ecorr2 * 0.5_q * 4 * PI * AUTOA / EDEPS
 
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, Ecorr2, 1))
 
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "Ecorr2(in a.u) = ", Ecorr2
+#endif
+
+!in atomic units
  AEL = Ecorr1 - Ecorr2
 
-!net correction
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "AEL(in a.u) = ", AEL
+#endif
+
+!net correction in atomic units
  ATOT = ATOT + AEL + ARHOB
 
  DEALLOCATE(PHI, VRHOB)
@@ -548,7 +569,7 @@ SUBROUTINE VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
 
  IMPLICIT NONE
 
- REAL(q) :: Acav, Adm, ECORR1, ATOT
+ REAL(q) :: ACAV, ADM, ECORR1, ATOT
  COMPLEX(q) :: CHTOT
  COMPLEX(q) :: VCORR(SIZE_REC)
  COMPLEX(q), ALLOCATABLE :: VCAV(:), VDM(:)
@@ -561,8 +582,19 @@ SUBROUTINE VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
  ACAV = 0._q
  ADM = 0._q
 
+!returns pot and energy in atomic units
  CALL VA_CAV(VCAV, ACAV)
+
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ACAV(in a.u) = ", ACAV
+#endif
+
+!returns pot and energy in atomic units
  CALL VA_DMED(VDM, ADM)
+
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ADM(in a.u) = ", ADM
+#endif
 
  VCORR = VCORR + VCAV + VDM
 
@@ -636,7 +668,8 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
  DO I = 1, SIZE_RCNP
 
     ARHOB = ARHOB + 0.5_q * FACT_K *CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
-                    & * ( PHI_TILDA(I) * 4_q * PI * AUTOA / EDEPS )
+                    & * ( PHI_TILDA(I) * 4_q * PI * AUTOA / EDEPS ) &
+                    & * LATT_CUR_NLN%OMEGA
 
  ENDDO
 
@@ -793,7 +826,7 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
  COMPLEX(q),INTENT(IN) :: TOTN(SIZE_REC), PS_TOTN(SIZE_REC) 
  COMPLEX(q), ALLOCATABLE :: PS_TOTN_TMP(:)
 
- INTEGER :: I,J, NCGSOL
+ INTEGER :: NCGSOL
  REAL(q)  :: ATOT
 
  ALLOCATE(PS_TOTN_TMP(SIZE_REC))
@@ -818,15 +851,24 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
  CALL MINIMIZE_NLN(TOTN, NCGSOL) 
 
 !poisson diff and rhob contributions
+!returns pot and energy in atomic units
  CALL VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
 !cav and dielectric medium
  CALL VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
 
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in a.u) = ", ATOT
+#endif
+
 !to eV
  VEL = VEL * HART_TO_EV_K
  VCORR = VCORR * HART_TO_EV_K
  ATOT = ATOT * HART_TO_EV_K
+
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in eV) = ", ATOT
+#endif
 
  DEALLOCATE(PS_TOTN_TMP)
 
