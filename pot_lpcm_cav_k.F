@@ -41,7 +41,7 @@ MODULE POT_LPCM_K
  COMPLEX(q), PUBLIC, ALLOCATABLE, SAVE :: Sol_phi(:)
  REAL(q), PUBLIC, ALLOCATABLE, SAVE    :: sigma_rc_k(:)
  REAL(q), PUBLIC, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
- TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
+ TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
 
  CONTAINS
 
