@@ -173,7 +173,7 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 !for the above example the value is approximately 0.005 in atomic units
 !-----------------------------------------------------------------
 
- Nsol_k   = Nsol_k1 * 6.022141 * 1E-4_q * (AUTOA**3)
+ Nsol_k   = Nsol_k1 * 6.022 * 1E-4_q * (AUTOA**3)
 
 !-----------------------------------------------------------------
 !temperature in kelvin

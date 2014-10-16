@@ -713,7 +713,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !>==========================SUBROUTINE SET_SOL_IO============================
 !!
 !!gets the IO object and ediff from main, sets LSOL to .TRUE. 
-!!and initializes the solvennt parameters(eb_k,nc_k,sigma_k,tau, by callingsol_reader)
+!!and initializes the solvent parameters(eb_k,nc_k,sigma_k,tau, by callingsol_reader)
 !!called from main.F(called only if INFO%LSOL is true)
 !!
 !!===========================================================================
@@ -729,24 +729,33 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   LSOL = .TRUE. 
   EDIFFSOL = EDIFF/100._q
 
-!default values
-  sigma_k = 0.6_q
-!   nc_k = 0.00473_q
-  nc_k = 0.0025_q
-  eb_k = 80.0_q
-  tau = 5.25E-4_q
+!!!default values
+!!! shape function parameters for linear solvation
+  sigma_k = 0.6_q !!!determines the width of the interface
+  nc_k    = 0.0025_q !!!cut-off charge density,old value: 0.00473_q
+  tau     = 5.25E-4_q
 
-!default values for nonlinear sol
-  p0_k = 1.0 ! not used
-  einfty_k = 1.33 * 1.33 ! square of water refractive index 
-  Nsol_k = 55.5 !mol/L, for water
-  T_k = 300 ! temperature i kelvin
+!!!default values for the paramters that describe the solvent environment
+  eb_k     = 78.4_q    !!!80.0_q
+  p0_k     = 0      !!!not used, computed from eb_k and einfty_k
+  einfty_k = 1.78_q   !!!1.33 * 1.33 ! square of water refractive index 
+  Nsol_k   = 55.35_q  !!!@ 25C, 997.075/18.015 = 55.35!!!55.5 !mol/L, for water
+  T_k      = 298.15_q !!!25C, temperature in kelvin
 
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
 #endif
 
+!!!read in the solvation parameters
   CALL SOL_READER()
+
+!!! if LNLSOL = TRUE, reset the default solvation params, nc_k and tau
+  IF (LNLSOL) THEN
+       nc_k    = 0.00675_q !!!
+       tau     = 9.23E-4_q !!!
+  ENDIF
+
+  RETURN
 
 END SUBROUTINE SET_SOL_IO
 
@@ -798,6 +807,8 @@ END SUBROUTINE SET_SOL_IO
          STOP
       ENDIF
 
+!!! read the nonlinear solvation parameters only if needed
+   IF (LNLSOL) THEN
 !---------------------------------------------------------------
 !P0_K
 !---------------------------------------------------------------
@@ -889,6 +900,7 @@ END SUBROUTINE SET_SOL_IO
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
          STOP
       ENDIF
+   ENDIF !!! end of if (lnlnsol)
 
 !---------------------------------------------------------------
 !sigma_k
