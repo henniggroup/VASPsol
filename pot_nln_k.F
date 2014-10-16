@@ -664,13 +664,13 @@ END SUBROUTINE VACORR_ELECTROSTATIC
 !!  computes the non electroststic potential and energy correctionsin recip space
 !!
 !!===============================================================================
-SUBROUTINE VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
+SUBROUTINE VACORR_NON_ELECTROSTATIC(PS_TOTN, VCORR, ATOT)
 
  IMPLICIT NONE
 
  REAL(q) :: ACAV, ADM, ECORR1, ATOT, AEPS
  COMPLEX(q) :: CHTOT
- COMPLEX(q) :: VCORR(SIZE_REC)
+ COMPLEX(q) :: VCORR(SIZE_REC), PS_TOTN(SIZE_REC)
  COMPLEX(q), ALLOCATABLE :: VCAV(:), VDM(:)
 
  ALLOCATE(VCAV(SIZE_REC), VDM(SIZE_REC))
@@ -683,7 +683,7 @@ SUBROUTINE VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
  AEPS = 0._q
 
 !!!returns pot and energy in atomic units
- CALL VA_CAV(VCAV, ACAV)
+ CALL VA_CAV(PS_TOTN, VCAV, ACAV)
 
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ACAV(in a.u) = ", ACAV
@@ -787,15 +787,156 @@ END SUBROUTINE VA_RHOB
 !!  computes the potential and energy due to the cavity formation
 !!
 !!===============================================================
-SUBROUTINE VA_CAV(VCAV, ACAV)
+SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
 
  IMPLICIT NONE
 
+ REAL(q),ALLOCATABLE        :: VWORK(:) ! Vcav in real space
+ REAL(q),ALLOCATABLE        :: GN(:,:), GN2_TMP(:) !\nabla n and |\naba n|^2
+ COMPLEX(q),ALLOCATABLE     :: GN2(:) ! |\naba n|^2
+ REAL(q),ALLOCATABLE        :: GGN(:,:) !\nabla |\nabla n|
+ REAL(q),ALLOCATABLE        :: GGN2(:) !| \nabla |\nabla n| |^2
+ REAL(q),ALLOCATABLE        :: DIVN(:) ! laplacian of n
+ REAL(q),ALLOCATABLE        :: TERM1(:) ! grad shape func wrt n
+ RGRID, ALLOCATABLE       :: RWORK(:)
+
+ REAL(q), EXTERNAL      :: ERRFC 
+ INTEGER(q)             :: I, J, NPC, NPR, RLNP, RCNP
+ REAL(q)                :: QS,dv,tmp,tmp1,tmp2
  REAL(q) :: ACAV
- COMPLEX(q) :: VCAV(SIZE_REC)
+ COMPLEX(q) :: VCAV(SIZE_REC), PS_TOTN(GRIDC_NLN%MPLWV)
+
+ NPC =  SIZE_REC !!GRIDC%MPLWV
+ RLNP = SIZE_RLNP !!GRIDC%RL%NP
+ RCNP = SIZE_RCNP !!GRIDC%RC%NP
+ NPR =  SIZE_REAL !!DIMREAL(GRIDC%MPLWV) !NPR = NPC, in complex mode
+
+ ALLOCATE(GN2(NPC)) !complex
+ ALLOCATE(GN2_TMP(NPR), GN(3, RLNP) )
+ ALLOCATE(GGN2(NPR), GGN(3, RLNP) )
+ ALLOCATE(DIVN(NPR), TERM1(RLNP))
+ ALLOCATE(RWORK(NPR), VWORK(NPR))
 
  VCAV = 0._q
  ACAV = 0._q
+ VWORK = 0._q
+
+!volume element
+ dv = LATT_CUR_NLN%OMEGA / GRIDC_NLN%NPLWV
+
+!remove the scaling in the reciprocal charge density
+ PS_TOTN = PS_TOTN / LATT_CUR_NLN%OMEGA
+
+!charge density in rec space, returns \nabla n and |\nabla n|^2 in real space
+ CALL NABLAN(PS_TOTN, GRIDC_NLN, LATT_CUR_NLN, GN2_TMP, GN)
+
+!charge density in rec space, returns laplacian of n, Lap(n)
+!Lap(n) = (\nabla \dot \nabla n) in real space
+ CALL LAPLN(PS_TOTN, GRIDC_NLN, LATT_CUR_NLN, DIVN)
+
+!add -Lap(n)/|\nabla n| to Vcav and copy \sqrt(|\nabla n|^2) to gn2_tmp
+ DO I = 1, SIZE_REAL !DIMREAL(GRIDC%MPLWV)
+
+   TMP = SQRT(MAX(REAL(GN2_TMP(I),KIND=q), CHGMIN))
+   VWORK(I) = VWORK(I) - (DIVN(I)) / TMP
+   GN2_TMP(I) = TMP
+
+ ENDDO
+
+!PS_TOTN to the real space
+ CALL FFT3D(PS_TOTN, GRIDC_NLN, 1)
+
+!unpack complex array to a real array
+!in complex mode, just copies PS_TOTN to RWORK
+ CALL UNPACK_C2R(PS_TOTN, 1.0_q, PS_TOTN, 0.0_q, RWORK, GRIDC_NLN)
+
+!charge density must be in real space(unscaled), 
+!returns derivative of shape function wrt the charge density in the real space,
+! term1 = gamma*A / n, where
+! gamma * A = exp( -( log(n/n_c) )^2 / (2 sigma^2) ) / ( sigma * sqrt(2*pi) )
+ CALL SHAPE_GRADN(GRIDC_NLN, T_INFO_NLN, P_NLN, LATT_CUR_NLN, RWORK, TERM1)
+
+!quantum surface area
+ QS = 0._q
+
+!quantum surface area, integral of (gamma*A / n) * |\nabla n| 
+!= term1 * \sqrt(gn2_tmp)
+ DO I = 1, SIZE_RLNP !GRIDC%RL%NP
+   QS = QS + (TERM1(I)) * (GN2_TMP(I)) 
+ ENDDO
+
+ QS = QS * dv 
+
+ CALLMPI( M_sum_d(GRIDC_NLN%COMM, QS, 1))
+
+!cavitation energy
+!tau is in eV/Angstrom^3 and QS has the units of Angstrom^2
+!==> acav is in eV
+ ACAV = tau * QS 
+
+#ifdef debugsol
+ IF (SP_IO%IU0>=0) THEN
+   print *,'tau (eV/Angstrom^2)', tau
+   print *,'surface area (Angstrom^2)', QS
+   print *,'Acav (eV)', ACAV
+ ENDIF
+#endif
+
+!to a.u, to be consistent with the rest of the ATOT components
+ ACAV = ACAV/ HART_TO_EV_K
+
+!1/ |nabla n|
+ DO I = 1, SIZE_RLNP !DIMREAL(GRIDC%MPLWV)
+   GN2_TMP(I) = 1._q / ( MAX(GN2_TMP(I), CHGMIN) ) 
+ ENDDO
+
+!-------------------------------------------------------------
+!Compute cavitation potential, Vcav
+!-------------------------------------------------------------
+!packs the real array into a complex one
+!in complex mode, same as  gn2 = CMPLX(gn2_tmp)
+ CALL PACK_R2C(GN2_TMP, GN2, GRIDC_NLN)
+
+!1/ |nabla n| to reciprocal space to take the gradient
+ CALL FFT3D(GN2, GRIDC_NLN, -1)
+ CALL SETUNB(GN2, GRIDC_NLN)
+ GN2 = GN2 / GRIDC_NLN%NPLWV
+
+!\nabla(1 / |\nabla n|), ggn in real space
+ CALL NABLAN(GN2, GRIDC_NLN, LATT_CUR_NLN, GGN2, GGN)
+
+!add -(\nabla n . \nabla(1/ |\nabla n|)) to Vcav in real space
+!and multiply by term1 = gamma*A/n in real space
+ DO I = 1, SIZE_RLNP !GRIDC%RL%NP
+  TMP = ( GN(1,I) * GGN(1,I) &
+         & + GN(2,I) * GGN(2,I) &
+         & + GN(3,I) * GGN(3,I) ) * ( TERM1(I) )
+  VWORK(I) = VWORK(I) - TMP
+ ENDDO
+
+ CALL PACK_R2C(VWORK, VCAV, GRIDC_NLN)
+
+!!!Vcav to reciprocal space
+ CALL FFT3D(VCAV, GRIDC_NLN, -1)
+ CALL SETUNB(VCAV, GRIDC_NLN)
+ VCAV = VCAV / GRIDC_NLN%NPLWV
+
+!!!ps_totn to rec space
+ CALL FFT3D(PS_TOTN, GRIDC_NLN, -1)
+ CALL SETUNB(PS_TOTN, GRIDC_NLN)
+ PS_TOTN = PS_TOTN / GRIDC_NLN%NPLWV * LATT_CUR_NLN%OMEGA
+
+!!!multiply by the surface tension
+!!!in units of eV/Angstrom
+ VCAV = VCAV * tau
+
+!to a.u to be consistent
+ VCAV = VCAV * AUTOA / HART_TO_EV_K
+
+ DEALLOCATE(RWORK, VWORK)
+ DEALLOCATE(GN2, GN2_TMP)
+ DEALLOCATE(GN, GGN2)
+ DEALLOCATE(GGN, DIVN, TERM1)
 
  RETURN
 
@@ -986,7 +1127,7 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 
 !!!cav and dielectric medium
 !!!atot = atot + acav + adm + aeps
- CALL VACORR_NON_ELECTROSTATIC(VCORR, ATOT)
+ CALL VACORR_NON_ELECTROSTATIC(PS_TOTN, VCORR, ATOT)
 
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in a.u) = AEL + ACAV + ADM + AEPS  =  ", ATOT
