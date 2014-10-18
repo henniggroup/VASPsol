@@ -34,7 +34,7 @@ MODULE POT_LPCM_K
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD
  PUBLIC :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
  PUBLIC :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
- PUBLIC :: PACK_R2C, UNPACK_C2R
+ PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
 
  INTEGER, PUBLIC, SAVE                 :: PK_counter = 1
  REAL(q), PUBLIC, SAVE                 :: CHGMIN = 1E-10_q
@@ -1227,5 +1227,99 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
  RETURN
 
 END SUBROUTINE UNPACK_C2R
+
+
+
+!>==========================SUBROUTINE WRITE_TO_FILE============================
+!!
+!! write real space quantities to file
+!! writes poscar first and then CVTOT(could be any quantity defined on RL grid)
+!!
+!!=============================================================================
+
+SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
+
+ USE prec
+ USE mgrid
+ USE poscar
+
+ IMPLICIT NONE
+
+ TYPE (grid_3d),INTENT(IN) :: GRIDC
+ TYPE(type_info),INTENT(IN) :: T_INFO
+ TYPE (latt),INTENT(IN) :: LATT_CUR
+ RGRID CVTOT(GRIDC%RL%NP)
+
+ LOGICAL LLONG
+ CHARACTER (40) FORM, SZNAM
+ CHARACTER (*) FNAME
+ REAL(q),ALLOCATABLE ::  WORK(:)
+ INTEGER :: ISTAT, NODE_ME, IONODE, IU
+ INTEGER :: NALLOC, NZ, NWRITE, NWRITTEN, N
+
+ NODE_ME = 0
+ IONODE = 0
+ IU = 468
+ SZNAM = 'Test'
+ FORM = '(1(1X,E17.11))'
+ NWRITE = 5
+ NALLOC = GRIDC%NGX*GRIDC%NGY
+
+#ifdef MPI
+ NODE_ME = GRIDC%COMM%NODE_ME
+ IONODE = GRIDC%COMM%IONODE
+#endif
+
+ ALLOCATE(WORK(NALLOC), STAT=ISTAT)
+
+ io_begin
+     OPEN(IU, FILE = FNAME, STATUS = 'UNKNOWN')
+     REWIND IU
+     CALL OUTPOS(IU, .FALSE., SZNAM, T_INFO, LATT_CUR%SCALE, LATT_CUR%A, .FALSE., T_INFO%POSION)
+ io_end
+
+ IF (ISTAT>0) RETURN ! can not write the potential immediate exit
+
+ IF (GRIDC%NPLWV/= GRIDC%NGX*GRIDC%NGY*GRIDC%NGZ) THEN
+    WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatible', &
+     &   ' with  GRIDC%NGX,GRIDC%NGY,NGZC'
+    WRITE(*,*)'   ',GRIDC%NPLWV,GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
+    STOP
+ ENDIF
+
+ do_io WRITE(IU,'(3I5)') GRIDC%NGX, GRIDC%NGY, GRIDC%NGZ
+
+ NWRITTEN = 0
+
+ DO NZ = 1, GRIDC%NGZ
+    CALL MRG_GRID_RL_PLANE(GRIDC, WORK, CVTOT, NZ)
+    io_begin
+    DO N = 1, NALLOC
+       NWRITTEN=NWRITTEN+1
+       IF ( MOD(NWRITTEN,NWRITE)==0 ) THEN
+          IF (ABS(WORK(N)) < 1E-10 ) THEN
+              WRITE(IU, FORM) 0._q
+          ELSE
+              WRITE(IU, FORM) WORK(N)
+          ENDIF
+       ELSE
+          IF (ABS(WORK(N)) < 1E-10 ) THEN
+             WRITE(IU, FORM, ADVANCE='NO') 0._q
+          ELSE
+             WRITE(IU, FORM, ADVANCE='NO') WORK(N)
+          ENDIF
+       ENDIF
+    ENDDO
+    io_end
+ ENDDO
+
+ IF ( MOD(NWRITTEN,NWRITE)/=0 ) WRITE(IU,*)' '
+
+ DEALLOCATE(WORK)
+
+ RETURN
+
+END SUBROUTINE WRITE_TO_FILE
+
 
 END MODULE POT_LPCM_K

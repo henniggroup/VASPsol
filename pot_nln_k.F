@@ -396,42 +396,49 @@ END FUNCTION CHI_NLN
 
 
 
-!>========================== FUNCTION RHOB_NLN_G =================
+!>========================== SUBROUTINE RHOB_NLN =================
 !!
-!! Gth the bound charge component
-!! bound charge, rho_b = \epsilon_0 \grad \cdot E - \rho_s
-!!    = -\epsilon_0 \grad \codt \grad \phi - \rho_s, where \phi is net potential
-!!
+!! compute the bound charge in real space
+!! bound charge, rho_b = -\nabla \cdot P = - \epsilon_0 \nabla \chi \vec{E}
+!! =  \epsilon_0 \nabla \cdot (\chi (\nabla \phi) )
 !!=======================================================================
-FUNCTION RHOB_NLN_G(I, TOTN_G)
+SUBROUTINE COMPUTE_RHOB_NLN()
 
  IMPLICIT NONE
 
  INTEGER(q) :: I
- REAL(q) :: G(3)
- REAL(q) :: G2
- COMPLEX(q) :: TOTN_G, TOTN_G_SCALED, PHI_G, RHOB_NLN_G
+ REAL(q), ALLOCATABLE :: R_CHI_WORK(:)
+ COMPLEX(q), ALLOCATABLE :: C_CHI_WORK(:)
+ COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
+ COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
+ COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
 
-!in atomic units and remove the units of energy
- PHI_G = PHI_TILDA(I) * 4 * PI * AUTOA /  EDEPS
+ ALLOCATE(R_CHI_WORK(SIZE_REAL), C_CHI_WORK(SIZE_REC))
+ ALLOCATE(gradphi_x_in(SIZE_REC), gradphi_y_in(SIZE_REC))
+ ALLOCATE(gradphi_z_in(SIZE_REC))
 
- G(:) = GVEC_NLN(:,I)
+!susceptibility in real space
+ DO I = 1, SIZE_RLNP
+    R_CHI_WORK = CHI_NLN(I)
+ ENDDO
 
-!WRITE(*,*) 'G(1), G(2), G(3) ', G(1), G(2), G(3)
+!c_chi_work = div(chi*grad phi) in reciprocal space
+ CALL LEPS(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, PHI_TILDA, R_CHI_WORK, &
+                & gradphi_x_in, gradphi_y_in, gradphi_z_in, C_CHI_WORK)
 
- G2 = ( G(1)**2 + G(2)**2 + G(3)**2 )
+!to real space
+ CALL FFT3D(C_CHI_WORK, GRIDC_NLN, 1)
 
-!to atomic units
- G2 = G2 * AUTOA * AUTOA
+ CALL UNPACK_C2R(C_CHI_WORK, 1.0_q, C_CHI_WORK, 0.0_q, R_CHI_WORK, GRIDC_NLN)
 
-!remove the volume and convert to atomic units
- TOTN_G_SCALED = TOTN_G * (AUTOA**3) / LATT_CUR_NLN%OMEGA
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BCHG', R_CHI_WORK)
 
- RHOB_NLN_G = G2 * PHI_G/4/PI - TOTN_G_SCALED
+ DEALLOCATE(R_CHI_WORK, C_CHI_WORK)
+ DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in)
 
  RETURN
 
-END FUNCTION RHOB_NLN_G
+END SUBROUTINE COMPUTE_RHOB_NLN
 
 
 
@@ -605,7 +612,7 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
  ALLOCATE(PHI(SIZE_REC), VRHOB(SIZE_REC))
 
- CALL VA_RHOB(TOTN, VRHOB, ARHOB)
+ CALL VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
 
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ARHOB(in a.u) = ", ARHOB
@@ -714,13 +721,13 @@ END SUBROUTINE VACORR_NON_ELECTROSTATIC
 
 !>========================== SUBROUTINE VA_RHOB =================
 !!
-!!  computes the potential and energy due to the bound charge
+!!  computes the potential due to the bound charge
 !! VRHOB = -\frac{\partial \epsilon}{\partial n} |E|^2
 !! ARHOB = 0.5 \int \phi \rho_b
 !! returns the potential in reciprocal space
 !!
 !!===============================================================
-SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
+SUBROUTINE VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
 
  IMPLICIT NONE
 
@@ -732,7 +739,7 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
 
  ALLOCATE(VRHOB_WORK(SIZE_REAL))
 
- ARHOB = 0._q
+!!! ARHOB = 0._q
  VRHOB_WORK = 0._q
 
 #ifdef realmode
@@ -764,15 +771,14 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB, ARHOB)
  VRHOB = VRHOB/ GRIDC_NLN%NPLWV
 
 !iterate over the G vectors
- DO I = 1, SIZE_RCNP
-
-    ARHOB = ARHOB + 0.5_q * FACT_K *CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
-                    & * ( PHI_TILDA(I) * 4 * PI * AUTOA / EDEPS ) &
-                    & * LATT_CUR_NLN%OMEGA
-
- ENDDO
-
- CALLMPI( M_sum_d(GRIDC_NLN%COMM, ARHOB, 1))
+!!! DO I = 1, SIZE_RCNP
+!!!
+!!!    ARHOB = ARHOB + 0.5_q * FACT_K *CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
+!!!                    & * ( PHI_TILDA(I) * 4 * PI * AUTOA / EDEPS ) &
+!!!                    & * LATT_CUR_NLN%OMEGA
+!!!
+!!! ENDDO
+!!! CALLMPI( M_sum_d(GRIDC_NLN%COMM, ARHOB, 1))
 
  DEALLOCATE(VRHOB_WORK)
 

@@ -755,6 +755,11 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
        tau     = 9.23E-4_q !!!
   ENDIF
 
+#ifdef debugsol
+
+
+#endif
+
   RETURN
 
 END SUBROUTINE SET_SOL_IO
@@ -932,9 +937,9 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water)'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water).check the outcar file'
 
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'nc_k = ', nc_k          
+!!!         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'nc_k = ', nc_k          
          
       ELSE IF (IERR == 0 ) THEN
       
@@ -980,8 +985,8 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''TAU'',cavity surface tension, not specified, using the default'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'tau = ',tau
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''TAU'',cavity surface tension, not specified, using the default. Check the outcar file'
+!!!         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'tau = ',tau
          
       ELSE IF (IERR == 0 ) THEN
       
@@ -1035,16 +1040,21 @@ SUBROUTINE SOL_WRITER()
  IMPLICIT NONE
  
  IF (SP_IO%IU6>=0) THEN
-   WRITE(SP_IO%IU6,100) eb_k, sigma_k, nc_k, tau, LNLSOL
+   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, p0_k, tau
  ENDIF
 
 100   FORMAT( &
              ' Solvation parameters'/ &
-             '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
+             '   LNLSOL     =',L10,  '    Nonlinear solvation(on/off)' /&
              '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
-             '   NC_K    =',F10.6,  '     cutoff charge density' /&
-             '   TAU     =',F10.6,  '     cavity surface tension' /&
-             '   LNLSOL     =',L10,  '    Nonlinear solvation' /)
+             '   NC_K    =',F10.6,  '     cutoff charge density(Angstrom^-3)' /&
+             ' Parameters that describe the solvent environement'/ &
+             '   T_K    =',F10.6,  '     Temperature(K)' /&
+             '   Nsol_K    =',F10.6,  '     molarity(mol/L)' /&
+             '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
+             '   EINFTY_K    =',F10.6,  '  relative permittivity(optical) of the bulk solvent' /&
+             '   P0_K    =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
+             '   TAU     =',F10.6,  '  cavity surface tension' /)
 
 END SUBROUTINE SOL_WRITER 
 

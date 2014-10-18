@@ -252,7 +252,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.878632101 -0400
-+++ VASPsol/pot.F	2014-10-09 14:39:57.553211813 -0400
++++ VASPsol/pot.F	2014-10-16 15:59:15.477827267 -0400
 @@ -2,6 +2,7 @@
        MODULE pot
        USE prec
