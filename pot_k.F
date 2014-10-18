@@ -755,11 +755,6 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
        tau     = 9.23E-4_q !!!
   ENDIF
 
-#ifdef debugsol
-
-
-#endif
-
   RETURN
 
 END SUBROUTINE SET_SOL_IO
