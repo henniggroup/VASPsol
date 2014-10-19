@@ -36,6 +36,7 @@ MODULE POT_NLN_K
  TYPE(grid_3d), PRIVATE, SAVE :: GRIDC_NLN
  TYPE (in_struct), PRIVATE, SAVE :: IO_NLN
 
+ LOGICAL, SAVE                          :: LBCHG = .FALSE.
  REAL(q), PRIVATE, SAVE    :: p0_k, einfty_k, Nsol_k, kb_k, T_k, KT, dv
  REAL(q), PRIVATE, SAVE    :: pkT !p0/k/T
  REAL(q), PRIVATE, PARAMETER    :: HART_TO_EV_K = 2 * RYTOEV
@@ -61,7 +62,7 @@ MODULE POT_NLN_K
 !!===============================================================================
 SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1, nc_k1, &
                            & eb_k1, CORE_C1, sigma_rc_k1, tau1, ediffsol1, &
-                           & p0_k1, einfty_k1, Nsol_k1, T_k1)
+                           & p0_k1, einfty_k1, Nsol_k1, T_k1, LBCHG_1)
 
  IMPLICIT NONE
 
@@ -71,11 +72,13 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1
  TYPE(grid_3d),INTENT(IN) :: GRIDC
  TYPE (in_struct),INTENT(IN) :: IO
 
+ LOGICAL :: LBCHG_1
  REAL(q) :: sigma_nc_k1, sigma_k1, nc_k1
  REAL(q) :: eb_k1, CORE_C1, sigma_rc_k1(T_INFO%NTYP), tau1, ediffsol1
  REAL(q) :: p0_k1, einfty_k1, Nsol_k1, T_k1
 
 
+ LBCHG = LBCHG_1
  IO_NLN = IO
  SP_IO = IO
  T_INFO_NLN = T_INFO
@@ -369,7 +372,6 @@ END FUNCTION LANG_X_NLN
 
 
 
-
 !>========================== FUNCTION CHI_NLN ===========================
 !!
 !! Compute the electric susceptibiltiy in real space
@@ -407,33 +409,49 @@ SUBROUTINE COMPUTE_RHOB_NLN()
  IMPLICIT NONE
 
  INTEGER(q) :: I
- REAL(q), ALLOCATABLE :: R_CHI_WORK(:)
- COMPLEX(q), ALLOCATABLE :: C_CHI_WORK(:)
+ REAL(q), ALLOCATABLE :: R_CHI_WORK(:), R_RHOB_WORK(:)
+ COMPLEX(q), ALLOCATABLE :: C_RHOB_WORK(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
 
- ALLOCATE(R_CHI_WORK(SIZE_REAL), C_CHI_WORK(SIZE_REC))
+ ALLOCATE(R_CHI_WORK(SIZE_REAL), R_RHOB_WORK(SIZE_RLNP), C_RHOB_WORK(SIZE_REC))
  ALLOCATE(gradphi_x_in(SIZE_REC), gradphi_y_in(SIZE_REC))
  ALLOCATE(gradphi_z_in(SIZE_REC))
 
+!!!initialize
+R_CHI_WORK = 0._q
+R_RHOB_WORK = 0._q
+
 !susceptibility in real space
  DO I = 1, SIZE_RLNP
-    R_CHI_WORK = CHI_NLN(I)
+    R_CHI_WORK(I) = CHI_NLN(I)
  ENDDO
 
-!c_chi_work = div(chi*grad phi) in reciprocal space
+!!!c_rhob_work = div(chi*grad phi) in reciprocal space
  CALL LEPS(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, PHI_TILDA, R_CHI_WORK, &
-                & gradphi_x_in, gradphi_y_in, gradphi_z_in, C_CHI_WORK)
+                & gradphi_x_in, gradphi_y_in, gradphi_z_in, C_RHOB_WORK)
+
+!!!note: in the above subroutine call, phi_tilda used was scaled by edeps/volume
+!!!in a.u, without the volume scaling
+!!!C_RHOB_WORK = C_RHOB_WORK * (4 * PI * AUTOA / EDEPS) * (AUTOA**2) * 4 * PI
+!!!==> in units of Angstrom^-3
+C_RHOB_WORK = C_RHOB_WORK * (4 * PI / EDEPS) * 4 * PI
 
 !to real space
- CALL FFT3D(C_CHI_WORK, GRIDC_NLN, 1)
+ CALL FFT3D(C_RHOB_WORK, GRIDC_NLN, 1)
 
- CALL UNPACK_C2R(C_CHI_WORK, 1.0_q, C_CHI_WORK, 0.0_q, R_CHI_WORK, GRIDC_NLN)
+!!!R_CHI_WORK overwritten
+ CALL UNPACK_C2R(C_RHOB_WORK, 1.0_q, C_RHOB_WORK, 0.0_q, R_CHI_WORK, GRIDC_NLN)
 
-  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BCHG', R_CHI_WORK)
+!!!multiply by the volume(in ang^3) to be consistent with CHG(or CHGCAR) file format
+ DO I = 1, SIZE_RLNP
+    R_RHOB_WORK(I) = R_CHI_WORK(I) * LATT_CUR_NLN%OMEGA
+ ENDDO
 
- DEALLOCATE(R_CHI_WORK, C_CHI_WORK)
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BCHG', R_RHOB_WORK)
+
+ DEALLOCATE(R_CHI_WORK, R_RHOB_WORK, C_RHOB_WORK)
  DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in)
 
  RETURN
@@ -1147,6 +1165,9 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in eV) = ", ATOT
 #endif
+
+!!!compute and write the boundcharge to file, filename: BCHG
+ IF (LBCHG) CALL COMPUTE_RHOB_NLN()
 
  DEALLOCATE(PS_TOTN_TMP)
 

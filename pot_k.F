@@ -37,7 +37,7 @@ MODULE POT_K
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,tau,EDIFFSOL
  REAL(q), PRIVATE, SAVE                 :: p0_k, einfty_k, Nsol_k, T_k
  TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
- LOGICAL, SAVE                          :: LSOL = .FALSE.
+ LOGICAL, SAVE                          :: LSOL = .FALSE., LBCHG = .FALSE.
  LOGICAL, SAVE                          :: LNLSOL = .FALSE.
  LOGICAL, SAVE                          :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE                          :: LJDFTX = .FALSE.
@@ -175,7 +175,7 @@ MODULE POT_K
 
      CALL CONSTRUCTOR_NLN(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, &
                           & sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
-                           & p0_k, einfty_k, Nsol_k, T_k)
+                           & p0_k, einfty_k, Nsol_k, T_k, LBCHG)
 
 !VCORR= just the poisson difference, VDIEL= the rest
      CALL VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VDIEL, VCORR, ADIEL )
@@ -807,6 +807,30 @@ END SUBROUTINE SET_SOL_IO
          STOP
       ENDIF
 
+!---------------------------------------------------------------
+!LBCHG
+!---------------------------------------------------------------
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LBCHG','=','#',';','L',IDUM,RDUM,CDUM,LNLSOL,CHARAC,N,1,IERR)
+#ifdef debugsol
+      IF (IERR == 3 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''LBCHG'', to write the bound charge file, BCHG'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'LBCHG = ', LBCHG          
+         
+      ELSE IF (IERR == 0 ) THEN
+      
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : LBCHG = ', LBCHG
+         
+      ENDIF
+#endif
+
+      IF ((IERR/=0).AND.(IERR/=3)) THEN
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''LBCHG''from INCAR.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+         STOP
+      ENDIF
+
+
 !!! read the nonlinear solvation parameters only if needed
    IF (LNLSOL) THEN
 !---------------------------------------------------------------
@@ -1040,16 +1064,16 @@ SUBROUTINE SOL_WRITER()
 
 100   FORMAT( &
              ' Solvation parameters'/ &
-             '   LNLSOL     =',L10,  '    Nonlinear solvation(on/off)' /&
-             '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
-             '   NC_K    =',F10.6,  '     cutoff charge density(Angstrom^-3)' /&
+             '   LNLSOL   =',L10,  '    Nonlinear solvation(on/off)' /&
+             '   SIGMA_K  =',F10.6,  '  width of the dielectric cavity' /&
+             '   NC_K     =',F10.6,  '  cutoff charge density(Angstrom^-3)' /&
              ' Parameters that describe the solvent environement'/ &
-             '   T_K    =',F10.6,  '     Temperature(K)' /&
-             '   Nsol_K    =',F10.6,  '     molarity(mol/L)' /&
-             '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
-             '   EINFTY_K    =',F10.6,  '  relative permittivity(optical) of the bulk solvent' /&
-             '   P0_K    =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
-             '   TAU     =',F10.6,  '  cavity surface tension' /)
+             '   T_K      =',F10.6,  '  Temperature(K)' /&
+             '   Nsol_K   =',F10.6,  '  molarity(mol/L)' /&
+             '   EB_K     =',F10.6,  '  relative permittivity of the bulk solvent' /&
+             '   EINFTY_K =',F10.6,  '  relative permittivity(optical) of the bulk solvent' /&
+             '   P0_K     =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
+             '   TAU      =',F10.6,  '  cavity surface tension' /)
 
 END SUBROUTINE SOL_WRITER 
 
