@@ -1,6 +1,6 @@
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/force.F VASPsol/force.F
 --- vasp.5.3.5/force.F	2014-06-12 15:16:18.806632209 -0400
-+++ VASPsol/force.F	2014-10-09 13:52:09.569152457 -0400
++++ VASPsol/force.F	2014-10-21 19:29:17.267028746 -0400
 @@ -50,7 +50,7 @@
  !=======================================================================
  ! first caclulate the local potential and its derivative
@@ -12,7 +12,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  ! one due to the tendency to put the charge density  at the largest
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/main.F VASPsol/main.F
 --- vasp.5.3.5/main.F	2014-06-12 15:16:17.034632144 -0400
-+++ VASPsol/main.F	2014-10-09 13:52:09.613152458 -0400
++++ VASPsol/main.F	2014-10-21 19:29:17.267028746 -0400
 @@ -2511,7 +2511,7 @@
                T_INFO%NIONS,NIOND,T_INFO%ITYP,T_INFO%NITYP,IO%IU6,.TRUE.)
        ELSE
@@ -33,7 +33,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.878632101 -0400
-+++ VASPsol/pot.F	2014-10-09 13:52:09.625152458 -0400
++++ VASPsol/pot.F	2014-10-21 19:30:49.131031354 -0400
 @@ -313,9 +313,9 @@
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
@@ -70,7 +70,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 +!      WRITE(*,*) 'PSCENC(before) = ', PSCENC
 +      ECORR = (PSCENC/ZVSUM) * (NELECT - ZVSUM)
-+      WRITE(*,*) 'Background correction = ', ECORR
++!      WRITE(*,*) 'Background correction = ', ECORR
 +      PSCENC = PSCENC + ECORR
 +!      WRITE(*,*) 'PSCENC(after) = ', PSCENC
 +
