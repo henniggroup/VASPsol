@@ -1,4 +1,4 @@
-Implicit solvation model for VASP:
+Implicit solvation model for VASP
 ==================================
 
 **Authors:** Kiran Mathew and Richard Hennig
