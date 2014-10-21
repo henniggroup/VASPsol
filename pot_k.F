@@ -736,8 +736,9 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   tau     = 5.25E-4_q
 
 !!!default values for the paramters that describe the solvent environment
-  eb_k     = 78.4_q    !!!80.0_q
-  p0_k     = 0      !!!not used, computed from eb_k and einfty_k
+  eb_k     = 78.4_q    !!!80.0_q, dimensionless
+!!!1 Debye = 0.393 e*a0
+  p0_k     = 1.86_q   !!!vacuum dipole moment of water molecule in debye= 0.73 e*a0
   einfty_k = 1.78_q   !!!1.33 * 1.33 ! square of water refractive index 
   Nsol_k   = 55.35_q  !!!@ 25C, 997.075/18.015 = 55.35!!!55.5 !mol/L, for water
   T_k      = 298.15_q !!!25C, temperature in kelvin
@@ -1068,8 +1069,7 @@ SUBROUTINE SOL_WRITER()
  IMPLICIT NONE
  
  IF (SP_IO%IU6>=0) THEN
-!   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, p0_k, tau
-   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, tau
+   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, p0_k, tau
  ENDIF
 
 100   FORMAT( &
@@ -1082,8 +1082,8 @@ SUBROUTINE SOL_WRITER()
              '   Nsol_K   =',F10.6,  '  molarity(mol/L)' /&
              '   EB_K     =',F10.6,  '  relative permittivity of the bulk solvent' /&
              '   EINFTY_K =',F10.6,  '  relative permittivity(optical) of the bulk solvent' /&
-!             '   P0_K     =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
-             '   TAU      =',F10.6,  '  cavity surface tension' /)
+             '   P0_K     =',F10.6,  '  dipole moment(Debye)' /&
+             '   TAU      =',F10.6,  '  cavity surface tension(eV/Angstrom^2)' /)
 
 END SUBROUTINE SOL_WRITER 
 

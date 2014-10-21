@@ -150,7 +150,8 @@ END SUBROUTINE DESTRUCTOR_NLN
 
 !>========================== SUBROUTINE SET_PARAMS_NLN =================
 !!
-!! Sets the params specifi to the nonlinear model
+!! Sets the params specific to the nonlinear model
+!! all paramters set in atomic units
 !!
 !!=====================================================================
 SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
@@ -207,16 +208,16 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 !1 Debye = 0.393430 e*a0
 ! where the e is the charge of the electron and a0 the bohr radius.
 !in atomic units e=1 and a0=1 so 1 Debye = 0.393430 au
-! p0_k is not independent, it can be computed from eb_k and einfty_k
-! the value of p0_k obtained from the INCAR is not used
-! p0_k     = p0_k1
 !
 !in atomic units \epsilon_0 = 1/4/\pi
 !
-!p0_k in atomic units
+!p0_k1 is in Debye and 
+!p0_k is in atomic units, e*a0, 1Debye = 0.393 e*a0
+! if p0_k is not independent, it can be computed from eb_k and einfty_k
 !-----------------------------------------------------------------
+!!! p0_k =  SQRT( (3._q * (eb_k - einfty_k) * KT)/ (4._q * PI * Nsol_k )  )
 
- p0_k =  SQRT( (3._q * (eb_k - einfty_k) * KT)/ (4._q * PI * Nsol_k )  )
+ p0_k     = p0_k1 * 0.393_q
 
 !-----------------------------------------------------------------
 !multiply by pkT to make the electric field nondimensional
@@ -979,12 +980,29 @@ SUBROUTINE VA_DMED(VDM, ADM, AEPS)
 
  INTEGER(q) :: I
  REAL(q) :: NDIM_E, dv, ADM, ADM_1
+ REAL(q) :: BETA_DM, GAMMA_DM, OLD_BETA, ADM_OLD, ADM_1_OLD
  REAL(q) :: AEPS, AEPS_1
  REAL(q) :: EXPX, EXP_X, LOG_TERM
  COMPLEX(q) :: VDM(SIZE_REC)
  RGRID, ALLOCATABLE :: VDM_WORK(:)
 
  ALLOCATE(VDM_WORK(SIZE_REAL))
+
+!!!beta = (epsilon_0 * k * T)/(N * p**2) * (epsilon_infty -1)
+!!!beta = (epsilon_0 )/(N * p* pkt) * (epsilon_infty -1)
+
+ BETA_DM = (EINFTY_K - 1._q) / (4._q * PI * NSOL_K * P0_k * PKT)
+
+ OLD_BETA = (einfty_k - 1._q) / 3._q / (eb_k - einfty_k)
+
+!!! gamma_dm = 1 + gamma 
+!!! = 3 (epsilon_0 * k * T)/(N * p**2) * (epsilon_b - epsilon_infty)
+
+ GAMMA_DM = 3 * (EB_K - EINFTY_K) / (4 * PI * NSOL_K * P0_k * PKT)
+
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) 'GAMMA_DM, BETA_DM, OLD_BETA ', GAMMA_DM, BETA_DM, OLD_BETA
+#endif
 
 !volume element
  dv =  LATT_CUR_NLN%OMEGA / GRIDC_NLN%NPLWV
@@ -995,6 +1013,7 @@ SUBROUTINE VA_DMED(VDM, ADM, AEPS)
  VDM_WORK = 0._q
 
  ADM = 0._q
+ ADM_OLD = 0._q
  AEPS = 0._q
 
  DO I = 1, SIZE_RLNP
@@ -1022,11 +1041,17 @@ SUBROUTINE VA_DMED(VDM, ADM, AEPS)
 
 !    WRITE(*,*) 'NDIM_E, LOG_TERM, L/x', NDIM_E, LOG_TERM, LANG_X_NLN(I)
 
-    ADM_1 = ( (einfty_k - 1._q) / 6._q / (eb_k - einfty_k) + LANG_X_NLN(I) ) * (NDIM_E**2)  - LOG_TERM
+!!!    ADM_1 = ( (einfty_k - 1._q) / 6._q / (eb_k - einfty_k) + LANG_X_NLN(I) ) * (NDIM_E**2)  - LOG_TERM
+!!! the above term same as the following
+    ADM_1_OLD = ( 0.5_q * OLD_BETA + LANG_X_NLN(I) ) * (NDIM_E**2)  - LOG_TERM
+
+    ADM_1 = ( GAMMA_DM * LANG_X_NLN(I) + 0.5_q * BETA_DM ) * (NDIM_E**2)  - GAMMA_DM * LOG_TERM
 
     ADM_1 = SHAPE_FUNC(I) * Nsol_k * KT *  ADM_1
+    ADM_1_OLD = SHAPE_FUNC(I) * Nsol_k * KT *  ADM_1_OLD
 
     ADM = ADM + ADM_1 * dv
+    ADM_OLD = ADM_OLD + ADM_1_OLD * dv
 
 !-0.5 \epsilon_0 \int \chi |E|^2
     AEPS = AEPS - 0.5_q * CHI_NLN(I) * EFIELD(I) * EFIELD(I) / 4 / PI * dv
@@ -1036,9 +1061,12 @@ SUBROUTINE VA_DMED(VDM, ADM, AEPS)
  ENDDO
 
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, ADM, 1))
+ CALLMPI( M_sum_d(GRIDC_NLN%COMM, ADM_OLD, 1))
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, AEPS, 1))
 
- WRITE(*,*) 'AEPS, ADM, ADM - AEPS', AEPS, ADM, ADM - AEPS
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) 'AEPS, ADM, ADM_OLD, ADM + AEPS', AEPS, ADM, ADM_OLD, ADM + AEPS
+#endif
 
  CALL PACK_R2C(VDM_WORK, VDM, GRIDC_NLN)
 
