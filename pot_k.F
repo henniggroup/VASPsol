@@ -749,11 +749,12 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
 !!!read in the solvation parameters
   CALL SOL_READER()
 
+!!!moved to sol_reader
 !!! if LNLSOL = TRUE, reset the default solvation params, nc_k and tau
-  IF (LNLSOL) THEN
-       nc_k    = 0.00675_q !!!
-       tau     = 9.23E-4_q !!!
-  ENDIF
+!!!  IF (LNLSOL) THEN
+!!!       nc_k    = 0.00675_q !!!
+!!!       tau     = 9.23E-4_q !!!
+!!!  ENDIF
 
   RETURN
 
@@ -806,6 +807,14 @@ END SUBROUTINE SET_SOL_IO
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
          STOP
       ENDIF
+
+!!! if LNLSOL = TRUE, reset the default solvation params, nc_k and tau
+!!! before the values are read from the ICAR
+  IF (LNLSOL) THEN
+       nc_k    = 0.00675_q !!!
+       tau     = 9.23E-4_q !!!
+  ENDIF
+
 
 !---------------------------------------------------------------
 !LBCHG
@@ -956,9 +965,9 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water).check the outcar file'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water)'
 
-!!!         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'nc_k = ', nc_k          
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'nc_k = ', nc_k          
          
       ELSE IF (IERR == 0 ) THEN
       
@@ -1004,8 +1013,8 @@ END SUBROUTINE SET_SOL_IO
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''TAU'',cavity surface tension, not specified, using the default. Check the outcar file'
-!!!         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'tau = ',tau
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''TAU'',cavity surface tension, not specified, using the default.'
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'tau = ',tau
          
       ELSE IF (IERR == 0 ) THEN
       
@@ -1059,7 +1068,8 @@ SUBROUTINE SOL_WRITER()
  IMPLICIT NONE
  
  IF (SP_IO%IU6>=0) THEN
-   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, p0_k, tau
+!   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, p0_k, tau
+   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, tau
  ENDIF
 
 100   FORMAT( &
@@ -1072,7 +1082,7 @@ SUBROUTINE SOL_WRITER()
              '   Nsol_K   =',F10.6,  '  molarity(mol/L)' /&
              '   EB_K     =',F10.6,  '  relative permittivity of the bulk solvent' /&
              '   EINFTY_K =',F10.6,  '  relative permittivity(optical) of the bulk solvent' /&
-             '   P0_K     =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
+!             '   P0_K     =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
              '   TAU      =',F10.6,  '  cavity surface tension' /)
 
 END SUBROUTINE SOL_WRITER 
