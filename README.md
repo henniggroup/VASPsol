@@ -1,5 +1,5 @@
-Implicit solvation model for VASP: Monopole, Dipole/quadrapole corrections due to the solvent presence
-==========================================
+Implicit solvation model for VASP:
+==================================
 
 **Authors:** Kiran Mathew and Richard Hennig
 
