@@ -33,7 +33,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.878632101 -0400
-+++ VASPsol/pot.F	2014-10-31 09:53:25.052196519 -0400
++++ VASPsol/pot.F	2014-10-31 13:06:23.956435971 -0400
 @@ -2,6 +2,12 @@
        MODULE pot
        USE prec
@@ -97,8 +97,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 +#if defined(MPI) || defined(MPI_CHAIN)
 +      IF (COMM%NODE_ME==COMM%IONODE) THEN
 +#endif
-+         WRITE(8, *) 'G=0 component of the total local potential ', CVTOT_GZERO
-+         WRITE(8, *) 'Background energy correction ', E_BG
++         WRITE(*, *) 'G=0 component of the total local potential ', CVTOT_GZERO
++         WRITE(*, *) 'Background energy correction ', E_BG
 +
 +#if defined(MPI) || defined(MPI_CHAIN)
 +      ENDIF
