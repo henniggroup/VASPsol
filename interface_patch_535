@@ -1,6 +1,6 @@
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/force.F VASPsol/force.F
 --- vasp.5.3.5/force.F	2014-06-12 15:16:18.806632209 -0400
-+++ VASPsol/force.F	2014-10-21 19:29:17.267028746 -0400
++++ VASPsol/force.F	2014-10-31 09:12:07.260143730 -0400
 @@ -50,7 +50,7 @@
  !=======================================================================
  ! first caclulate the local potential and its derivative
@@ -12,7 +12,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  ! one due to the tendency to put the charge density  at the largest
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/main.F VASPsol/main.F
 --- vasp.5.3.5/main.F	2014-06-12 15:16:17.034632144 -0400
-+++ VASPsol/main.F	2014-10-21 19:29:17.267028746 -0400
++++ VASPsol/main.F	2014-10-31 09:12:07.308143735 -0400
 @@ -2511,7 +2511,7 @@
                T_INFO%NIONS,NIOND,T_INFO%ITYP,T_INFO%NITYP,IO%IU6,.TRUE.)
        ELSE
@@ -33,8 +33,21 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.878632101 -0400
-+++ VASPsol/pot.F	2014-10-21 19:30:49.131031354 -0400
-@@ -313,9 +313,9 @@
++++ VASPsol/pot.F	2014-10-31 09:53:25.052196519 -0400
+@@ -2,6 +2,12 @@
+       MODULE pot
+       USE prec
+       USE charge
++
++!!!background correction and g=0 component of cvtot
++      REAL(q), PRIVATE, SAVE :: E_BG
++      COMPLEX(q) :: CVTOT_GZERO
++!!!
++
+       CONTAINS
+ !************************ SUBROUTINE POTLOK ****************************
+ ! RCS:  $Id: pot.F,v 1.5 2003/06/27 13:22:22 kresse Exp kresse $
+@@ -313,9 +319,9 @@
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
        IF(INFO%TURBO==0)THEN
@@ -46,7 +59,56 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        ENDIF
  
        ELECTROSTATIC=0
-@@ -541,7 +541,7 @@
+@@ -328,13 +334,28 @@
+         SETFACT
+ 
+         ELECTROSTATIC=ELECTROSTATIC+ MULFACT CWORK(NG,1)*CONJG(CHTOT(NG,1))
++
++!!!obtain the g=0 component
++!!!add the pseudo-potential contribution too
++        IF ((GRIDC%LPCTX(N1)==0).AND.(GRIDC%LPCTY(N2)==0).AND.(GRIDC%LPCTZ(N3)==0)) &
++     & THEN
++              CVTOT_GZERO = CVTOT(NG,1) + CWORK(NG,1)
++        ENDIF
++!!!
++
+         NG=NG+1
+       ENDDO row
+       ENDDO col
++
+       ELECTROSTATIC=ELECTROSTATIC+E%PSCENC-E%DENC+E%TEWEN
+ 
+       E%PSCENC=E%PSCENC + DIP%ECORR + DIP%E_ION_EXTERN
+ 
++!!! add the background correction
++      E_BG = ECORR_BG(P, LATT_CUR, T_INFO, INFO%NELECT)
++      E%PSCENC = E%PSCENC + E_BG
++!!!
++
+       DO I=1,GRIDC%RC%NP
+          CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
+       ENDDO
+@@ -365,6 +386,19 @@
+       ENDDO
+ 
+       DEALLOCATE(CWORK1,CWORK)
++
++!!!write to stdout on the master node
++#if defined(MPI) || defined(MPI_CHAIN)
++      IF (COMM%NODE_ME==COMM%IONODE) THEN
++#endif
++         WRITE(8, *) 'G=0 component of the total local potential ', CVTOT_GZERO
++         WRITE(8, *) 'Background energy correction ', E_BG
++
++#if defined(MPI) || defined(MPI_CHAIN)
++      ENDIF
++#endif
++!!!
++
+       RETURN
+     END SUBROUTINE POTLOK
+ 
+@@ -541,7 +575,7 @@
  !
  !***********************************************************************
  
@@ -55,29 +117,75 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        USE ini
        USE prec
        USE mgrid
-@@ -556,7 +556,7 @@
+@@ -556,7 +590,7 @@
        TYPE (potcar) P(T_INFO%NTYP)
        TYPE (latt) LATT_CUR
        COMPLEX(q) CVPS(GRIDC%RC%NP)
 -      REAL(q) PSCENC,TEWEN
-+      REAL(q) PSCENC,TEWEN, NELECT, ECORR
++      REAL(q) PSCENC,TEWEN, NELECT
        REAL(q), OPTIONAL :: FOR(:,:)
        ! local variables
        REAL(q) ZVSUM,G,GX,GY,GZ,TEWEN0
-@@ -574,6 +574,12 @@
+@@ -574,6 +608,7 @@
           PSCENC=PSCENC+P(NT)%PSCORE*T_INFO%VCA(NT)*T_INFO%NITYP(NT)*(ZVSUM/LATT_CUR%OMEGA)
        ENDDO
  
-+!      WRITE(*,*) 'PSCENC(before) = ', PSCENC
-+      ECORR = (PSCENC/ZVSUM) * (NELECT - ZVSUM)
-+!      WRITE(*,*) 'Background correction = ', ECORR
-+      PSCENC = PSCENC + ECORR
-+!      WRITE(*,*) 'PSCENC(after) = ', PSCENC
 +
        TEWEN=-PSCENC
        DO NT=1,T_INFO%NTYP
           TEWEN=TEWEN-P(NT)%ESELF*T_INFO%VCA(NT)*T_INFO%NITYP(NT)
-@@ -762,7 +768,7 @@
+@@ -665,6 +700,50 @@
+       RETURN
+       END SUBROUTINE POTION_PARTICLE_MESH
+ 
++!!!compute the background correction term
++      FUNCTION ECORR_BG(P, LATT_CUR, T_INFO, NELECT)
++      
++      USE prec
++      USE mpimy
++      USE pseudo
++      USE lattice
++      USE poscar
++      USE constant
++
++      IMPLICIT NONE
++
++      TYPE (type_info)   T_INFO
++      TYPE (potcar)      P (T_INFO%NTYP)
++      TYPE (latt)        LATT_CUR
++
++      REAL(q) :: NELECT, ECORR, ZVSUM, PSCENC, ECORR_BG
++      INTEGER :: NT
++
++      ZVSUM = 0
++
++      DO NT = 1,T_INFO%NTYP
++         ZVSUM = ZVSUM + P(NT)%ZVALF * T_INFO%NITYP(NT) * T_INFO%VCA(NT)
++      ENDDO
++
++      PSCENC = 0
++
++      DO NT = 1, T_INFO%NTYP
++         PSCENC = PSCENC + P(NT)%PSCORE * T_INFO%VCA(NT) * T_INFO%NITYP(NT) * (ZVSUM/LATT_CUR%OMEGA)
++      ENDDO
++
++!      WRITE(*,*) 'PSCENC(before) = ', PSCENC
++!      WRITE(*,*) 'PSCENC/ZVSUM = ', PSCENC/ZVSUM
++!      WRITE(*,*) '\sum \alpha = PSCENC/ZVSUM*OMEGA = ', PSCENC/ZVSUM*LATT_CUR%OMEGA
++
++      ECORR = (PSCENC/ZVSUM) * (NELECT - ZVSUM)
++
++      ECORR_BG = ECORR
++
++      RETURN
++
++      END FUNCTION ECORR_BG
++!!!
++
+       END MODULE
+ 
+ !************************ SUBROUTINE POTHAR ****************************
+@@ -762,7 +841,7 @@
  !
  !***********************************************************************
  
@@ -86,7 +194,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        USE prec
  
        USE mpimy
-@@ -782,6 +788,7 @@
+@@ -782,6 +861,7 @@
  
        COMPLEX(q) CSTRF(GRIDC%MPLWV,T_INFO%NTYP)
        COMPLEX(q) CVPS(GRIDC%RC%NP),CDVPS(GRIDC%RC%NP)
@@ -94,22 +202,3 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
  !=======================================================================
  ! calculate the contribution to the total energy from the non-coulomb
-@@ -799,6 +806,18 @@
-          PSCENC=PSCENC+P(NT)%PSCORE*T_INFO%VCA(NT)*T_INFO%NITYP(NT)*(ZVSUM/LATT_CUR%OMEGA)
-       ENDDO
- 
-+!      WRITE(*,*) 'PSCENC(before) = ', PSCENC
-+!      WRITE(*,*) 'PSCENC/ZVSUM = ', PSCENC/ZVSUM
-+!      WRITE(*,*) '\sum \alpha = PSCENC/ZVSUM*OMEGA = ', PSCENC/ZVSUM*LATT_CUR%OMEGA
-+
-+      ECORR = (PSCENC/ZVSUM) * (NELECT - ZVSUM)
-+
-+      WRITE(*,*) 'Background correction = ', ECORR
-+
-+      PSCENC = PSCENC + ECORR
-+
-+!      WRITE(*,*) 'PSCENC(after) = ', PSCENC
-+
-       CVPS =0
-       CDVPS=0
- !=======================================================================
