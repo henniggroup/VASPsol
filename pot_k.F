@@ -1018,11 +1018,11 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
            EIFOR_SOL(2,NI) = FOR2*TPI
            EIFOR_SOL(3,NI) = FOR3*TPI
 
-        ENDDO
+        ENDDO ion
 
         NIS = NIS + NIADD
 
-     ENDDO ion
+     ENDDO typ
 
 !----------------------------------------------------------------------------------
 ! forces are now in the reciprocal lattice transform it to
