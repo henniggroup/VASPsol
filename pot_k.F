@@ -34,9 +34,10 @@ MODULE POT_K
  INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
  REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,CORE_C,tau,EDIFFSOL
- REAL(q), PUBLIC, SAVE                 :: eb_k
- TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
+ REAL(q), PRIVATE, SAVE                 :: sigma_nc_k, sigma_k, nc_k
+ REAL(q), PRIVATE, SAVE                 :: CORE_C, tau, EDIFFSOL
+ REAL(q), PUBLIC, SAVE                  :: eb_k
+ TYPE (in_struct), PUBLIC, SAVE         :: SP_IO
  LOGICAL, SAVE                          :: LSOL = .FALSE.
  LOGICAL, SAVE                          :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE                          :: LJDFTX = .FALSE.
@@ -51,7 +52,8 @@ MODULE POT_K
 !!
 !!======================================================================
 
- SUBROUTINE Vcorrection(SP_GRIDC,SP_P,SP_LATT_CUR,SP_T_INFO,WDES,SP_CHTOT,Vcorr,Ecorr)
+ SUBROUTINE Vcorrection(SP_GRIDC, SP_P, SP_LATT_CUR, SP_T_INFO, WDES, SP_CHTOT, &
+      & Vcorr,Ecorr)
 
   USE constant 
   USE poscar, ONLY : type_info 
@@ -102,56 +104,55 @@ MODULE POT_K
     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Begin Solvation calculations'
     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the charge densities'
 #endif
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !Gaussian ionic charge in fourier space
-!-------------------------------------------------------------
-    CALL IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,1)
+!-----------------------------------------------------------------------------------
+    CALL IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, 1)
 
     SP_N_ION = SP_N
 
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !total charge in fourier space
-!-------------------------------------------------------------
-     CALL RC_ADD(SP_CHTOT(1,1),1.0_q,SP_N_ION(1),1.0_q,TOTN(1),SP_GRIDC)
+!-----------------------------------------------------------------------------------
+     CALL RC_ADD(SP_CHTOT(1,1), 1.0_q, SP_N_ION(1), 1.0_q, TOTN(1), SP_GRIDC)
 
-      CALL SETUNB(TOTN,SP_GRIDC)
+      CALL SETUNB(TOTN, SP_GRIDC)
 !    TOTN = SP_CHTOT + SP_N_ION
 
-
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !CHARGE BALL fourier, flag=3
-!-------------------------------------------------------------
-    CALL IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,3)
+!-----------------------------------------------------------------------------------
+    CALL IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, 3)
 
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !total charge in k space,valence+pseudo core
-!-------------------------------------------------------------
-   CALL RC_ADD(SP_CHTOT(1,1),1.0_q,SP_N(1),1.0_q,PS_TOTN(1),SP_GRIDC)
-   CALL SETUNB(PS_TOTN,SP_GRIDC)
+!-----------------------------------------------------------------------------------
+   CALL RC_ADD(SP_CHTOT(1,1), 1.0_q, SP_N(1), 1.0_q, PS_TOTN(1), SP_GRIDC)
+   CALL SETUNB(PS_TOTN, SP_GRIDC)
 
 !   PS_TOTN = SP_CHTOT + SP_N
 
 #ifdef debugsol
     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Begin minimization'
 #endif
-!-------------------------------------------------------------
-!
+!-----------------------------------------------------------------------------------
 !
 !              BEGIN Solvation minimization
 !
-!
-!-------------------------------------------------------------    
+!-----------------------------------------------------------------------------------
     IF (LDEFAULTPCM) THEN
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Calling vcorr_lpcm minimization'
 #endif
-     CALL Vcorrection_lpcm(SP_IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vdiel,Adiel,sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,sigma_rc_k,tau,EDIFFSOL)
+     CALL Vcorrection_lpcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
+          & PS_TOTN, Vcorr, Vdiel, Adiel, sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, &
+          & sigma_rc_k, tau, EDIFFSOL)
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Return from vcorr_lpcm minimization'
 #endif
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !BEGIN JDFTx
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 #ifdef jdftx
    ELSE
          ALLOCATE(A_n_r(SP_GRIDC%NPLWV),A_rho_r(SP_GRIDC%NPLWV))
@@ -221,17 +222,15 @@ MODULE POT_K
         DEALLOCATE(n_r,rho_r)
 #endif
      ENDIF
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !END JDFTx
-!-------------------------------------------------------------     
+!-----------------------------------------------------------------------------------
 
-!-------------------------------------------------------------
-!
+!-----------------------------------------------------------------------------------
 !
 !              END Solvation minimization
 !
-!
-!-------------------------------------------------------------    
+!-----------------------------------------------------------------------------------
 #ifdef debugsol
        IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'End minimization'
 #endif
@@ -252,14 +251,14 @@ MODULE POT_K
     CALL Fcorrection(SP_GRIDC,SP_P,SP_T_INFO,SP_LATT_CUR,Vcorr,Vdiel)
 !    CALL IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,5,Vcorr,Vdiel)
 
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !Vcorr = electrostatic correction + cavity correction(Vdiel)
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
      Vcorr = Vcorr + Vdiel
 
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !net correction to the total energy, TOTEN
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 #ifdef debugsol
      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Adiel, Ecorr3, Ecorr4 ', Adiel, Ecorr3, Ecorr4
 #endif
@@ -272,9 +271,9 @@ MODULE POT_K
 #endif
 !     WRITE(*,'(/a, (es15.6))')"E%Ediel = Ecorr", Ecorr
 
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !keeps count of the number of times Vcorrection is called
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
      PK_COUNTER = PK_COUNTER + 1
 
      DEALLOCATE(SP_N,TOTN)
@@ -304,7 +303,8 @@ MODULE POT_K
 !!also calculates force corrections(flag=5) in real space
 !!======================================================================
 
-SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdiel)
+SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
+     & flag, Vcorr, Vdiel)
 ! USE mpimy
 ! USE prec
  USE constant
@@ -339,9 +339,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 
    SP_NIS = 1  
 
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !loop over all ions
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
    type:DO SP_NT=1,SP_T_INFO%NTYP
       ions: DO SP_NI=SP_NIS,SP_T_INFO%NITYP(SP_NT)+SP_NIS-1
 
@@ -359,46 +359,58 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
            SP_N2= SP_GRIDC%RC%I2(SP_NC)
            SP_N3= SP_GRIDC%RC%I3(SP_NC)
 
-           SP_G1 = SP_T_INFO%POSION(1,SP_NI)*SP_GRIDC%LPCTX(SP_N1)
-           SP_G2 = SP_T_INFO%POSION(2,SP_NI)*SP_GRIDC%LPCTY(SP_N2)
-           SP_G3 = SP_T_INFO%POSION(3,SP_NI)*SP_GRIDC%LPCTZ(SP_N3)
-!-------------------------------------------------------------
+           SP_G1 = SP_T_INFO%POSION(1,SP_NI) * SP_GRIDC%LPCTX(SP_N1)
+           SP_G2 = SP_T_INFO%POSION(2,SP_NI) * SP_GRIDC%LPCTY(SP_N2)
+           SP_G3 = SP_T_INFO%POSION(3,SP_NI) * SP_GRIDC%LPCTZ(SP_N3)
+
+!-----------------------------------------------------------------------------------
 !phase factor
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
            SP_CEXPF=EXP(-CITPI*(SP_G3+SP_G2+SP_G1))*SP_T_INFO%VCA(SP_NT)
 
-          SP_GX=(SP_GRIDC%LPCTX(SP_N1)*SP_LATT_CUR%B(1,1)+SP_GRIDC%LPCTY(SP_N2)*SP_LATT&
-       &_CUR%B(1,2)+SP_GRIDC%LPCTZ(SP_N3)*SP_LATT_CUR%B(1,3))
-          SP_GY=(SP_GRIDC%LPCTX(SP_N1)*SP_LATT_CUR%B(2,1)+SP_GRIDC%LPCTY(SP_N2)*SP_LATT&
-       &_CUR%B(2,2)+SP_GRIDC%LPCTZ(SP_N3)*SP_LATT_CUR%B(2,3))
-         SP_GZ=(SP_GRIDC%LPCTX(SP_N1)*SP_LATT_CUR%B(3,1)+SP_GRIDC%LPCTY(SP_N2)*SP_LATT&
-       &_CUR%B(3,2)+SP_GRIDC%LPCTZ(SP_N3)*SP_LATT_CUR%B(3,3))
-!-------------------------------------------------------------
+          SP_GX = (SP_GRIDC%LPCTX(SP_N1) * SP_LATT_CUR%B(1,1) + & 
+               & SP_GRIDC%LPCTY(SP_N2) * SP_LATT_CUR%B(1,2) + &
+               & SP_GRIDC%LPCTZ(SP_N3) * SP_LATT_CUR%B(1,3))
+          SP_GY = (SP_GRIDC%LPCTX(SP_N1) * SP_LATT_CUR%B(2,1) + &
+               & SP_GRIDC%LPCTY(SP_N2) * SP_LATT_CUR%B(2,2) + & 
+               & SP_GRIDC%LPCTZ(SP_N3) * SP_LATT_CUR%B(2,3))
+         SP_GZ = (SP_GRIDC%LPCTX(SP_N1) * SP_LATT_CUR%B(3,1) + &
+              & SP_GRIDC%LPCTY(SP_N2) * SP_LATT_CUR%B(3,2) + &
+              & SP_GRIDC%LPCTZ(SP_N3) * SP_LATT_CUR%B(3,3))
+
+!-----------------------------------------------------------------------------------
 !G**2
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
           SP_GSQU=(SP_GX*SP_GX+SP_GY*SP_GY+SP_GZ*SP_GZ)*(TPI**2)
-!-------------------------------------------------------------
+
+!-----------------------------------------------------------------------------------
 !flag=1, gaussian ionic charge
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
              IF ( flag == 1) THEN
 
-               SP_N(SP_NG) = SP_N(SP_NG)-(SP_P(SP_NT)%ZVALF)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2))
-!-------------------------------------------------------------
+               SP_N(SP_NG) = SP_N(SP_NG) - &
+                    & (SP_P(SP_NT)%ZVALF) * &
+                    & SP_CEXPF * EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2))
+!-----------------------------------------------------------------------------------
 !flag=3, pseudo core cHarge density to repel fluid from core
-!-------------------------------------------------------------
+!-----------------------------------------------------------------------------------
              ELSE IF ( flag == 3 ) THEN
 
-               SP_N(SP_NG) = SP_N(SP_NG)+CORE_C*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2))
+               SP_N(SP_NG) = SP_N(SP_NG) + &
+                    & CORE_C * SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2))
 
              ENDIF
-!-------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !flag=5(not used), force correction due the gaussian ions and chrge ball
-!-------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------
              IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
 
-               SP_CEXPF=EXP(CITPI*(SP_G3+SP_G2+SP_G1))*SP_T_INFO%VCA(SP_NT)
-               SP_FOR_gion = (Vcorr(SP_NG))*imag_i*((SP_P(SP_NT)%ZVALF)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2)))
-               SP_FOR_cb = -(Vdiel(SP_NG))*imag_i*(CORE_C*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
+               SP_CEXPF = EXP(CITPI*(SP_G3+SP_G2+SP_G1))*SP_T_INFO%VCA(SP_NT)
+               SP_FOR_gion = (Vcorr(SP_NG))*imag_i * &
+                    & ((SP_P(SP_NT)%ZVALF) * &
+                    & SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2)))
+               SP_FOR_cb = -(Vdiel(SP_NG))*imag_i * &
+                    & (CORE_C*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
 
                SP_FOR1_gion = SP_FOR1_gion + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_gion
                SP_FOR2_gion = SP_FOR2_gion + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_gion
@@ -441,9 +453,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 
    END DO type
 
-!-------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !force corrections to real space
-!-------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------
    IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
 !      CALLMPI( M_sum_d(SP_GRIDC%COMM, EIFOR_SOL(1,1),SP_T_INFO%NIONS*3))
       CALL  DIRKAR(SP_T_INFO%NIONS,EIFOR_SOL,SP_LATT_CUR%B)
@@ -467,7 +479,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !! 
 !!======================================================================
 
- SUBROUTINE SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
+ SUBROUTINE SOL_INIT(INFO, LATT_CUR, GRIDC, T_INFO, P)
 
    USE poscar, ONLY : type_info 
    USE lattice, ONLY : latt, DIRKAR 
@@ -504,7 +516,8 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
  IF (PK_COUNTER == 1) THEN
    ALLOCATE(sigma_rc_k(T_INFO%NTYP))
 #ifdef debugsol
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the paramters.Unless explicity specified in the INCAR file these values will be used as the defaults'
+   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the paramters'
+   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Unless explicity specified in the INCAR file these values will be used as the defaults'
 #endif
 
 !   delta_grd = ((LATT_CUR%OMEGA)/(GRIDC%NPLWV))**(1._q/3._q)
@@ -542,9 +555,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
    OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
 
 !the following three paramters are essential for all pcm models
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !sigma_nc_k
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_NC_K','=','#',';','F',IDUM,sigma_nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol      
       IF (IERR == 3 ) THEN
@@ -564,9 +577,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
          STOP
       ENDIF
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !sigma_rc_k
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_RC_K','=','#',';','F',IDUM,sigma_rc_k0,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -590,9 +603,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
          STOP
       ENDIF
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !CORE_C
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'CORE_C','=','#',';','F',IDUM,CORE_C,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -615,9 +628,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
          STOP
       ENDIF
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !LJDFTX
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 #ifdef jdftx   
    CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LJDFTX','=','#',';','L',IDUM,RDUM,CDUM,LJDFTX,CHARAC,N,1,IERR)
 #endif
@@ -681,7 +694,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !!
 !!===========================================================================
 
-SUBROUTINE SET_SOL_IO(IO,EDIFF)
+SUBROUTINE SET_SOL_IO(IO, EDIFF)
 
   IMPLICIT NONE
 
@@ -731,9 +744,9 @@ END SUBROUTINE SET_SOL_IO
       
       OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !sigma_k
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_K','=','#',';','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -754,9 +767,9 @@ END SUBROUTINE SET_SOL_IO
          STOP
       ENDIF
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !nc_k
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'NC_K','=','#',';','F',IDUM,nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -778,9 +791,9 @@ END SUBROUTINE SET_SOL_IO
          STOP
       ENDIF
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !eb_k
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EB_K','=','#',';','F',IDUM,eb_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -802,9 +815,9 @@ END SUBROUTINE SET_SOL_IO
          STOP
       ENDIF
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !tau
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'TAU','=','#',';','F',IDUM,tau,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -825,9 +838,9 @@ END SUBROUTINE SET_SOL_IO
          STOP
       ENDIF
 
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
 !EDIFFSOL
-!---------------------------------------------------------------
+!-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EDIFFSOL','=','#',';','F',IDUM,EDIFFSOL,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -891,29 +904,29 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
 
   IMPLICIT NONE
 
-   TYPE (grid_3d)     GRIDC
-   TYPE (type_info)   T_INFO
-   TYPE (potcar)      P (T_INFO%NTYP)
-   TYPE (latt)        LATT_CUR
+  TYPE (grid_3d)     GRIDC
+  TYPE (type_info)   T_INFO
+  TYPE (potcar)      P (T_INFO%NTYP)
+  TYPE (latt)        LATT_CUR
 
-   COMPLEX(q) Vcorr(GRIDC%RC%NP)
-   COMPLEX(q) Vdiel(GRIDC%RC%NP)
-   INTEGER :: NIS,NT,NIADD,NI,N,N1,NC,N2,N3,NG,NGP,N1P,I,J
-   REAL(q) ::G,GX,GY,GZ,G1,G2,G3,FOR1,FOR2,FOR3,FOR,FACTM
-   COMPLEX(q) :: CE,CX,CEXPF
+  COMPLEX(q) Vcorr(GRIDC%RC%NP)
+  COMPLEX(q) Vdiel(GRIDC%RC%NP)
+  INTEGER :: NIS,NT,NIADD,NI,N,N1,NC,N2,N3,NG,NGP,N1P,I,J
+  REAL(q) ::G,GX,GY,GZ,G1,G2,G3,FOR1,FOR2,FOR3,FOR,FACTM
+  COMPLEX(q) :: CE,CX,CEXPF
 
 ! work arrays
-      REAL(q), ALLOCATABLE :: GWORK(:),PCWORK(:)
+  REAL(q), ALLOCATABLE :: GWORK(:),PCWORK(:)
 
-      ALLOCATE(GWORK(GRIDC%RC%NP),PCWORK(GRIDC%RC%NP))
+  ALLOCATE(GWORK(GRIDC%RC%NP),PCWORK(GRIDC%RC%NP))
 
-      NIS=1
-!=======================================================================
-      typ: DO NT=1,T_INFO%NTYP
-!=======================================================================
-       NIADD=T_INFO%NITYP(NT)
+  NIS = 1
 
-      DO N=1,GRIDC%RC%NP
+  typ: DO NT=1,T_INFO%NTYP
+     
+     NIADD=T_INFO%NITYP(NT)
+
+     DO N=1,GRIDC%RC%NP
         N1= MOD((N-1),GRIDC%RC%NROW) +1
         NC= (N-1)/GRIDC%RC%NROW+1
         N2= GRIDC%RC%I2(NC)
@@ -922,9 +935,12 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
         SETFACT1
         SETFACT
 
-        GX= GRIDC%LPCTX(N1)*LATT_CUR%B(1,1)+GRIDC%LPCTY(N2)*LATT_CUR%B(1,2)+GRIDC%LPCTZ(N3)*LATT_CUR%B(1,3)
-        GY= GRIDC%LPCTX(N1)*LATT_CUR%B(2,1)+GRIDC%LPCTY(N2)*LATT_CUR%B(2,2)+GRIDC%LPCTZ(N3)*LATT_CUR%B(2,3)
-        GZ= GRIDC%LPCTX(N1)*LATT_CUR%B(3,1)+GRIDC%LPCTY(N2)*LATT_CUR%B(3,2)+GRIDC%LPCTZ(N3)*LATT_CUR%B(3,3)
+        GX = GRIDC%LPCTX(N1) * LATT_CUR%B(1,1) + GRIDC%LPCTY(N2) * LATT_CUR%B(1,2) &
+             & + GRIDC%LPCTZ(N3) * LATT_CUR%B(1,3)
+        GY = GRIDC%LPCTX(N1) * LATT_CUR%B(2,1) + GRIDC%LPCTY(N2) * LATT_CUR%B(2,2) &
+             & + GRIDC%LPCTZ(N3) * LATT_CUR%B(2,3)
+        GZ = GRIDC%LPCTX(N1) * LATT_CUR%B(3,1) + GRIDC%LPCTY(N2) * LATT_CUR%B(3,2) &
+             & +GRIDC%LPCTZ(N3)*LATT_CUR%B(3,3)
 
         G=SQRT(GX**2+GY**2+GZ**2)*TPI
 
@@ -932,102 +948,99 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
         PCWORK (N) = (CORE_C)*EXP(-0.5_q*(G**2)*(sigma_rc_k(NT)**2))
 
 
-      ENDDO
+     ENDDO
 
-      ion: DO NI=NIS,NIADD+NIS-1
-!=======================================================================
-! initialise the force on the ion to zero
-!=======================================================================
-         FOR1=0
-         FOR2=0
-         FOR3=0
-!=======================================================================
-! CGXDX,Y,Z = I* the changes in the phase factor g.r on moving one
-! reciprocal lattice vector in the x,y,z directions, respectively
-!=======================================================================
-!=======================================================================
+     ion: DO NI = NIS, NIADD+NIS-1
+        FOR1 = 0
+        FOR2 = 0
+        FOR3 = 0
+!-----------------------------------------------------------------------------------
 ! calculate the total force on the ions by summing over reciprocal
 ! lattice vectors
 ! first calculate phase factor:
 ! there are two version for calculating the phase factor
 ! on vector machines you might try the first version
 ! (see stufak.F)
-!=======================================================================
+!-----------------------------------------------------------------------------------
 #ifdef vector
-         DO NG=1,GRIDC%RC%NP
-           N1= MOD((NG-1),GRIDC%RC%NROW) +1
-           NC= (NG-1)/GRIDC%RC%NROW+1
-           N2= GRIDC%RC%I2(NC)
-           N3= GRIDC%RC%I3(NC)
+        DO NG = 1, GRIDC%RC%NP
+           N1 = MOD((NG-1),GRIDC%RC%NROW) +1
+           NC = (NG-1)/GRIDC%RC%NROW+1
+           N2 = GRIDC%RC%I2(NC)
+           N3 = GRIDC%RC%I3(NC)
 
-           G1=T_INFO%POSION(1,NI)*GRIDC%LPCTX(N1)
-           G2=T_INFO%POSION(2,NI)*GRIDC%LPCTY(N2)
-           G3=T_INFO%POSION(3,NI)*GRIDC%LPCTZ(N3)
+           G1 = T_INFO%POSION(1,NI)*GRIDC%LPCTX(N1)
+           G2 = T_INFO%POSION(2,NI)*GRIDC%LPCTY(N2)
+           G3 = T_INFO%POSION(3,NI)*GRIDC%LPCTZ(N3)
            SETFACT1
            SETFACT
-           CEXPF=EXP(-CITPI*(G3+G2+G1))*T_INFO%VCA(NT)
+           CEXPF = EXP(-CITPI*(G3+G2+G1))*T_INFO%VCA(NT)
 #else
-         CX =EXP(-CITPI*T_INFO%POSION(1,NI))
-         G1 =T_INFO%POSION(1,NI)*xmin(GRIDC%NGX)
+           CX = EXP(-CITPI*T_INFO%POSION(1,NI))
+           G1 =T_INFO%POSION(1,NI)*xmin(GRIDC%NGX)
 
-         DO NC=1,GRIDC%RC%NCOL
-           NGP=(NC-1)*GRIDC%RC%NROW+1
+           DO NC = 1, GRIDC%RC%NCOL
+              NGP = (NC-1)*GRIDC%RC%NROW+1
+              
+              N2 = GRIDC%RC%I2(NC)
+              N3 = GRIDC%RC%I3(NC)
+              G2 = T_INFO%POSION(2,NI)*GRIDC%LPCTY(N2)
+              G3 = T_INFO%POSION(3,NI)*GRIDC%LPCTZ(N3)
+              CE = EXP(-CITPI*(G3+G2+G1))*T_INFO%VCA(NT)
 
-           N2= GRIDC%RC%I2(NC)
-           N3= GRIDC%RC%I3(NC)
-           G2=T_INFO%POSION(2,NI)*GRIDC%LPCTY(N2)
-           G3=T_INFO%POSION(3,NI)*GRIDC%LPCTZ(N3)
-           CE=EXP(-CITPI*(G3+G2+G1))*T_INFO%VCA(NT)
+              DO N1P = 0, GRIDC%RC%NROW-1
+                 SETN1fromN1P
+                 NG = NGP+N1
+                 N1 = N1+1
 
-           DO N1P=0,GRIDC%RC%NROW-1
-           SETN1fromN1P
-           NG=NGP+N1
-           N1=N1+1
-
-           SETFACT1
-           SETFACT
-           CEXPF=CE
-           CE=CE*CX
+                 SETFACT1
+                 SETFACT
+                 CEXPF = CE
+                 CE = CE*CX
 #endif
-!=======================================================================
+!-----------------------------------------------------------------------------------
 ! add the contribution to the force from the present reciprocal lattice
 ! vector  and multiply by i (ie take imaginary part)
-!=======================================================================
-           FOR = GWORK(NG)*MULFACT AIMAG(CONJG(Vcorr(NG))*CEXPF)
-           FOR = FOR + PCWORK(NG)*MULFACT AIMAG(CONJG(Vdiel(NG))*CEXPF)
-           FOR1=FOR1-GRIDC%LPCTX_(N1)*FOR
-           FOR2=FOR2-GRIDC%LPCTY_(N2)*FOR
-           FOR3=FOR3-GRIDC%LPCTZ_(N3)*FOR
-         ENDDO
+!-----------------------------------------------------------------------------------
+                 FOR = GWORK(NG)*MULFACT AIMAG(CONJG(Vcorr(NG))*CEXPF)
+                 FOR = FOR + PCWORK(NG)*MULFACT AIMAG(CONJG(Vdiel(NG))*CEXPF)
+                 FOR1 = FOR1-GRIDC%LPCTX_(N1)*FOR
+                 FOR2 = FOR2-GRIDC%LPCTY_(N2)*FOR
+                 FOR3 = FOR3-GRIDC%LPCTZ_(N3)*FOR
+              ENDDO
 #ifndef vector
-         ENDDO
+           ENDDO
 #endif
-!=======================================================================
+!-----------------------------------------------------------------------------------
 ! multiply forces by 2*Pi
-!=======================================================================
-         EIFOR_SOL(1,NI)=FOR1*TPI
-         EIFOR_SOL(2,NI)=FOR2*TPI
-         EIFOR_SOL(3,NI)=FOR3*TPI
+!-----------------------------------------------------------------------------------
+           EIFOR_SOL(1,NI) = FOR1*TPI
+           EIFOR_SOL(2,NI) = FOR2*TPI
+           EIFOR_SOL(3,NI) = FOR3*TPI
 
-      ENDDO ion
-      NIS=NIS+NIADD
-      ENDDO typ
+        ENDDO
 
-!=======================================================================
+        NIS = NIS + NIADD
+
+     ENDDO ion
+
+!----------------------------------------------------------------------------------
 ! forces are now in the reciprocal lattice transform it to
 ! cartesian coordinates
-!=======================================================================
-      CALLMPI( M_sum_d(GRIDC%COMM, EIFOR_SOL(1,1),T_INFO%NIONS*3))
+!----------------------------------------------------------------------------------
+     CALLMPI( M_sum_d(GRIDC%COMM, EIFOR_SOL(1,1),T_INFO%NIONS*3))
 
-      CALL  DIRKAR(T_INFO%NIONS,EIFOR_SOL,LATT_CUR%B)
+     CALL  DIRKAR(T_INFO%NIONS,EIFOR_SOL,LATT_CUR%B)
 
-      DEALLOCATE(GWORK,PCWORK)
+     DEALLOCATE(GWORK,PCWORK)
 #ifdef debugsol
-      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*)'FORCE CORRECTIONS'
-      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,T_INFO%NIONS)
+     IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*)'FORCE CORRECTIONS'
+     IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,T_INFO%NIONS)
 #endif
-      RETURN
-      END SUBROUTINE Fcorrection
+
+     RETURN
+
+END SUBROUTINE Fcorrection
 
 !>==========================SUBROUTINE GETRCORE============================
 !!
@@ -1083,16 +1096,3 @@ END SUBROUTINE GETRCORE
 
 
 END MODULE POT_K
-
-!*******************************************************************************************
-!
-!********************                 END OF MODULE POT_K                 ******************
-!
-!*******************************************************************************************
-
-!polarization
-!   phi_bnd=phi_tilda - phi
-!compute the bound charge, bnd_chg, in kspace
-!   CALL SimplePoisson(SP_GRIDC,SP_LATT_CUR,phi_bnd,bnd_chg,0)
-!bnd_chg in real space
-!  CALL FFT3D(bnd_chg,SP_GRIDC,1)

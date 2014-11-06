@@ -51,7 +51,9 @@ MODULE POT_LPCM_K
 !!
 !!======================================================================
 
-SUBROUTINE Vcorrection_lpcm(IO,SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,TOTN,PS_TOTN,Vcorr,Vel,Atot,sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,sigma_rc_k1,tau1,ediffs)
+SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
+     & PS_TOTN, Vcorr, Vel, Atot, sigma_nc_k1, sigma_k1, nc_k1, eb_k1, CORE_C1, &
+     & sigma_rc_k1, tau1, ediffs)
 
  IMPLICIT NONE
 
@@ -192,7 +194,8 @@ END SUBROUTINE Vcorrection_lpcm
 !!
 !!======================================================================
 
-SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,Vcav,Acav)  
+SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN, &
+     & CE_d_eps,Vcav,Acav)  
 
  IMPLICIT NONE
 
@@ -322,7 +325,8 @@ SUBROUTINE CREATECAVITY(CE_GRIDC,CE_LATT_CUR,CE_P,CE_T_INFO,CE_PS_TOTN,CE_d_eps,
 !add -(\nabla n . \nabla(1/ |\nabla n|)) to Vcav in real space
 !and multiply by CE_term1 = gamma*A/n in real space
  DO I=1, CE_GRIDC%RL%NP
-  tmp = ( CE_gn(1,I)*CE_ggn(1,I) + CE_gn(2,I)*CE_ggn(2,I) + CE_gn(3,I)*CE_ggn(3,I) ) * (CE_term1(I))
+  tmp = ( CE_gn(1,I)*CE_ggn(1,I) + CE_gn(2,I)*CE_ggn(2,I) + &
+       & CE_gn(3,I)*CE_ggn(3,I) ) * (CE_term1(I))
   VWORK(I) = VWORK(I) - tmp
  ENDDO
 
@@ -352,8 +356,8 @@ END SUBROUTINE CREATECAVITY
 !!
 !!======================================================================
 
-SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
-                    &MN_phi,NCGSOL)
+SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps, MN_TOTN,&
+                    & MN_phi, NCGSOL)
 
  IMPLICIT NONE
 
@@ -400,7 +404,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  rinvLr=0._q
  r2 = 0._q
  
-I = 0
+ I = 0
 
 !-------------------------------------------------------------
 !calculating 1/G^2 for preconditioning
@@ -409,25 +413,25 @@ I = 0
          N2= MN_GRIDC%RC%I2(NC)
          N3= MN_GRIDC%RC%I3(NC)
          row: DO N1=1,MN_GRIDC%RC%NROW
-I = I +1
+            I = I +1
 !GX,GY,GZ
-   GX=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
-   GY=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
-   GZ=(MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2)*MN_LATT&
-       &_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
+            GX = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1) + MN_GRIDC%LPCTY(N2) &
+                 & * MN_LATT_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
+            GY = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2) &
+                 & * MN_LATT_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
+            GZ = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2) &
+                 & * MN_LATT_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
 !set G=0 component 0
-   IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
-      &(MN_GRIDC%LPCTZ(N3)==0)) THEN
-    MN_GSQU(I)=(0.0_q,0.0_q)
-   ELSE
+            IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
+                 &(MN_GRIDC%LPCTZ(N3)==0)) THEN
+               MN_GSQU(I)=(0.0_q,0.0_q)
+            ELSE
 ! 1/G^2
-    MN_GSQU(I)=1/(GX*GX+GY*GY+GZ*GZ)/(TPI**2)
-   ENDIF
+               MN_GSQU(I)=1/(GX*GX+GY*GY+GZ*GZ)/(TPI**2)
+            ENDIF
  
- ENDDO row
-ENDDO col
+         ENDDO row
+      ENDDO col
 
 !*********************************************************
 ! start of Pre-conditioned Conjugate Gradient
@@ -449,7 +453,8 @@ ENDDO col
 !epsilon is in real space
 !Lp = - A*phi
 !-------------------------------------------------------------
- CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_phi,MN_d_eps,gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
+ CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_phi, MN_d_eps, &
+      & gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
 
 !-------------------------------------------------------------
 ! the residue
@@ -497,7 +502,8 @@ ENDDO col
 
  DO WHILE ( (count < 20000) .AND. (sqrt(r2) > EDIFFSOL).AND. (sqrt(rinvLr) > 1e-10) )
 
-   CALL Leps(MN_GRIDC,MN_LATT_CUR,MN_T_INFO,MN_d,MN_d_eps,gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
+   CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_d, MN_d_eps, &
+        & gradphi_x_in,gradphi_y_in,gradphi_z_in,MN_Lp)
 
 !   MN_alpha = DOT_PRODUCT(MN_d,MN_Lp)
    CALL MY_D_PROD(MN_alpha, MN_d, MN_Lp, MN_GRIDC)
@@ -575,8 +581,8 @@ END SUBROUTINE MINIMIZE
 !!
 !!=======================================================================
 
-SUBROUTINE Leps(LPS_GRIDC,LPS_LATT_CUR,LPS_T_INFO,LPS_phi,LPS_d_eps,&
-                &gradphi_x_in,gradphi_y_in,gradphi_z_in,LPS_Lp)
+SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps,&
+                & gradphi_x_in, gradphi_y_in, gradphi_z_in, LPS_Lp)
 
  IMPLICIT NONE
 
@@ -698,7 +704,8 @@ k = k+1
 !!
 !!====================================================================
 
-SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi,EPP_deps,EPP_CWORK)
+SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN, &
+     & EPP_phi,EPP_deps,EPP_CWORK)
 
  IMPLICIT NONE
 
@@ -834,7 +841,8 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    N2= D_GRIDC%RC%I2(NC)
    N3= D_GRIDC%RC%I3(NC)
 
-   GX = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(1,1)+D_GRIDC%LPCTY(N2)*D_LATT_CUR%B(1,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(1,3))
+   GX = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(1,1)+D_GRIDC%LPCTY(N2) * &
+        & D_LATT_CUR%B(1,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(1,3))
 
    CR(I) = D_PHI(I) * GX * CITPI
  ENDDO
@@ -860,7 +868,7 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    N2= D_GRIDC%RC%I2(NC)
    N3= D_GRIDC%RC%I3(NC)
 
-   GY = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(2,1)+D_GRIDC%LPCTY(N2)*&
+   GY = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(2,1)+D_GRIDC%LPCTY(N2) * &
          &D_LATT_CUR%B(2,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(2,3))
 
    CR(I) = D_PHI(I) * GY * CITPI
@@ -888,8 +896,8 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    N2= D_GRIDC%RC%I2(NC)
    N3= D_GRIDC%RC%I3(NC)
 
-   GZ = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(3,1)+D_GRIDC%LPCTY(N2)*&
-         &D_LATT_CUR%B(3,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(3,3))
+   GZ = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(3,1)+D_GRIDC%LPCTY(N2) * &
+         & D_LATT_CUR%B(3,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(3,3))
 
    CR(I)=D_PHI(I) * GZ * CITPI
  ENDDO
@@ -949,8 +957,8 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
    N2= D_GRIDC%RC%I2(NC)
    N3= D_GRIDC%RC%I3(NC)
 
-   GX = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(1,1)+D_GRIDC%LPCTY(N2)*&
-       &D_LATT_CUR%B(1,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(1,3))
+   GX = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(1,1)+D_GRIDC%LPCTY(N2) * &
+       & D_LATT_CUR%B(1,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(1,3))
 
    CR(I) = D_PHI(I) * (GX*CITPI)**2.0
  ENDDO
@@ -976,7 +984,7 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
    N2= D_GRIDC%RC%I2(NC)
    N3= D_GRIDC%RC%I3(NC)
 
-   GY = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(2,1)+D_GRIDC%LPCTY(N2)*&
+   GY = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(2,1)+D_GRIDC%LPCTY(N2) * &
          &D_LATT_CUR%B(2,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(2,3))
 
    CR(I) = D_PHI(I) * (GY*CITPI)**2
@@ -1002,8 +1010,8 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
    N2= D_GRIDC%RC%I2(NC)
    N3= D_GRIDC%RC%I3(NC)
 
-   GZ = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(3,1)+D_GRIDC%LPCTY(N2)*&
-         &D_LATT_CUR%B(3,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(3,3))
+   GZ = (D_GRIDC%LPCTX(N1)*D_LATT_CUR%B(3,1)+D_GRIDC%LPCTY(N2) * &
+         & D_LATT_CUR%B(3,2)+D_GRIDC%LPCTZ(N3)*D_LATT_CUR%B(3,3))
 
    CR(I)=D_PHI(I) * (GZ*CITPI)**2.0
  ENDDO
@@ -1033,7 +1041,7 @@ END SUBROUTINE LAPLN
 !!
 !!===============================================================
 
-SUBROUTINE SimplePoisson(GC_GRIDC,GC_LATT_CUR,GC_IN,GC_OUT,GFLAG)
+SUBROUTINE SimplePoisson(GC_GRIDC, GC_LATT_CUR, GC_IN, GC_OUT, GFLAG)
 
  IMPLICIT NONE
 
@@ -1190,6 +1198,3 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 END SUBROUTINE UNPACK_C2R
 
 END MODULE POT_LPCM_K
-!*******************************************************************************************
-!*****************************************END OF MODULE POT_LPCM_K ******************************
-!*******************************************************************************************
