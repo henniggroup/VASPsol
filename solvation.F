@@ -1,15 +1,4 @@
 #include "symbol.inc"
-! Your original module
-!     MODULE POT_LPCM_K
-!     ...
-!     ...
-!     END MODULE POT_LPCM_K
-
-! Your original module minus SOL_READER, SOL_WRITER (see below)
-!     MODULE POT_K
-!     ...
-!     ...
-!     END MODULE POT_K
 
 MODULE solvation
   USE prec
@@ -21,8 +10,7 @@ MODULE solvation
 
   PUBLIC :: SOL_READER, SOL_WRITER, SOL_Vcorrection
 
-  TYPE (in_struct), PRIVATE, SAVE :: IO_1
-  REAL(q), PUBLIC, SAVE :: EDIFF_1
+  LOGICAL, SAVE :: LSOL=.FALSE.
 
 !energy and force
   REAL(q), PUBLIC, SAVE :: Ediel_SOL=0._q
@@ -33,15 +21,21 @@ MODULE solvation
   REAL(q), PRIVATE, SAVE  :: eb_k = 80.0_q
   REAL(q), PRIVATE, SAVE  :: tau = 5.25E-4_q
 
-  LOGICAL, SAVE :: LSOL=.FALSE.
+  TYPE (in_struct), PRIVATE, SAVE :: IO_1
+  REAL(q), PRIVATE, SAVE :: EDIFF_1
+
 
 CONTAINS
 
-!******************** SUBROUTINE SOL_READER ****************************
+
+
+!******************** SUBROUTINE SOL_READER ***************************************
+!
 !
 ! Reads in the solvation model parameters
+!
 !      
-!***********************************************************************
+!**********************************************************************************
 
   SUBROUTINE SOL_READER(NIONS,EDIFF,IO)
 
@@ -182,28 +176,30 @@ CONTAINS
   END SUBROUTINE SOL_READER
 
 
-!******************** SUBROUTINE SOL_WRITER ****************************
+
+!******************** SUBROUTINE SOL_WRITER ***************************************
 !      
+!
 ! writes the solvation model paramters to the OUTCAR file
 !
-!***********************************************************************
-    SUBROUTINE SOL_WRITER(IO)
-      USE base
+!
+!**********************************************************************************
+  SUBROUTINE SOL_WRITER(IO)
 
-      IMPLICIT NONE
+    USE base
 
-      TYPE (in_struct), INTENT(in) :: IO
+    IMPLICIT NONE
 
-      ! early exit if possible
-      IF (.NOT.LSOL) RETURN
+    TYPE (in_struct), INTENT(in) :: IO
 
-      ! here you write to OUTCAR: LSOL, and the other flags
- 
-      IF (IO%IU6>=0) THEN
-         WRITE(IO%IU6,100) eb_k, sigma_k, nc_k, tau
-      ENDIF
+    ! early exit if possible
+    IF (.NOT.LSOL) RETURN
 
-100   FORMAT( &
+    IF (IO%IU6>=0) THEN
+       WRITE(IO%IU6,100) eb_k, sigma_k, nc_k, tau
+    ENDIF
+
+100 FORMAT( &
              ' Solvation parameters'/ &
              '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
              '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
@@ -211,61 +207,84 @@ CONTAINS
              '   TAU     =',F10.6,  '     cavity surface tension' /)
 
 
-      RETURN
+    RETURN
 
-    END SUBROUTINE SOL_WRITER
+  END SUBROUTINE SOL_WRITER
 
 
-!******************** SUBROUTINE SOL_Vcorrection ***********************
-!      
+
+!******************** SUBROUTINE SOL_Vcorrection *********************************
+!
+!
 ! Computes the potential, energy and force corrections due to solvation
 !
-!***********************************************************************
+!
+!********************************************************************************
 
-    SUBROUTINE SOL_Vcorrection(INFO, T_INFO, LATT_CUR, P, WDES, GRIDC, CHTOT, CVTOT)
-      USE base
-      USE poscar
-      USE lattice
-      USE pseudo
-      USE mgrid
-      USE wave
-      USE pot_k, ONLY : SOL_INIT, VCORRECTION
+  SUBROUTINE SOL_Vcorrection(INFO, T_INFO, LATT_CUR, P, WDES, GRIDC, CHTOT, CVTOT)
 
-      IMPLICIT NONE
+    USE base
+    USE poscar
+    USE lattice
+    USE pseudo
+    USE mgrid
+    USE wave
+    USE mdipol
+    USE pot_k, ONLY : SOL_INIT, VCORRECTION
 
-      TYPE (info_struct), INTENT(in) :: INFO
-      TYPE (type_info), INTENT(in) :: T_INFO
-      TYPE (latt), INTENT(IN) :: LATT_CUR
-      TYPE (potcar), INTENT(IN) :: P(T_INFO%NTYP)
-      TYPE (wavedes), INTENT(IN) :: WDES
-      TYPE (grid_3d), INTENT(IN) :: GRIDC
+    IMPLICIT NONE
 
-      COMPLEX(q) CHTOT(GRIDC%MPLWV,WDES%NCDIJ)
-      COMPLEX(q) CVTOT(GRIDC%MPLWV,WDES%NCDIJ)
+    TYPE (info_struct), INTENT(in) :: INFO
+    TYPE (type_info), INTENT(in) :: T_INFO
+    TYPE (latt), INTENT(IN) :: LATT_CUR
+    TYPE (potcar), INTENT(IN) :: P(T_INFO%NTYP)
+    TYPE (wavedes), INTENT(IN) :: WDES
+    TYPE (grid_3d), INTENT(IN) :: GRIDC
+    
+    COMPLEX(q) CHTOT(GRIDC%MPLWV,WDES%NCDIJ)
+    COMPLEX(q) CVTOT(GRIDC%MPLWV,WDES%NCDIJ)
+    
+! local variables
+    REAL(q) :: Ecorr, EDIFF
+    COMPLEX(q), ALLOCATABLE :: Vcorr(:)
+    INTEGER :: I
 
-      ! local variables
-      REAL(q) :: Ecorr, EDIFF
-      COMPLEX(q), ALLOCATABLE :: Vcorr(:)
-      INTEGER :: I
+! early exit if possible
+    IF (.NOT.LSOL) RETURN
 
-      ! early exit if possible
-      IF (.NOT.LSOL) RETURN
+    ALLOCATE(Vcorr(GRIDC%MPLWV))
+    
+    CALL SOL_INIT(IO_1, EDIFF_1, INFO, LATT_CUR, GRIDC, T_INFO, P, sigma_k, nc_k, eb_k, tau)
+    CALL VCORRECTION(GRIDC, P, LATT_CUR, T_INFO, WDES, CHTOT, Vcorr, Ecorr, EIFOR_SOL) 
 
-      ALLOCATE(Vcorr(GRIDC%MPLWV))
+    DO I = 1, GRIDC%RC%NP
+       CVTOT(I,1) = CVTOT(I,1) + Vcorr(I)
+    ENDDO
 
-      CALL SOL_INIT(IO_1, EDIFF_1, INFO, LATT_CUR, GRIDC, T_INFO, P, sigma_k, nc_k, eb_k, tau)
-      CALL VCORRECTION(GRIDC, P, LATT_CUR, T_INFO, WDES, CHTOT, Vcorr, Ecorr, EIFOR_SOL) 
+    Ediel_sol = Ecorr
 
-      DO I = 1, GRIDC%RC%NP
-         CVTOT(I,1) = CVTOT(I,1) + Vcorr(I)
-      ENDDO
+!setting the value of epsilon used in computing the dipole and monopole corrections            
+!to EB_K
+    IF (((DIP%IDIPCO>0) .OR. (DIP%LMONO)) ) THEN
+#ifdef debugsol
+       IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'monopole or dipole/quadrapole energy corrections set in INCAR'
+       IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Setting DIP%EPSILON = EB_K, the bulk dielectric constant of the solvent, since solvent is included in the vacuum region'
+       IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Current value of DIP%EPSILON = ', DIP%EPSILON
+#endif
 
-      Ediel_sol = Ecorr
+       DIP%EPSILON = EB_K
 
-      DEALLOCATE(Vcorr)
+#ifdef debugsol
+       IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'New value of DIP%EPSILON = ', DIP%EPSILON
+#endif
+
+    ENDIF
+
+    DEALLOCATE(Vcorr)
       
-      RETURN
+    RETURN
 
-    END SUBROUTINE SOL_Vcorrection
+  END SUBROUTINE SOL_Vcorrection
+  
 
-  END MODULE solvation
+END MODULE solvation
