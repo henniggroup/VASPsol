@@ -28,11 +28,10 @@ MODULE POT_K
 
  EXTERNAL initjdftx, getionsigma, minimizefluid
 
- PUBLIC :: Vcorrection, SET_SOL_IO, SOL_INIT, SOL_WRITER, LSOL, EIFOR_SOL
- PRIVATE :: SOL_READER, IONIC_CHARGE, GETRCORE, Fcorrection
+ PUBLIC :: SOL_INIT, Vcorrection 
+ PRIVATE :: IONIC_CHARGE, GETRCORE, Fcorrection
 
  INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
- REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k, sigma_k, nc_k
  REAL(q), PRIVATE, SAVE                 :: CORE_C, tau, EDIFFSOL
@@ -53,7 +52,7 @@ MODULE POT_K
 !!======================================================================
 
  SUBROUTINE Vcorrection(SP_GRIDC, SP_P, SP_LATT_CUR, SP_T_INFO, WDES, SP_CHTOT, &
-      & Vcorr,Ecorr)
+      & Vcorr, Ecorr, EIFOR_SOL)
 
   USE constant 
   USE poscar, ONLY : type_info 
@@ -75,6 +74,7 @@ MODULE POT_K
 !  REAL(q), ALLOCATABLE ::  A_n_r_tmp(:),A_rho_r_tmp(:)
   REAL(q), ALLOCATABLE ::  n_r(:),rho_r(:)
   COMPLEX(q), ALLOCATABLE ::  A_n_c(:),A_rho_c(:)
+  REAL(q) :: EIFOR_SOL(3,SP_T_INFO%NIONS)
   REAL(q) :: Adiel
 
   COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
@@ -94,12 +94,12 @@ MODULE POT_K
     ALLOCATE(PS_TOTN(SP_GRIDC%MPLWV))
     ALLOCATE(SP_N_ION(SP_GRIDC%MPLWV))
   
-    IF (PK_COUNTER == 1) ALLOCATE(EIFOR_SOL(3,SP_T_INFO%NIONS))
-
     Vdiel = 0._q
     Ecorr3 = 0._q
     Ecorr4 = 0._q
     Adiel = 0._q
+    EIFOR_SOL = 0._q
+
 #ifdef debugsol
     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Begin Solvation calculations'
     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the charge densities'
@@ -247,8 +247,9 @@ MODULE POT_K
 !    CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr4,1))
         CALLMPI( M_sum_s(SP_GRIDC%COMM,1,Ecorr4,0,0,0))
 
+!Compute the force corrections
+    CALL Fcorrection(SP_GRIDC,SP_P,SP_T_INFO,SP_LATT_CUR,Vcorr,Vdiel,EIFOR_SOL)
 !calculate force correction,flag=5(not used)
-    CALL Fcorrection(SP_GRIDC,SP_P,SP_T_INFO,SP_LATT_CUR,Vcorr,Vdiel)
 !    CALL IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,5,Vcorr,Vdiel)
 
 !-----------------------------------------------------------------------------------
@@ -300,7 +301,7 @@ MODULE POT_K
 !!
 !! evaluates the gaussian ionic charge(flag=1) and pseudo-core charge
 !!(flag=3)in k space
-!!also calculates force corrections(flag=5) in real space
+!!also calculates force corrections(flag=5) in real space, not used
 !!======================================================================
 
 SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
@@ -403,49 +404,49 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 !-----------------------------------------------------------------------------------
 !flag=5(not used), force correction due the gaussian ions and chrge ball
 !-----------------------------------------------------------------------------------
-             IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
-
-               SP_CEXPF = EXP(CITPI*(SP_G3+SP_G2+SP_G1))*SP_T_INFO%VCA(SP_NT)
-               SP_FOR_gion = (Vcorr(SP_NG))*imag_i * &
-                    & ((SP_P(SP_NT)%ZVALF) * &
-                    & SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2)))
-               SP_FOR_cb = -(Vdiel(SP_NG))*imag_i * &
-                    & (CORE_C*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
-
-               SP_FOR1_gion = SP_FOR1_gion + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_gion
-               SP_FOR2_gion = SP_FOR2_gion + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_gion
-               SP_FOR3_gion = SP_FOR3_gion + SP_GRIDC%LPCTZ_(SP_N3)*SP_FOR_gion
-
-               SP_FOR1_cb = SP_FOR1_cb + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_cb
-               SP_FOR2_cb = SP_FOR2_cb + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_cb
-               SP_FOR3_cb = SP_FOR3_cb + SP_GRIDC%LPCTZ_(SP_N3)*SP_FOR_cb
-
-         ENDIF
+!             IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
+!
+!               SP_CEXPF = EXP(CITPI*(SP_G3+SP_G2+SP_G1))*SP_T_INFO%VCA(SP_NT)
+!               SP_FOR_gion = (Vcorr(SP_NG))*imag_i * &
+!                    & ((SP_P(SP_NT)%ZVALF) * &
+!                    & SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2)))
+!               SP_FOR_cb = -(Vdiel(SP_NG))*imag_i * &
+!                    & (CORE_C*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
+!
+!               SP_FOR1_gion = SP_FOR1_gion + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_gion
+!               SP_FOR2_gion = SP_FOR2_gion + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_gion
+!               SP_FOR3_gion = SP_FOR3_gion + SP_GRIDC%LPCTZ_(SP_N3)*SP_FOR_gion
+!
+!               SP_FOR1_cb = SP_FOR1_cb + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_cb
+!               SP_FOR2_cb = SP_FOR2_cb + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_cb
+!               SP_FOR3_cb = SP_FOR3_cb + SP_GRIDC%LPCTZ_(SP_N3)*SP_FOR_cb
+!
+!         ENDIF
 
        ENDDO !end of loop over reciproc vectors
 
-            IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
-                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR1_gion,1))
-                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR2_gion,1))
-                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR3_gion,1))
-
-                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR1_cb,1))
-                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR2_cb,1))
-                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR3_cb,1))
-
-                 SP_FOR1_gion =  SP_FOR1_gion * TPI
-                 SP_FOR2_gion =  SP_FOR2_gion * TPI
-                 SP_FOR3_gion =  SP_FOR3_gion * TPI
-
-                  SP_FOR1_cb =  SP_FOR1_cb * TPI
-                  SP_FOR2_cb =  SP_FOR2_cb * TPI
-                  SP_FOR3_cb =  SP_FOR3_cb * TPI
-
-                  EIFOR_SOL(1,SP_NI) =  SP_FOR1_gion +  SP_FOR1_cb
-                  EIFOR_SOL(2,SP_NI) =  SP_FOR2_gion +  SP_FOR2_cb
-                  EIFOR_SOL(3,SP_NI) =  SP_FOR3_gion +  SP_FOR3_cb
-
-             ENDIF
+!            IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
+!                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR1_gion,1))
+!                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR2_gion,1))
+!                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR3_gion,1))
+!
+!                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR1_cb,1))
+!                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR2_cb,1))
+!                 CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR3_cb,1))
+!
+!                 SP_FOR1_gion =  SP_FOR1_gion * TPI
+!                 SP_FOR2_gion =  SP_FOR2_gion * TPI
+!                 SP_FOR3_gion =  SP_FOR3_gion * TPI
+!
+!                  SP_FOR1_cb =  SP_FOR1_cb * TPI
+!                  SP_FOR2_cb =  SP_FOR2_cb * TPI
+!                  SP_FOR3_cb =  SP_FOR3_cb * TPI
+!
+!                  EIFOR_SOL(1,SP_NI) =  SP_FOR1_gion +  SP_FOR1_cb
+!                  EIFOR_SOL(2,SP_NI) =  SP_FOR2_gion +  SP_FOR2_cb
+!                  EIFOR_SOL(3,SP_NI) =  SP_FOR3_gion +  SP_FOR3_cb
+!
+!             ENDIF
 
        ENDDO ions
 
@@ -456,16 +457,15 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 !-----------------------------------------------------------------------------------
 !force corrections to real space
 !-----------------------------------------------------------------------------------
-   IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
-!      CALLMPI( M_sum_d(SP_GRIDC%COMM, EIFOR_SOL(1,1),SP_T_INFO%NIONS*3))
-      CALL  DIRKAR(SP_T_INFO%NIONS,EIFOR_SOL,SP_LATT_CUR%B)
-#ifdef debugsol
-      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*)'FORCE CORRECTIONS'
-      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,SP_T_INFO%NIONS)
-#endif
-!STOP
-   ENDIF
-
+!   IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
+!!      CALLMPI( M_sum_d(SP_GRIDC%COMM, EIFOR_SOL(1,1),SP_T_INFO%NIONS*3))
+!      CALL  DIRKAR(SP_T_INFO%NIONS,EIFOR_SOL,SP_LATT_CUR%B)
+!#ifdef debugsol
+!      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*)'FORCE CORRECTIONS'
+!      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,SP_T_INFO%NIONS)
+!#endif
+!!STOP
+!   ENDIF
 
  RETURN
 
@@ -473,13 +473,13 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 
 !>==========================SUBROUTINE SOL_INIT======================
 !!
-!! set the numerical parameters(sigma_nc_k,sigma_rc_k,core_c)
+!! set solvation paramters
+!! all read in values for the numerical parameters(sigma_nc_k,sigma_rc_k,core_c) from INCAR if specified(for testing prpose)
 !! and initiaize the grid for jdftx(if LJDFTX flag is set in INCAR)
 !! called in potlok
 !! 
 !!======================================================================
-
- SUBROUTINE SOL_INIT(INFO, LATT_CUR, GRIDC, T_INFO, P)
+ SUBROUTINE SOL_INIT(IO, EDIFF, INFO, LATT_CUR, GRIDC, T_INFO, P, sigma_k_1, nc_k_1, eb_k_1, tau_1)
 
    USE poscar, ONLY : type_info 
    USE lattice, ONLY : latt, DIRKAR 
@@ -493,9 +493,10 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
    TYPE (info_struct) :: INFO
    TYPE (latt),INTENT(IN) :: LATT_CUR
    TYPE(grid_3d),INTENT(IN) :: GRIDC
-   
-   REAL(q) :: sigma_gauss,RCS(T_INFO%NTYP)
-   
+   TYPE (in_struct),INTENT(IN) :: IO
+
+   REAL(q) :: EDIFF
+   REAL(q) :: sigma_gauss,RCS(T_INFO%NTYP), sigma_k_1, nc_k_1, eb_k_1, tau_1
    INTEGER :: IDUM, N, IERR, K, I
    REAL(q) :: RDUM,delta_grd,sigma_rc_k0
    COMPLEX(q) CDUM
@@ -503,56 +504,58 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
    CHARACTER (1) CHARAC
    
    LIONODE_FLAG = .FALSE.
+
+   SP_IO = IO
+   LSOL = .TRUE. 
+   EDIFFSOL = EDIFF/100._q
+
+!default values
+   sigma_k = sigma_k_1
+!   nc_k = 0.00473_q
+   nc_k = nc_k_1
+   eb_k = eb_k_1
+   tau = tau_1
    
 #ifdef MPI
-      IF (GRIDC%COMM%NODE_ME==GRIDC%COMM%IONODE) THEN
+   IF (GRIDC%COMM%NODE_ME==GRIDC%COMM%IONODE) THEN
 #endif
-          LIONODE_FLAG = .TRUE.
+      LIONODE_FLAG = .TRUE.
    
 #ifdef MPI
-      ENDIF
+   ENDIF
 #endif   
 
- IF (PK_COUNTER == 1) THEN
-   ALLOCATE(sigma_rc_k(T_INFO%NTYP))
+   IF (PK_COUNTER == 1) THEN
+      ALLOCATE(sigma_rc_k(T_INFO%NTYP))
 #ifdef debugsol
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the paramters'
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Unless explicity specified in the INCAR file these values will be used as the defaults'
+      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the paramters'
+      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Unless explicity specified in the INCAR file these values will be used as the defaults'
 #endif
 
 !   delta_grd = ((LATT_CUR%OMEGA)/(GRIDC%NPLWV))**(1._q/3._q)
-   delta_grd = MAXVAL(LATT_CUR%ANORM/GRIDC%NGPTAR)
+      delta_grd = MAXVAL(LATT_CUR%ANORM/GRIDC%NGPTAR)
 #ifdef debugsol      
-   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'delta_grd = ', delta_grd      
+      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'delta_grd = ', delta_grd      
 #endif
 
-!   sigma_nc_k = 1.5_q * delta_grd
-!   sigma_rc_k = 1.1_q * delta_grd
+      sigma_nc_k = 1.6_q * delta_grd !sigma for point charges
 
-!   sigma_rc_k = 3.0_q * delta_grd
-!   sigma_nc_k = 3.0_q * delta_grd !sigma for point charges
-
-   sigma_nc_k = 1.6_q * delta_grd !sigma for point charges
-
-   CALL GETRCORE(T_INFO%NTYP,RCS)
+      CALL GETRCORE(T_INFO%NTYP,RCS)
 
 !   RCS = (/(P(K)%PSRMAX,K=1,T_INFO%NTYP)/) !PSDMAX, maximal r for nonlocal contribution (in fact rmax=PSRMAX/NPSNL*(NPSNL-1))
 
 !   sigma_rc_k = MINVAL(RCS)*2.0/4.0_q   ! sigma for the pseudo core
 #ifdef debugsol
-  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'RCOREs = ', RCS      
+      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'RCOREs = ', RCS      
 #endif
 !STOP
-   sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
+      sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
 
-!   print *,RCS,sigma_rc_k
-!   stop
+      CORE_C = 1.0_q
 
-   CORE_C = 1.0_q
-
-   LOPEN = .FALSE.
+      LOPEN = .FALSE.
    
-   OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
+      OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
 
 !the following three paramters are essential for all pcm models
 !-----------------------------------------------------------------------------------
@@ -627,7 +630,29 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
          STOP
       ENDIF
+!-----------------------------------------------------------------------------------
+!EDIFFSOL
+!-----------------------------------------------------------------------------------
+         CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EDIFFSOL','=','#',';','F',IDUM,EDIFFSOL,CDUM,LDUM,CHARAC,N,1,IERR)
+#ifdef debugsol
+         IF (IERR == 3 ) THEN
+      
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
 
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'EDIFFSOL = ', EDIFFSOL          
+         
+         ELSE IF (IERR == 0 ) THEN
+      
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : EDIFFSOL = ', EDIFFSOL 
+         
+         ENDIF
+#endif
+
+         IF ((IERR/=0).AND.(IERR/=3)) THEN
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EDIFFSOL''from INCAR.'
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+            STOP
+         ENDIF
 !-----------------------------------------------------------------------------------
 !LJDFTX
 !-----------------------------------------------------------------------------------
@@ -684,210 +709,10 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 
  ENDIF
 
+ RETURN
+
  END SUBROUTINE SOL_INIT
 
-!>==========================SUBROUTINE SET_SOL_IO============================
-!!
-!!gets the IO object and ediff from main, sets LSOL to .TRUE. 
-!!and initializes the solvennt parameters(eb_k,nc_k,sigma_k,tau, by callingsol_reader)
-!!called from main.F(called only if INFO%LSOL is true)
-!!
-!!===========================================================================
-
-SUBROUTINE SET_SOL_IO(IO, EDIFF)
-
-  IMPLICIT NONE
-
-  TYPE (in_struct),INTENT(IN) :: IO
-  REAL(q) :: EDIFF
-
-  SP_IO = IO
-  LSOL = .TRUE. 
-  EDIFFSOL = EDIFF/100._q
-
-!default values
-  sigma_k = 0.6_q
-!   nc_k = 0.00473_q
-  nc_k = 0.0025_q
-  eb_k = 80.0_q
-  tau = 5.25E-4_q
-#ifdef debugsol
-  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
-#endif
-
-  CALL SOL_READER()
-
-END SUBROUTINE SET_SOL_IO
-
-!>==========================SUBROUTINE SOL_READER============================
-!!
-!!Reads in the linear pcm model parameters(eb_k,nc_k,sigma_k,tau,ediffsol))
-!!for the solvent from INCAR
-!!
-!!===========================================================================
-
- SUBROUTINE SOL_READER()
-
-      USE setexm
-      USE vaspxml
-
-      IMPLICIT NONE
-
-      INTEGER :: IDUM, N, IERR
-      REAL(q) :: RDUM
-      COMPLEX(q) CDUM
-      LOGICAL LOPEN,LDUM
-      CHARACTER (1) CHARAC
-
-       LOPEN = .FALSE.
-  
-      
-      OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
-
-!-----------------------------------------------------------------------------------
-!sigma_k
-!-----------------------------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_K','=','#',';','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_K'',the width of dielectric cavity, not specified, using the default(fit parameter for solvent = water)'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_k = ',sigma_k          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_k(width of dielectric cavity) = ',sigma_k 
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
-!-----------------------------------------------------------------------------------
-!nc_k
-!-----------------------------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'NC_K','=','#',';','F',IDUM,nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water)'
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'nc_k = ', nc_k          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : nc_k (cavity turn-on charge density) = ', nc_k 
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''NC_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
-!-----------------------------------------------------------------------------------
-!eb_k
-!-----------------------------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EB_K','=','#',';','F',IDUM,eb_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EB_K'', relative permittivity of the bulk solvent, not specified, using the default(for solvent = water)'
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'eb_k = ', eb_k          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : eb_k (relative permittivity of the bulk solvent) = ', eb_k 
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EB_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
-!-----------------------------------------------------------------------------------
-!tau
-!-----------------------------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'TAU','=','#',';','F',IDUM,tau,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''TAU'',cavity surface tension, not specified, using the default'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'tau = ',tau
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : tau(cavity surface tension) = ',tau
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''TAU''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
-!-----------------------------------------------------------------------------------
-!EDIFFSOL
-!-----------------------------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EDIFFSOL','=','#',';','F',IDUM,EDIFFSOL,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'EDIFFSOL = ', EDIFFSOL          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : EDIFFSOL = ', EDIFFSOL 
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EDIFFSOL''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
-
-END SUBROUTINE SOL_READER
-
-!>==========================SUBROUTINE SOL_WRITER============================
-!!
-!!Writes the linear pcm model parameters(eb_k,nc_k,sigma_k,tau))
-!!for the solvent to outcar
-!!
-!!===========================================================================
-
-SUBROUTINE SOL_WRITER()
-
- IMPLICIT NONE
- 
- IF (SP_IO%IU6>=0) THEN
-   WRITE(SP_IO%IU6,100) eb_k, sigma_k, nc_k, tau
- ENDIF
-
-100   FORMAT( &
-             ' Solvation parameters'/ &
-             '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
-             '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
-             '   NC_K    =',F10.6,  '     cutoff charge density' /&
-             '   TAU     =',F10.6,  '     cavity surface tension' /)
-
-END SUBROUTINE SOL_WRITER 
 
 !>==========================SUBROUTINE Fcorrection============================
 !!
@@ -895,7 +720,7 @@ END SUBROUTINE SOL_WRITER
 !!
 !!===========================================================================
 
-SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
+SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel,EIFOR_SOL)
   USE constant 
   USE poscar, ONLY : type_info 
   USE lattice, ONLY : latt, DIRKAR 
@@ -913,6 +738,7 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
   COMPLEX(q) Vdiel(GRIDC%RC%NP)
   INTEGER :: NIS,NT,NIADD,NI,N,N1,NC,N2,N3,NG,NGP,N1P,I,J
   REAL(q) ::G,GX,GY,GZ,G1,G2,G3,FOR1,FOR2,FOR3,FOR,FACTM
+  REAL(q) :: EIFOR_SOL(3,T_INFO%NIONS)
   COMPLEX(q) :: CE,CX,CEXPF
 
 ! work arrays
