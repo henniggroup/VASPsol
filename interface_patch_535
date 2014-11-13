@@ -246,7 +246,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
            WRITE(IO%IU0,1000) I, TOTEN_, TOTEN_-TOTEN, DESUM, ICOUEV, RMS
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x solvation.F vasp.5.3.5/main.F VASPsol/main.F
 --- vasp.5.3.5/main.F	2014-06-12 15:16:17.034632144 -0400
-+++ VASPsol/main.F	2014-11-12 09:57:04.009731764 -0500
++++ VASPsol/main.F	2014-11-13 09:17:14.031464273 -0500
 @@ -168,6 +168,9 @@
  
        USE lcao
@@ -286,7 +286,17 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
  #ifdef logflow
         CLOSE(19)
-@@ -4085,7 +4094,7 @@
+@@ -1394,6 +1403,9 @@
+        CALL  XML_WRITE_ORBITALMAG
+        CALL  XML_WRITE_RESPONSE
+        CALL  XML_WRITE_CLASSICFIELDS
++! solvation__
++       CALL XML_WRITE_SOL
++! solvation__
+ 
+        CALL XML_CLOSE_TAG("parameters")
+ !=======================================================================
+@@ -4085,7 +4097,7 @@
       ! for the selfconsistent update set W_F%CELTOT and TOTEN now
        IF (INFO%LONESW) W_F%CELTOT=W%CELTOT
        E%EBANDSTR= BANDSTRUCTURE_ENERGY(WDES, W)

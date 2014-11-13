@@ -1707,7 +1707,6 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 
 !default values
    sigma_k = sigma_k_1
-!   nc_k = 0.00473_q
    nc_k = nc_k_1
    eb_k = eb_k_1
    tau = tau_1
@@ -1734,7 +1733,11 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
       IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'delta_grd = ', delta_grd      
 #endif
 
-      sigma_nc_k = 1.6_q * delta_grd !sigma for point charges
+!-----------------------------------------------------------------------------------
+! default sigma_nc_k
+! sigma for ionic gaussians
+!-----------------------------------------------------------------------------------
+      sigma_nc_k = 1.6_q * delta_grd 
 
       CALL GETRCORE(T_INFO%NTYP,RCS)
 
@@ -1745,31 +1748,39 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
       IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'RCOREs = ', RCS      
 #endif
 !STOP
-      sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
+!-----------------------------------------------------------------------------------
+! default sigma_rc_k
+! sigma for the pseudo core
+!-----------------------------------------------------------------------------------
+      sigma_rc_k = RCS/2.5_q   
 
+!-----------------------------------------------------------------------------------
+! default CORE_C
+!-----------------------------------------------------------------------------------
       CORE_C = 1.0_q
 
+!-----------------------------------------------------------------------------------
+! read in the numerical parameters from incar, for debug purposes only
+! also read in the jdftx stuff, if activated in the makefile
+!-----------------------------------------------------------------------------------
+#if defined(DEBUGSOL) || defined(JDFTX)
       LOPEN = .FALSE.
-   
-      OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
+      OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')
+#endif
 
-!the following three paramters are essential for all pcm models
+#ifdef debugsol
 !-----------------------------------------------------------------------------------
 !sigma_nc_k
 !-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_NC_K','=','#',';','F',IDUM,sigma_nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol      
+
       IF (IERR == 3 ) THEN
-      
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_NC_K'',the width of ionic gaussians, not specified, using the default'
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_nc_k = ',sigma_nc_k          
-         
       ELSE IF (IERR == 0 ) THEN
-      
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_nc_k(width of ionic gaussians) = ',sigma_nc_k 
-
       ENDIF
-#endif
+
       IF ((IERR/=0).AND.(IERR/=3)) THEN
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_NC_K''from INCAR.'
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
@@ -1780,21 +1791,16 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 !sigma_rc_k
 !-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_RC_K','=','#',';','F',IDUM,sigma_rc_k0,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
+
       IF (IERR == 3 ) THEN
-      
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_RC_K'',the width of pseudo-core gaussians, not specified, using the default'
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_rc_k = ',sigma_rc_k          
-         
       ELSE IF (IERR == 0 ) THEN
-      
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_rc_k(width of pseudo-core gaussians) = ',sigma_rc_k0
          DO I=1,T_INFO%NTYP
             sigma_rc_k(I) = sigma_rc_k0
          ENDDO
-         
       ENDIF
-#endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_RC_K''from INCAR.'
@@ -1806,20 +1812,13 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 !CORE_C
 !-----------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'CORE_C','=','#',';','F',IDUM,CORE_C,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
+
       IF (IERR == 3 ) THEN
-      
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''CORE_C'', magnitude of pseudo-core charge, not specified, using the default'
-
-
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'CORE_C = ', CORE_C          
-         
       ELSE IF (IERR == 0 ) THEN
-      
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : CORE_C (magnitude of pseudo-core charge) = ', CORE_C 
-         
       ENDIF
-#endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
          IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''CORE_C''from INCAR.'
@@ -1830,41 +1829,37 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 !EDIFFSOL
 !-----------------------------------------------------------------------------------
          CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EDIFFSOL','=','#',';','F',IDUM,EDIFFSOL,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-         IF (IERR == 3 ) THEN
-      
-            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
 
+         IF (IERR == 3 ) THEN
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
             IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'EDIFFSOL = ', EDIFFSOL          
-         
          ELSE IF (IERR == 0 ) THEN
-      
             IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : EDIFFSOL = ', EDIFFSOL 
-         
          ENDIF
-#endif
 
          IF ((IERR/=0).AND.(IERR/=3)) THEN
             IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EDIFFSOL''from INCAR.'
             IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
             STOP
          ENDIF
+#endif
 !-----------------------------------------------------------------------------------
-!LJDFTX
+!LJDFTX, optional flag to interface with the jdftx library
+!to use set -Djdftx directive in the makefile
 !-----------------------------------------------------------------------------------
 #ifdef jdftx   
    CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LJDFTX','=','#',';','L',IDUM,RDUM,CDUM,LJDFTX,CHARAC,N,1,IERR)
-#endif
-!error opening INCAR      
+
    IF ( IERR == 1 .OR. IERR == 2) THEN
      IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Error reading INCAR'
      STOP
    ENDIF
-#ifdef jdftx
+
 !check for flucar
 #ifdef debugsol
    IF (LIONODE_FLAG .AND. LJDFTX) WRITE(*,*)'Checking for FLUCAR file'       
 #endif
+
    INQUIRE(FILE='FLUCAR',EXIST=LFLUEX)
 
 !if LJDFTX is true and flucar exists initialize jdftx
@@ -1885,24 +1880,33 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_N, &
 #ifdef debugsol
       IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'sigma_nc_k set to ',sigma_nc_k
 #endif
+
 !otherwise use the default pcm
    ELSE
+
 #ifdef debugsol
         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Either LJDFTX = .FALSE. or FLUCAR file not present'
         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'using the default linear pcm in vasp'
 #endif
+
+!close ifdef jdftx 
 #endif
+
         LDEFAULTPCM = .TRUE.
+
 #ifdef debugsol
         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,'(/A/)') 'All solvation model paramters are set'
 #endif
+
 #ifdef jdftx        
    ENDIF
 #endif
+
 #ifdef debugsol
    IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Solvation model intialization DONE'
 #endif
 
+!close if pk_counter=1
  ENDIF
 
  RETURN
@@ -2137,7 +2141,7 @@ MODULE solvation
 
   PRIVATE
 
-  PUBLIC :: SOL_READER, SOL_WRITER, SOL_VCORRECTION
+  PUBLIC :: SOL_READER, SOL_WRITER, XML_WRITE_SOL, SOL_VCORRECTION
 
   LOGICAL, SAVE :: LSOL=.FALSE.
 
@@ -2169,6 +2173,7 @@ CONTAINS
   SUBROUTINE SOL_READER(NIONS,EDIFF,IO)
 
     USE base
+    USE vaspxml
     
     IMPLICIT NONE
 
@@ -2190,11 +2195,13 @@ CONTAINS
     IO_1 = IO
     EDIFF_1 = EDIFF
 
-      LOPEN = .FALSE.
+    LOPEN = .FALSE.
    
-      OPEN(UNIT=IO%IU5,FILE='INCAR',STATUS='OLD')      
+    OPEN(UNIT=IO%IU5,FILE='INCAR',STATUS='OLD')      
 
-! read in flag LSOL
+!-----------------------------------------------------------------
+! LSOL, solvation on/off
+!-----------------------------------------------------------------
     CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LSOL','=','#',';','L', &
          &            IDUM,RDUM,CDUM,LSOL,CHARAC,N,1,IERR)
     IF (((IERR/=0).AND.(IERR/=3)).OR. &
@@ -2203,6 +2210,7 @@ CONTAINS
             WRITE(IO%IU0,*)'Error reading item ''LSOL'' from file INCAR.'
        STOP
     ENDIF
+    CALL XML_INCAR('LSOL','L',IDUM,RDUM,CDUM,LSOL,CHARAC,N)
 
     IF (LSOL) THEN
 
@@ -2227,6 +2235,7 @@ CONTAINS
           IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
           STOP
        ENDIF
+       CALL XML_INCAR('SIGMA_K','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,N)
 
 !---------------------------------------------------------------------------
 !nc_k
@@ -2250,6 +2259,7 @@ CONTAINS
           IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
           STOP
        ENDIF
+       CALL XML_INCAR('NC_K','F',IDUM,nc_k,CDUM,LDUM,CHARAC,N)
 
 !---------------------------------------------------------------------------
 !eb_k
@@ -2273,6 +2283,7 @@ CONTAINS
           IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
           STOP
        ENDIF
+       CALL XML_INCAR('EB_K','F',IDUM,eb_k,CDUM,LDUM,CHARAC,N)
 
 !---------------------------------------------------------------------------
 !tau
@@ -2296,6 +2307,7 @@ CONTAINS
           IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
           STOP
        ENDIF
+       CALL XML_INCAR('TAU','F',IDUM,tau,CDUM,LDUM,CHARAC,N)
 
     ENDIF
       
@@ -2308,7 +2320,7 @@ CONTAINS
 !******************** SUBROUTINE SOL_WRITER ***************************************
 !      
 !
-! writes the solvation model paramters to the OUTCAR file
+! writes the solvation model parameters to the OUTCAR file
 !
 !
 !**********************************************************************************
@@ -2324,11 +2336,12 @@ CONTAINS
     IF (.NOT.LSOL) RETURN
 
     IF (IO%IU6>=0) THEN
-       WRITE(IO%IU6,100) eb_k, sigma_k, nc_k, tau
+       WRITE(IO%IU6,100) LSOL, eb_k, sigma_k, nc_k, tau
     ENDIF
 
 100 FORMAT( &
-             ' Solvation parameters'/ &
+             ' Solvation model:'/ &
+             '   LSOL    =',L6, '         switch on solvation model'/ &
              '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
              '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
              '   NC_K    =',F10.6,  '     cutoff charge density' /&
@@ -2338,6 +2351,44 @@ CONTAINS
     RETURN
 
   END SUBROUTINE SOL_WRITER
+
+
+
+!******************** SUBROUTINE XML_WRITE_SOL ************************************
+!      
+!
+! writes the solvation model parameters to vasprun.xml
+!
+!
+!**********************************************************************************
+  SUBROUTINE XML_WRITE_SOL
+
+    USE vaspxml
+
+    IMPLICIT NONE
+
+    INTEGER IDUM
+    REAL(q) RDUM
+    COMPLEX(q) CDUM
+    LOGICAL LDUM
+    CHARACTER (1) CHARAC
+
+    CALL XML_TAG("separator","solvation model")
+
+    CALL XML_INCAR('LSOL','L',IDUM,RDUM,CDUM,LSOL,CHARAC,1)
+
+    IF (LSOL) THEN
+       CALL XML_INCAR('SIGMA_K','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,1)
+       CALL XML_INCAR('NC_K','F',IDUM,nc_k,CDUM,LDUM,CHARAC,1)
+       CALL XML_INCAR('EB_K','F',IDUM,eb_k,CDUM,LDUM,CHARAC,1)
+       CALL XML_INCAR('TAU','F',IDUM,tau,CDUM,LDUM,CHARAC,1)
+    ENDIF
+
+    CALL XML_CLOSE_TAG
+
+    RETURN
+
+  END SUBROUTINE XML_WRITE_SOL
 
 
 
