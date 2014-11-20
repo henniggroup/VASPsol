@@ -307,7 +307,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x solvation.F vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.878632101 -0400
-+++ VASPsol/pot.F	2014-11-12 09:57:04.009731764 -0500
++++ VASPsol/pot.F	2014-11-20 09:34:58.120010638 -0500
 @@ -39,6 +39,9 @@
        USE meta
        USE Constrained_M_modular
@@ -326,15 +326,6 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  !-----------------------------------------------------------------------
  !
  !  calculate the exchange correlation potential and the dc. correction
-@@ -90,7 +94,7 @@
- #ifdef libbeef
-       IF(LBEEFCALCBASIS) THEN
-          BEEFCOUNTER = 1
--         SAVELUSE_VDW = LUSE_VDW
-+5B         SAVELUSE_VDW = LUSE_VDW
- !        for calculation of nscf xc energies for error estimates,
- !        vdW interactions don't need to be calculated
-          LUSE_VDW = .FALSE.
 @@ -309,6 +313,12 @@
        DO I=1,GRIDC%RC%NP
           CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
