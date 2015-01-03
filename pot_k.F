@@ -743,7 +743,8 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   T_k      = 298.15_q !!!25C, temperature in kelvin
 
 #ifdef debugsol
-  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR. If not present, default values will be used'
+  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR.&
+      & If not present, default values will be used'
 #endif
 
 !!!read in the solvation parameters

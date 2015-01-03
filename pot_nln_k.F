@@ -218,6 +218,7 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 
  p0_k =  SQRT( (3._q * (eb_k - einfty_k) * KT)/ (4._q * PI * Nsol_k )  )
 
+
 !-----------------------------------------------------------------
 !multiply by pkT to make the electric field nondimensional
 !in atomic units
@@ -295,7 +296,7 @@ FUNCTION LANG_NLN(NDIM_E)
 
  REAL(q) :: NDIM_E, LANG_NLN
 
- LANG_NLN = ( COSH(NDIM_E)/ SINH(NDIM_E) )  - ( 1._q / NDIM_E )
+ LANG_NLN = ( COSH(NDIM_E)/ SINH(NDIM_E) )  - ( 1._q / NDIM_E)
 
 !langevin function cannot be greater than 1
  IF (LANG_NLN > 1._q) THEN 
@@ -320,9 +321,11 @@ FUNCTION LANG_X_NLN(I)
  IMPLICIT NONE
 
  INTEGER(q) :: I
- REAL(q) :: NDIM_E, LANG_X_NLN, SINHX, COSHX, EXPX, EXP_X
+ REAL(q) :: NDIM_E, LANG_X_NLN, SINHX, COSHX, EXPX, EXP_X, alpha
+!scaling factor
+ alpha = 2.81_q
 
- NDIM_E = EFIELD(I) * pkT
+ NDIM_E = alpha * EFIELD(I) * pkT
 
 !only interested in the magnitude of the electric field
  IF (NDIM_E < 0) THEN
@@ -600,7 +603,8 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
      CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, TOTN, PHI_TILDA, NCGSOL, DIFFPHI)
 
 #ifdef debugsol
-     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "PK_COUNTER, MIN_COUNTER, DIFFPHI", PK_COUNTER, MIN_COUNTER, DIFFPHI
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "PK_COUNTER, MIN_COUNTER, &
+                            & DIFFPHI", PK_COUNTER, MIN_COUNTER, DIFFPHI
 #endif
 
      MIN_COUNTER = MIN_COUNTER + 1
@@ -1154,7 +1158,8 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
  CALL VACORR_NON_ELECTROSTATIC(PS_TOTN, VCORR, ATOT)
 
 #ifdef debugsol
-     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in a.u) = AEL + ACAV + ADM + AEPS  =  ", ATOT
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in a.u) = &
+      & AEL + ACAV + ADM + AEPS  =  ", ATOT
 #endif
 
 !!!to eV

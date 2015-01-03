@@ -1,6 +1,6 @@
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/base.F VASPsol/base.F
---- vasp.5.3.5/base.F	2014-06-12 15:16:16.830632136 -0400
-+++ VASPsol/base.F	2014-10-09 13:59:51.265162012 -0400
+--- vasp.5.3.5/base.F	2014-06-12 15:16:16.000000000 -0400
++++ VASPsol/base.F	2014-12-18 07:28:26.429287093 -0500
 @@ -43,6 +43,7 @@
          LOGICAL LPOTOK               ! local potential ok ?
          LOGICAL LMIX                 ! mixing done
@@ -17,9 +17,30 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
          REAL(q)    XCENC             ! -V(xc)+E(xc) (d.c.)
          REAL(q)    EXCG              ! E(xc) (LDA+GGA)
          REAL(q)    EXCM              ! E(xc) (metaGGA)
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_all.F VASPsol/electron_all.F
+--- vasp.5.3.5/electron_all.F	2014-06-12 15:16:19.000000000 -0400
++++ VASPsol/electron_all.F	2014-12-18 07:28:26.461286876 -0500
+@@ -389,7 +389,7 @@
+ ! calculate old band structure energy
+       E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, W)
+ ! old total energy
+-      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%EDOTP
++      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%EDOTP+E%Ediel
+ !-MM- Added to accomodate constrained moment calculations
+       IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
+       io_begin
+@@ -489,7 +489,7 @@
+       CALL PEAD_EDOTP(W,P,CQIJ,LATT_CUR,T_INFO,E2)
+ 
+       E2%EBANDSTR= BANDSTRUCTURE_ENERGY(WDES, W)
+-      TOTEN2=E2%EBANDSTR+E2%DENC+E2%XCENC+E2%TEWEN+E2%PSCENC+E2%EENTROPY+E2%PAWPS+E2%PAWAE+INFO%EALLAT+E2%EXHF+E2%EDOTP
++      TOTEN2=E2%EBANDSTR+E2%DENC+E2%XCENC+E2%TEWEN+E2%PSCENC+E2%EENTROPY+E2%PAWPS+E2%PAWAE+INFO%EALLAT+E2%EXHF+E2%EDOTP+E2%Ediel
+ !-MM- Added to accomodate constrained moment calculations
+       IF (M_CONSTRAINED()) TOTEN2=TOTEN2+E_CONSTRAINT()
+       io_begin
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron.F VASPsol/electron.F
---- vasp.5.3.5/electron.F	2014-06-12 15:16:20.174632256 -0400
-+++ VASPsol/electron.F	2014-10-09 13:59:51.277162012 -0400
+--- vasp.5.3.5/electron.F	2014-06-12 15:16:20.000000000 -0400
++++ VASPsol/electron.F	2014-12-18 07:28:26.445286985 -0500
 @@ -439,7 +439,7 @@
  ! TOTEN = total free energy of the system
  !=======================================================================
@@ -59,42 +80,9 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       &        '  ---------------------------------------------------'/ &
       &        '  free energy    TOTEN  = ',F18.8,' eV'// &
       &        '  energy without entropy =',F18.8, &
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_OEP.F VASPsol/electron_OEP.F
---- vasp.5.3.5/electron_OEP.F	2014-06-12 15:16:19.954632250 -0400
-+++ VASPsol/electron_OEP.F	2014-10-09 13:59:51.285162013 -0400
-@@ -584,7 +584,7 @@
- ! TOTEN = total free energy of the system
- !=======================================================================
-      E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, WXI)
--     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF
-+     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%Ediel
-      IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
- 
-      DESUM(N)=TOTEN-TOTENL
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_all.F VASPsol/electron_all.F
---- vasp.5.3.5/electron_all.F	2014-06-12 15:16:19.818632246 -0400
-+++ VASPsol/electron_all.F	2014-10-09 13:59:51.285162013 -0400
-@@ -389,7 +389,7 @@
- ! calculate old band structure energy
-       E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, W)
- ! old total energy
--      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%EDOTP
-+      TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%EDOTP+E%Ediel
- !-MM- Added to accomodate constrained moment calculations
-       IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
-       io_begin
-@@ -489,7 +489,7 @@
-       CALL PEAD_EDOTP(W,P,CQIJ,LATT_CUR,T_INFO,E2)
- 
-       E2%EBANDSTR= BANDSTRUCTURE_ENERGY(WDES, W)
--      TOTEN2=E2%EBANDSTR+E2%DENC+E2%XCENC+E2%TEWEN+E2%PSCENC+E2%EENTROPY+E2%PAWPS+E2%PAWAE+INFO%EALLAT+E2%EXHF+E2%EDOTP
-+      TOTEN2=E2%EBANDSTR+E2%DENC+E2%XCENC+E2%TEWEN+E2%PSCENC+E2%EENTROPY+E2%PAWPS+E2%PAWAE+INFO%EALLAT+E2%EXHF+E2%EDOTP+E2%Ediel
- !-MM- Added to accomodate constrained moment calculations
-       IF (M_CONSTRAINED()) TOTEN2=TOTEN2+E_CONSTRAINT()
-       io_begin
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_lhf.F VASPsol/electron_lhf.F
---- vasp.5.3.5/electron_lhf.F	2014-06-12 15:16:16.646632130 -0400
-+++ VASPsol/electron_lhf.F	2014-10-09 13:59:51.289162013 -0400
+--- vasp.5.3.5/electron_lhf.F	2014-06-12 15:16:16.000000000 -0400
++++ VASPsol/electron_lhf.F	2014-12-18 07:28:26.477286768 -0500
 @@ -526,7 +526,7 @@
       LHFCALC_FORCE=.FALSE.
  
@@ -104,9 +92,21 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
       IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
       io_begin
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_OEP.F VASPsol/electron_OEP.F
+--- vasp.5.3.5/electron_OEP.F	2014-06-12 15:16:19.000000000 -0400
++++ VASPsol/electron_OEP.F	2014-12-18 07:28:26.461286876 -0500
+@@ -584,7 +584,7 @@
+ ! TOTEN = total free energy of the system
+ !=======================================================================
+      E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, WXI)
+-     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF
++     TOTEN=E%EBANDSTR+E%DENC+E%XCENC+E%TEWEN+E%PSCENC+E%EENTROPY+E%PAWPS+E%PAWAE+INFO%EALLAT+E%EXHF+E%Ediel
+      IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
+ 
+      DESUM(N)=TOTEN-TOTENL
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/elinear_response.F VASPsol/elinear_response.F
---- vasp.5.3.5/elinear_response.F	2014-06-12 15:16:16.522632125 -0400
-+++ VASPsol/elinear_response.F	2014-10-09 13:59:51.293162013 -0400
+--- vasp.5.3.5/elinear_response.F	2014-06-12 15:16:16.000000000 -0400
++++ VASPsol/elinear_response.F	2014-12-18 07:28:26.489286688 -0500
 @@ -433,7 +433,7 @@
         W1%CELTOT=   WXI%CELTOT
  
@@ -117,8 +117,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
         IF (IO%IU0>=0) THEN
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/force.F VASPsol/force.F
---- vasp.5.3.5/force.F	2014-06-12 15:16:18.806632209 -0400
-+++ VASPsol/force.F	2014-10-09 13:59:51.293162013 -0400
+--- vasp.5.3.5/force.F	2014-06-12 15:16:18.000000000 -0400
++++ VASPsol/force.F	2014-12-18 07:28:26.497286633 -0500
 @@ -1075,6 +1075,9 @@
      USE vdwforcefield
      USE fileio
@@ -163,8 +163,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
                IF (IO%IU6>=0) THEN
                   NORDER=0 ; IF (KPOINTS%ISMEAR>=0) NORDER=KPOINTS%ISMEAR
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/ilinear_response.F VASPsol/ilinear_response.F
---- vasp.5.3.5/ilinear_response.F	2014-06-12 15:16:20.854632283 -0400
-+++ VASPsol/ilinear_response.F	2014-10-09 13:59:51.293162013 -0400
+--- vasp.5.3.5/ilinear_response.F	2014-06-12 15:16:20.000000000 -0400
++++ VASPsol/ilinear_response.F	2014-12-18 07:28:26.497286633 -0500
 @@ -624,7 +624,7 @@
         E1%EENTROPY=(E1%EENTROPY-E2%EENTROPY)*(1/POTIM)
  
@@ -175,8 +175,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         
         IF (IO%IU0>=0) THEN
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/linear_response.F VASPsol/linear_response.F
---- vasp.5.3.5/linear_response.F	2014-06-12 15:16:22.238632334 -0400
-+++ VASPsol/linear_response.F	2014-10-09 13:59:51.293162013 -0400
+--- vasp.5.3.5/linear_response.F	2014-06-12 15:16:22.000000000 -0400
++++ VASPsol/linear_response.F	2014-12-18 07:28:26.505286579 -0500
 @@ -341,7 +341,7 @@
               LMDIM,CDIJ,CQIJ, RMS,DESUM,ICOUEV, SV, E%EXHF, IO%IU6,IO%IU0, .FALSE., .TRUE., .FALSE.)
  
@@ -187,8 +187,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         IF (IO%IU0>=0) THEN
            WRITE(IO%IU0,1000) I, TOTEN_, TOTEN_-TOTEN, DESUM, ICOUEV, RMS
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/main.F VASPsol/main.F
---- vasp.5.3.5/main.F	2014-06-12 15:16:17.034632144 -0400
-+++ VASPsol/main.F	2014-10-09 13:59:51.305162013 -0400
+--- vasp.5.3.5/main.F	2014-06-12 15:16:17.000000000 -0400
++++ VASPsol/main.F	2014-12-18 07:28:26.513286525 -0500
 @@ -139,6 +139,7 @@
        USE relativistic
        USE rhfatm
@@ -251,8 +251,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        CALL STOP_TIMING("G",IO%IU6,'EDDIAG')
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
---- vasp.5.3.5/pot.F	2014-06-12 15:16:15.878632101 -0400
-+++ VASPsol/pot.F	2014-10-16 15:59:15.477827267 -0400
+--- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
++++ VASPsol/pot.F	2014-12-18 07:28:26.513286525 -0500
 @@ -2,6 +2,7 @@
        MODULE pot
        USE prec
@@ -312,8 +312,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
      END SUBROUTINE POTLOK
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/reader.F VASPsol/reader.F
---- vasp.5.3.5/reader.F	2014-06-12 15:16:18.630632202 -0400
-+++ VASPsol/reader.F	2014-10-09 13:59:51.341162014 -0400
+--- vasp.5.3.5/reader.F	2014-06-12 15:16:18.000000000 -0400
++++ VASPsol/reader.F	2014-12-18 07:28:26.529286417 -0500
 @@ -16,7 +16,7 @@
       &        ENAUG,LORBIT,LELF,ROPT,ENINI, &
       &        NGX,NGY,NGZ,NGXF,NGYF,NGZF,NBANDS,NEDOS,NBLK,LATT_CUR, &
@@ -360,8 +360,8 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        IF (LMETAGGA) LASPH=.TRUE.
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/subrot_scf.F VASPsol/subrot_scf.F
---- vasp.5.3.5/subrot_scf.F	2014-06-12 15:16:17.086632145 -0400
-+++ VASPsol/subrot_scf.F	2014-10-09 13:59:51.349162014 -0400
+--- vasp.5.3.5/subrot_scf.F	2014-06-12 15:16:17.000000000 -0400
++++ VASPsol/subrot_scf.F	2014-12-18 07:28:26.529286417 -0500
 @@ -320,7 +320,7 @@
  !=======================================================================
        E%EBANDSTR=BANDSTRUCTURE_ENERGY(W%WDES, W)
