@@ -205,7 +205,7 @@ MODULE POT_K
 !Ecorr3 = Vcorr*n(just electrostatic correction)
 !-------------------------------------------------------------
 !test
-   sol_io 'Vcorr(1), electrostatic corr. = ', Vcorr(1)
+!   sol_io 'Vcorr(1), electrostatic corr. = ', Vcorr(1)
 !test
 
    CALL MY_D_PROD(Ecorr3, SP_CHTOT(1,1), Vcorr, SP_GRIDC)
@@ -217,7 +217,7 @@ MODULE POT_K
 !where Vdiel = epsilon and kappa2 derivative terms + cavity pot
 !-------------------------------------------------------------
 !test
-    sol_io 'Vdiel(1), the rest = ', Vdiel(1)
+!    sol_io 'Vdiel(1), the rest = ', Vdiel(1)
 !test
 
    CALL MY_D_PROD(Ecorr4, SP_CHTOT(1,1), Vdiel, SP_GRIDC)
@@ -246,7 +246,7 @@ MODULE POT_K
    Ecorr = Atot - Ecorr3 - Ecorr4
 
 #ifdef debugsol
-   IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,'(/a, (es15.6))')"E%Ediel = Ecorr", Ecorr
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(/a, (es15.6))')"E%Ediel = Ecorr", Ecorr
 #endif
 
 !-------------------------------------------------------------
@@ -719,7 +719,8 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   kappa2b_k = 0._q !(1._q/9._q)
 
 #ifdef debugsol
-  sol_io 'Reading in solvation model parameters from INCAR. If not present, default values will be used'
+  sol_io 'Reading in solvation model parameters from INCAR.'
+  sol_io 'If not present, default values will be used'
 #endif
 
 !---------------------------------------------------------------
@@ -839,7 +840,7 @@ END SUBROUTINE SET_SOL_IO
       
          sol_io '''LAMBDA_D_K'', debye screening length not specified'
 
-         sol_io 'kappa2b_k = ', kappa2b_k
+         sol_io 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k         
          
       ELSE IF (IERR == 0 ) THEN
          sol_io 'Found : lambda_d_k (debye screening length) = ', lambda_d_k
@@ -924,11 +925,12 @@ SUBROUTINE SOL_WRITER()
 
 100   FORMAT( &
              ' Solvation parameters'/ &
-             '   EB_K    =',F10.6,  '     relative permittivity of the bulk solvent' /&
-             '   LAMBDA_D_K    =',F10.6,  '     the debye screening length' /&
-             '   SIGMA_K =',F10.6,  '     width of the dielectric cavity' /&
+             '   EB_K    =',F10.6,  'relative permittivity of the bulk solvent' /&
+             '   LAMBDA_D_K    =',F10.6,  ' the debye screening length' /&
+             '   SIGMA_K =', F10.6, '     width of the dielectric cavity' /&
              '   NC_K    =',F10.6,  '     cutoff charge density' /&
-             '   TAU     =',F10.6,  '     cavity surface tension' /)
+             '   TAU     =',F10.6,  '     cavity surface tension' /&
+             )
 
 END SUBROUTINE SOL_WRITER 
 
@@ -1086,7 +1088,7 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
 
 #ifdef debugsol
       sol_io 'FORCE CORRECTIONS'
-      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,T_INFO%NIONS)
+      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,T_INFO%NIONS)
 #endif
 
       RETURN
