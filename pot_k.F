@@ -835,7 +835,7 @@ END SUBROUTINE SET_SOL_IO
 ! if lambd_d_k not set in INCAR, kappa2b_k will be set to zero(default value)
 !--------------------------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LAMBDA_D_K','=','#',';','F',IDUM,lambda_d_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
+
       IF (IERR == 3 ) THEN
       
          sol_io '''LAMBDA_D_K'', debye screening length not specified'
@@ -852,7 +852,6 @@ END SUBROUTINE SET_SOL_IO
          sol_io 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
          
       ENDIF
-#endif
 
       IF ((IERR/=0).AND.(IERR/=3)) THEN
          sol_io 'Error reading ''LAMBDA_D_K''from INCAR.'
