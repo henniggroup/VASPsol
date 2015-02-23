@@ -34,7 +34,7 @@ MODULE POT_LPCM_K
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD
  PRIVATE :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
  PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
- PRIVATE :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
+ PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
 
  INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
  REAL(q), PRIVATE, SAVE                 :: CHGMIN = 1E-10_q
@@ -42,7 +42,7 @@ MODULE POT_LPCM_K
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,&
                                            & kappa2b_k,CORE_C, tau,EDIFFSOL
- TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
+ TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
 
  CONTAINS
 
@@ -78,10 +78,16 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN,&
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
  REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1,CORE_C1,tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
+#ifdef debugsolwf
+ RGRID,ALLOCATABLE :: RWORK_PHI(:)
+#endif
 
  ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)), SP_kappa2(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV), phi(SP_GRIDC%MPLWV))
  ALLOCATE(Vcav(SP_GRIDC%MPLWV), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
+#ifdef debugsolwf
+ ALLOCATE(RWORK_PHI(DIMREAL(SP_GRIDC%MPLWV)))
+#endif
       
  IF (PK_COUNTER == 1)  THEN
    ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
@@ -212,8 +218,17 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN,&
  ENDIF
 
  PK_COUNTER = PK_COUNTER + 1
+#ifdef debugsolwf
+      CALL FFT3D(phi, SP_GRIDC, 1) 
+      CALL UNPACK_C2R(phi, 1.0_q, phi, 0.0_q, RWORK_PHI, SP_GRIDC)
+      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_POIS'
+      CALL WRITE_TO_FILE(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, 'PHI_POIS', RWORK_PHI)
+#endif
       
  DEALLOCATE(SP_d_eps, SP_kappa2, phi_tilda, phi, Vcav, RWORK)
+#ifdef debugsolwf
+ DEALLOCATE(RWORK_PHI)
+#endif
 
  RETURN
 
@@ -894,9 +909,9 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
 ! eprime = d erf/dx, so the minus sign in the potenials are taken care of
 !-------------------------------------------------------------------------
   CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, EPP_PS_TOTN, eprime)
-!test
-  CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'EPRIME', eprime)
-!test
+!!!soltest
+!  CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'EPRIME', eprime)
+!!!soltest
    kprime = eprime * kappa2b_k
    eprime = eprime * (eb_k - 1._q)
 
@@ -914,9 +929,10 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
 
  CALL UNPACK_C2R(EPP_phi, 1.0_q, EPP_phi, 0.0_q, RWORK_1, EPP_GRIDC)
 
-!test
- CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'PHI', RWORK_1)
-!test
+#ifdef debugsolwf
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PBZ'
+ CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'PHI_PBZ', RWORK_1)
+#endif
 
 
 !-------------------------------------------------------------------------
@@ -1420,6 +1436,7 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  REAL(q),ALLOCATABLE ::  WORK(:)
  INTEGER :: ISTAT, NODE_ME, IONODE, IU
  INTEGER :: NALLOC, NZ, NWRITE, NWRITTEN, N
+ REAL(q),ALLOCATABLE ::  AVG_XY(:)
 
  NODE_ME = 0
  IONODE = 0
@@ -1435,6 +1452,7 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 #endif
 
  ALLOCATE(WORK(NALLOC), STAT=ISTAT)
+ ALLOCATE(AVG_XY(GRIDC%NGZ))
 
  io_begin
      OPEN(IU, FILE = FNAME, STATUS = 'UNKNOWN')
@@ -1454,11 +1472,13 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  do_io WRITE(IU,'(3I5)') GRIDC%NGX, GRIDC%NGY, GRIDC%NGZ
 
  NWRITTEN = 0
+ AVG_XY = 0
 
  DO NZ = 1, GRIDC%NGZ
     CALL MRG_GRID_RL_PLANE(GRIDC, WORK, CVTOT, NZ)
     io_begin
     DO N = 1, NALLOC
+       AVG_XY(NZ) = AVG_XY(NZ) + WORK(N)/NALLOC
        NWRITTEN=NWRITTEN+1
        IF ( MOD(NWRITTEN,NWRITE)==0 ) THEN
           IF (ABS(WORK(N)) < 1E-10 ) THEN
@@ -1479,7 +1499,13 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
  IF ( MOD(NWRITTEN,NWRITE)/=0 ) WRITE(IU,*)' '
 
+! MASK = ABS(AVG_XY - MAXVAL(AVG_XY) ) <= 1E-4
+! SUM(AVG_XY, MASK)/COUNT(MASK) 
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'MAX AVG_XY = ', MAXVAL(AVG_XY)
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'AVG_XY averaged along vacuum z= ', MAXVAL(AVG_XY), SUM(AVG_XY(GRIDC%NGZ-9:GRIDC%NGZ)) / 10.
+
  DEALLOCATE(WORK)
+ DEALLOCATE(AVG_XY)
 
  RETURN
 
