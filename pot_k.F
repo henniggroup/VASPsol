@@ -170,7 +170,7 @@ MODULE POT_K
 !
 !-------------------------------------------------------------
         CALL Vcorrection_lpcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO,&
-                         & TOTN, PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k,&
+                         & SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k,&
                          & sigma_k, nc_k, eb_k, kappa2b_k, CORE_C, sigma_rc_k,&
                          & tau, EDIFFSOL)
 

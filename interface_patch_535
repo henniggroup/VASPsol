@@ -252,19 +252,25 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
-+++ VASPsol/pot.F	2015-02-22 21:03:12.664954862 -0500
-@@ -2,6 +2,10 @@
++++ VASPsol/pot.F	2015-02-24 20:50:27.010721268 -0500
+@@ -2,6 +2,16 @@
        MODULE pot
        USE prec
        USE charge
++!!!solpbz
++      USE pot_lpcm_k, ONLY : UNPACK_C2R, SP_IO
++      USE pot_lpcm_k, ONLY : GET_VAC_LEVEL, VACPOT_POIS
++!!!solpbz
 +      USE POT_K, ONLY : Vcorrection, LSOL, SOL_INIT
++!!!solpbz
 +#ifdef debugsolwf
-+      USE pot_lpcm_k, ONLY : UNPACK_C2R, WRITE_TO_FILE, SP_IO
++      USE pot_lpcm_k, ONLY : WRITE_TO_FILE
 +#endif
++!!!solpbz
        CONTAINS
  !************************ SUBROUTINE POTLOK ****************************
  ! RCS:  $Id: pot.F,v 1.5 2003/06/27 13:22:22 kresse Exp kresse $
-@@ -62,6 +66,12 @@
+@@ -62,6 +72,12 @@
        COMPLEX(q), ALLOCATABLE::  CWORK1(:),CWORK(:,:)
        REAL(q) ELECTROSTATIC
        LOGICAL, EXTERNAL :: L_NO_LSDA_GLOBAL
@@ -277,38 +283,47 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
  #ifdef libbeef
        LOGICAL LBEEFCALCBASIS, LBEEFBAS
-@@ -71,9 +81,21 @@
+@@ -71,9 +87,27 @@
        LOGICAL SAVELUSE_VDW
        INTEGER BEEFCOUNTER
  #endif
 +
-+#ifdef debugsolwf
-+      RGRID, ALLOCATABLE :: RWORK_HAR(:), RWORK_PSP(:), RWORK_VCORR(:)
-+#endif
++!!!solpbz
++      RGRID, ALLOCATABLE :: RWORK_HAR(:), RWORK_PSP(:)
++      RGRID, ALLOCATABLE :: RWORK_CHG(:) !, RWORK_VCORR(:)
++      COMPLEX(q), ALLOCATABLE::  CWORK_K(:)      
++      REAL(q) :: VACPOT_PSP, VACPOT
++!!!solpbz
        
        MWORK1=MAX(GRIDC%MPLWV,GRID_SOFT%MPLWV)
        ALLOCATE(CWORK1(MWORK1),CWORK(GRIDC%MPLWV,WDES%NCDIJ))
 +      IF (LSOL) ALLOCATE(Vcorr(GRIDC%MPLWV))
 +      IF (LSOL) CALL SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
-+#ifdef debugsolwf
++
++!!!solpbz
 +      ALLOCATE(RWORK_HAR(DIMREAL(GRIDC%MPLWV)))
 +      ALLOCATE(RWORK_PSP(DIMREAL(GRIDC%MPLWV)))
-+      ALLOCATE(RWORK_VCORR(DIMREAL(GRIDC%MPLWV)))
-+#endif
++      !ALLOCATE(RWORK_VCORR(DIMREAL(GRIDC%MPLWV)))
++      ALLOCATE(RWORK_CHG(DIMREAL(GRIDC%MPLWV)))
++      ALLOCATE(CWORK_K(GRIDC%MPLWV))
++!!!solpbz
 +
  !-----------------------------------------------------------------------
  !
  !  calculate the exchange correlation potential and the dc. correction
-@@ -309,6 +331,34 @@
+@@ -309,6 +343,40 @@
        DO I=1,GRIDC%RC%NP
           CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
        ENDDO
-+#ifdef debugsolwf
++
++!!!solpbz
 +      CALL FFT3D(CWORK, GRIDC, 1) 
 +      CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_HAR, GRIDC)
++!!!#ifdef debugsolwf
 +!!!      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_HAR'
 +!!!      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_HAR', RWORK_HAR)
-+#endif
++!!!#endif
++!!!solpbz
 +!-----------------------------------------------------------------------
 +! add the dielectric corrections to CVTOT and the energy
 +!-----------------------------------------------------------------------
@@ -325,41 +340,75 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 +ELSE
 +         E%ediel = 0._q
 +ENDIF
-+!!!#ifdef debugsolwf
++
++!!!solpbz
 +!!!      CALL FFT3D(Vcorr, GRIDC, 1) 
 +!!!      CALL UNPACK_C2R(Vcorr, 1.0_q, Vcorr, 0.0_q, RWORK_VCORR, GRIDC)
++!!!#ifdef debugsolwf
 +!!!      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_VCORR'
 +!!!      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_VCORR', RWORK_VCORR)
 +!!!#endif
++!!!solpbz
  !-----------------------------------------------------------------------
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
-@@ -338,6 +388,15 @@
+@@ -338,6 +406,36 @@
        DO I=1,GRIDC%RC%NP
           CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
        ENDDO
-+#ifdef debugsolwf
++
++!!!solpbz
 +      CALL FFT3D(CWORK, GRIDC, 1) 
 +      CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_PSP, GRIDC)
++!!!#ifdef debugsolwf
 +!!!      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PSP'
 +!!!      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP', RWORK_PSP)
++!!!#endif
 +      RWORK_PSP = RWORK_PSP + RWORK_HAR
-+      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
-+      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RWORK_PSP)
++      !copy CHTOT to CWORK_K
++      CALL RC_ADD(CHTOT, 1.0, CHTOT, 0.0, CWORK_K, GRIDC)
++      !to real space
++      CALL FFT3D(CWORK_K, GRIDC, 1) 
++      CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, GRIDC)
++      CALL GET_VAC_LEVEL(GRIDC, RWORK_CHG, RWORK_PSP, VACPOT_PSP)
++#ifdef debugsol
++      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
 +#endif
++      VACPOT = VACPOT_POIS - VACPOT_PSP
++      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_POIS - VACPOT_PSP = ', VACPOT
++#ifdef debugsolwf
++      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
++      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RWORK_PSP)
++      !shift by vacpot
++      RWORK_PSP = RWORK_PSP + VACPOT
++      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR (shifted by VACPOT)'
++      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR_SHIFTED', RWORK_PSP)
++#endif
++!!!solpbz
++
        CALL POT_FLIP(CVTOT, GRIDC,WDES%NCDIJ )
  !=======================================================================
  ! if overlap is used :
-@@ -365,6 +424,12 @@
+@@ -363,8 +461,22 @@
+ #endif
+          CALL FFT3D(CVTOT(1,ISP),GRIDC,1)
        ENDDO
++      
++!!!solpbz
++      !shift SV and CVTOT by VACPOT
++      !SV = SV + VACPOT
++      !CVTOT = CVTOT + CMPLX(VACPOT, VACPOT)
++!!!solpbz
  
        DEALLOCATE(CWORK1,CWORK)
 +      IF (LSOL) DEALLOCATE(Vcorr)
-+#ifdef debugsolwf
++!!!solpbz
 +      DEALLOCATE(RWORK_HAR)
 +      DEALLOCATE(RWORK_PSP)
-+      DEALLOCATE(RWORK_VCORR)
-+#endif
++      !DEALLOCATE(RWORK_VCORR)
++      DEALLOCATE(RWORK_CHG)
++      DEALLOCATE(CWORK_K)
++!!!solpbz
        RETURN
      END SUBROUTINE POTLOK
  

@@ -34,7 +34,7 @@ MODULE POT_LPCM_K
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD
  PRIVATE :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
  PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
- PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
+ PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE, GET_VAC_LEVEL
 
  INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
  REAL(q), PRIVATE, SAVE                 :: CHGMIN = 1E-10_q
@@ -43,6 +43,7 @@ MODULE POT_LPCM_K
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,&
                                            & kappa2b_k,CORE_C, tau,EDIFFSOL
  TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
+ REAL(q), PUBLIC, SAVE :: VACPOT_POIS = 0._q
 
  CONTAINS
 
@@ -55,7 +56,7 @@ MODULE POT_LPCM_K
 !!
 !!================================================================================
 
-SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN,&
+SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTOT, TOTN,&
                             & PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k1, sigma_k1,&
                             & nc_k1, eb_k1, kappa2b_k1, CORE_C1, sigma_rc_k1,&
                             & tau1, ediffs )
@@ -71,23 +72,27 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN,&
  COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
  COMPLEX(q),ALLOCATABLE :: phi_tilda(:),phi(:),Vcav(:)
  COMPLEX(q),INTENT(OUT) :: Vdiel(SP_GRIDC%MPLWV)
- COMPLEX(q),INTENT(IN) ::TOTN(SP_GRIDC%MPLWV),PS_TOTN(SP_GRIDC%MPLWV) 
+ COMPLEX(q),INTENT(IN) :: SP_CHTOT(SP_GRIDC%MPLWV)
+ COMPLEX(q),INTENT(IN) :: TOTN(SP_GRIDC%MPLWV),PS_TOTN(SP_GRIDC%MPLWV) 
  REAL(q),ALLOCATABLE :: SP_d_eps(:), SP_kappa2(:)
  RGRID,ALLOCATABLE :: RWORK(:)
  INTEGER :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
  REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1,CORE_C1,tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
-#ifdef debugsolwf
- RGRID,ALLOCATABLE :: RWORK_PHI(:)
-#endif
+!!!vacuum level
+ RGRID,ALLOCATABLE :: RWORK_PHI(:), RWORK_CHG(:)
+ COMPLEX(q),ALLOCATABLE :: CWORK_K(:)
+!!!vacuum level
 
  ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)), SP_kappa2(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV), phi(SP_GRIDC%MPLWV))
  ALLOCATE(Vcav(SP_GRIDC%MPLWV), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
-#ifdef debugsolwf
+!!!vacuum level
  ALLOCATE(RWORK_PHI(DIMREAL(SP_GRIDC%MPLWV)))
-#endif
+ ALLOCATE(RWORK_CHG(DIMREAL(SP_GRIDC%MPLWV)))
+ ALLOCATE(CWORK_K(SP_GRIDC%MPLWV))
+!!!vacuum level
       
  IF (PK_COUNTER == 1)  THEN
    ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
@@ -218,17 +223,30 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN,&
  ENDIF
 
  PK_COUNTER = PK_COUNTER + 1
-#ifdef debugsolwf
+!!!vacuum level
       CALL FFT3D(phi, SP_GRIDC, 1) 
       CALL UNPACK_C2R(phi, 1.0_q, phi, 0.0_q, RWORK_PHI, SP_GRIDC)
+#ifdef debugsolwf
       IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_POIS'
       CALL WRITE_TO_FILE(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, 'PHI_POIS', RWORK_PHI)
 #endif
+      !copy CHTOT to CWORK_K
+      CALL RC_ADD(SP_CHTOT, 1.0, SP_CHTOT, 0.0, CWORK_K, SP_GRIDC)
+      !to real space
+      CALL FFT3D(CWORK_K, SP_GRIDC, 1) 
+      CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, SP_GRIDC)
+      CALL GET_VAC_LEVEL(SP_GRIDC, RWORK_CHG, RWORK_PHI, VACPOT_POIS)
+#ifdef debugsol
+      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'VACPOT_POIS = ', VACPOT_POIS
+#endif
+!!!vacuum level
       
  DEALLOCATE(SP_d_eps, SP_kappa2, phi_tilda, phi, Vcav, RWORK)
-#ifdef debugsolwf
+!!!vacuum level
  DEALLOCATE(RWORK_PHI)
-#endif
+ DEALLOCATE(RWORK_CHG)
+ DEALLOCATE(CWORK_K)
+!!!vacuum level
 
  RETURN
 
@@ -1499,17 +1517,88 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
  IF ( MOD(NWRITTEN,NWRITE)/=0 ) WRITE(IU,*)' '
 
-! MASK = ABS(AVG_XY - MAXVAL(AVG_XY) ) <= 1E-4
-! SUM(AVG_XY, MASK)/COUNT(MASK) 
  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'MAX AVG_XY = ', MAXVAL(AVG_XY)
- IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'AVG_XY averaged along vacuum z= ', MAXVAL(AVG_XY), SUM(AVG_XY(GRIDC%NGZ-9:GRIDC%NGZ)) / 10.
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'AVG_XY averaged along vacuum z = ', SUM(AVG_XY(GRIDC%NGZ-9:GRIDC%NGZ)) / 10.
+
+ DEALLOCATE(AVG_XY)
 
  DEALLOCATE(WORK)
- DEALLOCATE(AVG_XY)
 
  RETURN
 
 END SUBROUTINE WRITE_TO_FILE
+
+!>========================== SUBROUTINE GET_VAC_LEVEL ============================
+!!
+!! Get the vacuum level
+!! uses the AVERAG subroutine from dipol.F
+!! both CHTOT and CVTOT must in real space
+!!
+!!=============================================================================
+
+SUBROUTINE GET_VAC_LEVEL(GRIDC, CHTOT, CVTOT, VACPOT)
+
+ USE prec
+ USE mgrid
+ USE poscar
+
+ IMPLICIT NONE
+
+ TYPE (grid_3d),INTENT(IN) :: GRIDC
+
+ RGRID CVTOT(DIMREAL(GRIDC%MPLWV))
+ RGRID CHTOT(DIMREAL(GRIDC%MPLWV))
+
+ REAL(q),ALLOCATABLE :: DENLIN(:)
+
+ REAL(q) :: DENMIN , DEN, VACPOT
+ INTEGER(q) :: DIRECTION, IND, NOUT, II, INDMINDEN, II_IND
+ INTEGER,PARAMETER :: NWIN = 3
+ REAL(q) :: WINDOW(-NWIN:NWIN) = (/0.1,0.2,0.3,0.4,0.3,0.2,0.1/)
+
+ ALLOCATE(DENLIN(MAX(GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ)) )
+ 
+ DENMIN = 1E9
+ !x-->1, y-->2, z-->3
+ DIRECTION = 3
+ NOUT = GRIDC%NGPTAR(DIRECTION) 
+
+ DENLIN = 0._q
+ !average chargedensity along direction, DIRECTION
+ CALL AVERAG(GRIDC, DIRECTION, CHTOT, DENLIN, .TRUE.)
+
+ !set vacuum to be the point in space where the electronic charge density is the minimum 
+ !get the index corresponding to the minimum charge density
+ DO IND = 1, NOUT
+    !use a sliding average to smoothen in charge density
+    DEN = 0
+    DO II = -NWIN, NWIN
+       II_IND = MOD(IND+II-1+NOUT, NOUT) + 1
+       DEN = DEN + DENLIN(II_IND) * WINDOW(II)
+    ENDDO
+    IF (DEN < DENMIN) THEN
+       DENMIN = DEN
+       INDMINDEN = IND
+    ENDIF
+ ENDDO
+
+ DENLIN = 0._q
+ !average potential along direction, DIRECTION
+ CALL AVERAG(GRIDC, DIRECTION, CVTOT, DENLIN, .FALSE.)
+
+ VACPOT = DENLIN(MOD(INDMINDEN + NOUT, NOUT))
+ !VACPOT=DENLIN(MOD(INDMIN+INT(WIDTH)+NOUT,NOUT))
+ !DIP%VACUUM(2)=VACPOT
+#ifdef debugsol
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'DENMIN = ', DENMIN
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'INDMINDEN = ', INDMINDEN, MOD(INDMINDEN + NOUT, NOUT)
+#endif
+
+ DEALLOCATE(DENLIN)
+
+ RETURN
+
+END SUBROUTINE GET_VAC_LEVEL
 
 END MODULE POT_LPCM_K
 !***********************************************************************************
