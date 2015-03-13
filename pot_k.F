@@ -731,13 +731,15 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
 
 !!!default values
 !!! shape function parameters for linear solvation
+!!! linearpcm params, if LNLSOL = .TRUE. then nc_k and tau will be reset
   sigma_k = 0.6_q !!!determines the width of the interface
   nc_k    = 0.0025_q !!!cut-off charge density,old value: 0.00473_q
   tau     = 5.25E-4_q
 
 !!!default values for the paramters that describe the solvent environment
+!!! water @ 25C
   eb_k     = 78.4_q    !!!80.0_q
-  p0_k     = 0      !!!not used, computed from eb_k and einfty_k
+  p0_k     = 0.94/0.393430_q      !!! in Debye, 1 D = 0.393430 ea0
   einfty_k = 1.78_q   !!!1.33 * 1.33 ! square of water refractive index 
   Nsol_k   = 55.35_q  !!!@ 25C, 997.075/18.015 = 55.35!!!55.5 !mol/L, for water
   T_k      = 298.15_q !!!25C, temperature in kelvin
@@ -749,13 +751,6 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
 
 !!!read in the solvation parameters
   CALL SOL_READER()
-
-!!!moved to sol_reader
-!!! if LNLSOL = TRUE, reset the default solvation params, nc_k and tau
-!!!  IF (LNLSOL) THEN
-!!!       nc_k    = 0.00675_q !!!
-!!!       tau     = 9.23E-4_q !!!
-!!!  ENDIF
 
   RETURN
 
@@ -813,7 +808,7 @@ END SUBROUTINE SET_SOL_IO
 !!! before the values are read from the ICAR
   IF (LNLSOL) THEN
        nc_k    = 0.00675_q !!!
-       tau     = 9.23E-4_q !!!
+       tau     = 9.23E-4_q !!! for water
   ENDIF
 
 

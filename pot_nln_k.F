@@ -30,30 +30,39 @@ MODULE POT_NLN_K
  PRIVATE :: VACORR_ELECTROSTATIC, VACORR_NON_ELECTROSTATIC, VA_RHOB, VA_CAV, VA_DMED
  PRIVATE :: INIT_EFIELD, TEST_K
 
- TYPE(type_info), PRIVATE, SAVE :: T_INFO_NLN
- TYPE(potcar), PRIVATE, ALLOCATABLE, SAVE :: P_NLN(:)
- TYPE (latt), PRIVATE, SAVE :: LATT_CUR_NLN
- TYPE(grid_3d), PRIVATE, SAVE :: GRIDC_NLN
- TYPE (in_struct), PRIVATE, SAVE :: IO_NLN
+ TYPE(type_info), PRIVATE :: T_INFO_NLN
+ TYPE(potcar), PRIVATE, ALLOCATABLE :: P_NLN(:)
+ TYPE (latt), PRIVATE :: LATT_CUR_NLN
+ TYPE(grid_3d), PRIVATE :: GRIDC_NLN
+ TYPE (in_struct), PRIVATE :: IO_NLN
 
- LOGICAL, SAVE                          :: LBCHG = .FALSE.
- REAL(q), PRIVATE, SAVE    :: p0_k, einfty_k, Nsol_k, kb_k, T_k, KT, dv
- REAL(q), PRIVATE, SAVE    :: pkT !p0/k/T
- REAL(q), PRIVATE, PARAMETER    :: HART_TO_EV_K = 2 * RYTOEV
- REAL(q), PRIVATE, SAVE    :: EDIFFSOL_INNER, EDIFFSOL_OUTER, DIFFPHI=1._q
- COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE  :: PHI_TILDA(:) !soln to the poisson eqn
- REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: EFIELD(:)!, EFIELD_TMP(:) !modulus of electri field vector in real space
- REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: R_PS_TOTN(:) !ps_totn in real space
- REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: GVEC_NLN(:,:) !array og G vectors
+ LOGICAL, SAVE :: LBCHG = .FALSE.
+ REAL(q), PRIVATE, SAVE :: p0_k, einfty_k, Nsol_k, kb_k, T_k, KT, xx_k, dv
+ REAL(q), PRIVATE, SAVE :: pkT !p0/k/T
+ REAL(q), PRIVATE, PARAMETER :: HART_TO_EV_K = 2 * RYTOEV
+ REAL(q), PRIVATE, SAVE :: EDIFFSOL_INNER, EDIFFSOL_OUTER, DIFFPHI=1._q
+ COMPLEX(q), PRIVATE, ALLOCATABLE :: PHI_TILDA(:) !soln to the poisson eqn
+ !modulus of electri field vector in real space
+ REAL(q), PRIVATE, ALLOCATABLE :: EFIELD(:)
+ !ps_totn in real space
+ REAL(q), PRIVATE, ALLOCATABLE :: R_PS_TOTN(:) 
+ !array of G vectors
+ REAL(q), PRIVATE, ALLOCATABLE :: GVEC_NLN(:,:) 
 
- INTEGER(q), PRIVATE, SAVE :: SIZE_REAL, SIZE_REC !allocation size
- INTEGER(q), PRIVATE, SAVE :: SIZE_RLNP, SIZE_RCNP !actual size
+ INTEGER(q), PRIVATE :: SIZE_REAL, SIZE_REC !allocation size
+ INTEGER(q), PRIVATE :: SIZE_RLNP, SIZE_RCNP !actual size
 
-
+ !effective field table size
+ INTEGER(q), PRIVATE, PARAMETER :: N_EF1 = 5000, N_EF2 = 3000, N_EF3 = 1000, N_EF = 9000
+ !effective field table, 
+ ! and spline coefficients for the effective field
+ REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: E_EFF_TAB(:), E_EFF_SPL(:,:)
+ ! effective field corresponding to each 
+ ! actual field (obtained from spline fit)
+ REAL(q), PRIVATE, ALLOCATABLE :: E_EFF(:)
+ REAL(q), PRIVATE, SAVE    :: alpha_k
 
  CONTAINS
-
-
 
 !>========================== SUBROUTINE CONSTRUCTOR_NLN ======================
 !!
@@ -98,33 +107,37 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1
  SIZE_RLNP = GRIDC_NLN%RL%NCOL * GRIDC_NLN%RL%NROW
 
  ALLOCATE(P_NLN(T_INFO_NLN%NTYP))
-! ALLOCATE(EFIELD(SIZE_REAL), EFIELD_TMP(SIZE_REAL), R_PS_TOTN(SIZE_REAL))
  ALLOCATE(EFIELD(SIZE_REAL), R_PS_TOTN(SIZE_REAL))
  ALLOCATE(PHI_TILDA(SIZE_REC), GVEC_NLN(3, SIZE_RCNP))
+ ALLOCATE(E_EFF(SIZE_REAL))
 
  IF (PK_COUNTER == 1)  THEN
-   ALLOCATE(SOL_PHI(SIZE_REC))
-   SOL_PHI = 0._q
+
+    ALLOCATE(E_EFF_TAB(N_EF))
+    ALLOCATE(E_EFF_SPL(N_EF, 5))
+    E_EFF_TAB = 0._q
+    E_EFF_SPL = 0._q
+
+    ALLOCATE(SOL_PHI(SIZE_REC))
+    SOL_PHI = 0._q
+
+    CALL SET_PARAMS_LPCM(sigma_nc_k1, sigma_k1, nc_k1, eb_k1, CORE_C1, sigma_rc_k1, tau1, &
+                      & ediffsol1, T_INFO_NLN%NTYP)
+    CALL SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
  ENDIF
 
  P_NLN = P
  PHI_TILDA = 0._q
 ! EFIELD = 0._q
-! EFIELD_TMP = 0._q
  R_PS_TOTN = 0._q
  GVEC_NLN = 0._q
-
- CALL SET_PARAMS_LPCM(sigma_nc_k1, sigma_k1, nc_k1, eb_k1, CORE_C1, sigma_rc_k1, tau1, &
-                      & ediffsol1, T_INFO_NLN%NTYP)
- CALL SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
+ E_EFF = 0._q
 
  CALL SET_GVEC_NLN()
 
  RETURN
 
 END SUBROUTINE CONSTRUCTOR_NLN
-
-
 
 
 !>========================== SUBROUTINE DESTRUCTOR_NLN ======================
@@ -136,16 +149,13 @@ SUBROUTINE DESTRUCTOR_NLN()
 
  IMPLICIT NONE
 
-! DEALLOCATE(P_NLN, EFIELD, EFIELD_TMP, R_PS_TOTN, PHI_TILDA, GVEC_NLN)
- DEALLOCATE(P_NLN, EFIELD, R_PS_TOTN, PHI_TILDA, GVEC_NLN)
+ DEALLOCATE(P_NLN, EFIELD, R_PS_TOTN, PHI_TILDA, GVEC_NLN, E_EFF)
 
  PK_COUNTER = PK_COUNTER + 1
 
  RETURN
 
 END SUBROUTINE DESTRUCTOR_NLN
-
-
 
 
 !>========================== SUBROUTINE SET_PARAMS_NLN =================
@@ -163,7 +173,6 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 !dimensionless quatity
 !einfty_k = (refractive index)**2
 !-----------------------------------------------------------------
-
  einfty_k = einfty_k1
 
 !-----------------------------------------------------------------
@@ -175,39 +184,33 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 ! also multiply by AUTOA**3 to convert to atomic units
 !for the above example the value is approximately 0.005 in atomic units
 !-----------------------------------------------------------------
-
  Nsol_k   = Nsol_k1 * 6.022 * 1E-4_q * (AUTOA**3)
 
 !-----------------------------------------------------------------
 !temperature in kelvin
 !-----------------------------------------------------------------
-
  T_k      = T_k1
 
 !-----------------------------------------------------------------
 ! boltzmann const in eV/K from constant.inc
 !-----------------------------------------------------------------
-
  kb_k     = BOLKEV 
 
 !-----------------------------------------------------------------
 !in atomic units, hartree_to_ev = 2 * rydberg_to_ev
 !-----------------------------------------------------------------
-
  KT = kb_k * T_k/(2 * RYTOEV)
-
 
 !Note:
 !for the above example, N*k*T = 0.005 * 8.6173857E-5 * 300/ 2 / 13.61 
 ! = 4.75e-06 hartree/a0^3, where a0 = bohr radius 
 ! ~= 0.9 meV/Angstrom^3
 
-
 !-----------------------------------------------------------------
 !1 Debye = 0.393430 e*a0
 ! where the e is the charge of the electron and a0 the bohr radius.
 !in atomic units e=1 and a0=1 so 1 Debye = 0.393430 au
-! p0_k is not independent, it can be computed from eb_k and einfty_k
+! p0_k is not independent, it can be computed from eb_k and einfty_k <-- ignore
 ! the value of p0_k obtained from the INCAR is not used
 ! p0_k     = p0_k1
 !
@@ -215,17 +218,30 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
 !
 !p0_k in atomic units
 !-----------------------------------------------------------------
-
- p0_k =  SQRT( (3._q * (eb_k - einfty_k) * KT)/ (4._q * PI * Nsol_k )  )
-
+! p0_k =  SQRT( (3._q * (eb_k - einfty_k) * KT)/ (4._q * PI * Nsol_k )  )
+ p0_k     =  p0_k1 * 0.393430_q
 
 !-----------------------------------------------------------------
 !multiply by pkT to make the electric field nondimensional
 !in atomic units
 !note: electric field must be in atomic units too
 !-----------------------------------------------------------------
-
  pkT      = p0_k/KT
+
+!-----------------------------------------------------------------
+!the alpha parameter from the paper
+!-----------------------------------------------------------------
+ alpha_k =  3._q - (4._q * PI * Nsol_k * p0_k**2) / KT / (eb_k - einfty_k)
+
+!-----------------------------------------------------------------
+!the X parameter from the paper
+!-----------------------------------------------------------------
+ xx_k =  KT * (einfty_k - 1._q) / ( 4._q * PI * Nsol_k * p0_k**2 ) 
+
+
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "eb_k, einfty_k, Nsol_k, p0_k, T_k, KT, pkT, alpha_k, xx_k (all in a.u) ", eb_k, einfty_k, Nsol_k, p0_k, T_k, KT, pkT, alpha_k, xx_k
+#endif
 
  RETURN
 
@@ -256,7 +272,6 @@ FUNCTION SHAPE_FUNC(I)
 END FUNCTION SHAPE_FUNC
 
 
-
 !>========================== FUNCTION SHAPE_FUNC_DER =================
 !!
 !! shape function derivative in real space
@@ -281,7 +296,6 @@ FUNCTION SHAPE_FUNC_DER(I)
  RETURN
 
 END FUNCTION SHAPE_FUNC_DER
-
 
 
 !>========================== FUNCTION LANG_NLN ==========================
@@ -309,11 +323,13 @@ FUNCTION LANG_NLN(NDIM_E)
 END FUNCTION LANG_NLN
 
 
-
 !>========================== FUNCTION LANG_X_NLN ==========================
 !!
-!! Compute ( coth(x) - 1/x) /x, in real space
-!! x = NDIM_E = \frac{p0 * |E|}{k * T}
+!! Compute f(e) = ( coth(e) - 1/e) /e, in real space
+!! e = effective field s.t e(1-alpha*f(e)) = x
+!! x = \frac{p0 * |E|}{k * T}
+!! input, I = index
+!! output, LANG_X_NLN = f(e)
 !!
 !!=======================================================================
 FUNCTION LANG_X_NLN(I)
@@ -321,11 +337,31 @@ FUNCTION LANG_X_NLN(I)
  IMPLICIT NONE
 
  INTEGER(q) :: I
- REAL(q) :: NDIM_E, LANG_X_NLN, SINHX, COSHX, EXPX, EXP_X, alpha
-!scaling factor
- alpha = 2.81_q
+ REAL(q) :: NDIM_E, LANG_X_NLN, SINHX, COSHX, EXPX, EXP_X
 
- NDIM_E = alpha * EFIELD(I) * pkT
+ NDIM_E = E_EFF(I) !EFIELD(I) * pkT
+
+ LANG_X_NLN = F_E(NDIM_E)
+
+ RETURN
+
+END FUNCTION LANG_X_NLN
+
+
+!>========================== FUNCTION LANG_X_NLN ==========================
+!!
+!! Compute f(e) = ( coth(e) - 1/e) /e, in real space
+!! e = effective field s.t e(1-alpha*f(e)) = x
+!! x = \frac{p0 * |E|}{k * T}
+!! input, NDIM_E = e
+!! output, F_E = f(e)
+!!
+!!=======================================================================
+FUNCTION F_E(NDIM_E)
+
+ IMPLICIT NONE
+
+ REAL(q) :: NDIM_E, F_E, SINHX, COSHX, EXPX, EXP_X
 
 !only interested in the magnitude of the electric field
  IF (NDIM_E < 0) THEN
@@ -333,46 +369,41 @@ FUNCTION LANG_X_NLN(I)
     STOP
  ENDIF
 
-!coth(x) and 1/x, individually diverges as x-->0
-! but coth(x) - 1/x --> 0 as x-->0
-! when x is very samll, numerical errors dominate. 
-! L(x)/x --> 0 as x --> \infty since L(x) --> 1 as x --> \infty
-! L(x)/x --> 1/3 as x--> 0, 
-!note: L(x)/x ~= 1/3 - 1/45 x^2  ==> for x = 1e-4 , L(x)/x - (1/3) ~= 2e-10
-!on the other hand ( (cosh(x)/sinh(x) - 1/x)/x - (1/3) ) ~= 5e-9
+ !coth(x) and 1/x, individually diverges as x-->0
+ ! but coth(x) - 1/x --> 0 as x-->0
+ ! when x is very samll, numerical errors dominate. 
+ ! L(x)/x --> 0 as x --> \infty since L(x) --> 1 as x --> \infty
+ ! L(x)/x --> 1/3 as x--> 0, 
+ !note: L(x)/x ~= 1/3 - 1/45 x^2  ==> for x = 1e-4 , L(x)/x - (1/3) ~= 2e-10
+ !on the other hand ( (cosh(x)/sinh(x) - 1/x)/x - (1/3) ) ~= 5e-9
 
-
-!case 1: x -->0, L/x --> 1/3
+ !case 1: x -->0, L/x --> 1/3
  IF (NDIM_E < 1E-4_q) THEN
+    F_E = 1._q/3._q - 1./45 * (NDIM_E**2)
 
-    LANG_X_NLN = 1._q/3._q - 1./45 * (NDIM_E**2)
-
-!case 2: x --> \infty, L/x --> 1/x since L --> 1
-!but exp(x) = 1e30 corresponds to x ~= 70, if the L/x is approximated as 1/x then the error
-! introduced is pretty significant. But, with L/x ~= 1/x - 1/x^2, the error is negligible for x >= 70
+    !case 2: x --> \infty, L/x --> 1/x since L --> 1
+    !but exp(x) = 1e30 corresponds to x ~= 70, if the L/x is approximated as 1/x then the error
+    ! introduced is pretty significant. But, with L/x ~= 1/x - 1/x^2, the error is negligible for x >= 70
  ELSE IF (EXP(NDIM_E) > 1E30_q) THEN
-
-        LANG_X_NLN = 1._q/NDIM_E - 1._q/(NDIM_E**2)
+        F_E = 1._q/NDIM_E - 1._q/(NDIM_E**2)
 
  ELSE
-
-     LANG_X_NLN = LANG_NLN(NDIM_E) / NDIM_E
+     F_E = LANG_NLN(NDIM_E) / NDIM_E
 
  ENDIF
 
-! WRITE(*,*) 'NDIM_E, LANG_X_NLN  ', NDIM_E, LANG_X_NLN
-
-!better safe than sorry
-!0 < L(x)/x < 1/3
- IF ( ( (LANG_X_NLN - 1._q/3._q) > 1E-6) .OR. (LANG_X_NLN < 0) ) THEN 
-    WRITE(*,*) "ERROR: 0 < L(x)/x < 1/3 ", LANG_X_NLN
+ ! WRITE(*,*) 'NDIM_E, F_E  ', NDIM_E, F_E
+ 
+ !better safe than sorry
+ !0 < L(x)/x < 1/3
+ IF ( ( (F_E - 1._q/3._q) > 1E-6) .OR. (F_E < 0) ) THEN 
+    WRITE(*,*) "ERROR: 0 < L(x)/x < 1/3 ", F_E
     STOP
  ENDIF
 
  RETURN
 
-END FUNCTION LANG_X_NLN
-
+END FUNCTION F_E
 
 
 !>========================== FUNCTION CHI_NLN ===========================
@@ -387,18 +418,21 @@ FUNCTION CHI_NLN(I)
  INTEGER(q) :: I
  REAL(q) :: NDIM_E, CHI_NLN
 
- NDIM_E = EFIELD(I) * pkT
+ NDIM_E = E_EFF(I) !EFIELD(I) * pkT
 
- CHI_NLN =  ( 3 * (EB_K - EINFTY_K) * LANG_X_NLN(I) + (EINFTY_K - 1._q) )
+ IF (PK_COUNTER == 1) THEN
+    CHI_NLN =  ( EB_K - 1._q )
+ ELSE
+    CHI_NLN =  ( (EB_K - EINFTY_K) * ( (3._q - alpha_k)/alpha_k ) * ( G_E(NDIM_E) - 1._q )  + (EINFTY_K - 1._q) )
+ ENDIF
 
-! WRITE(*,*) 'shape_func, chi', SHAPE_FUNC(I), CHI_NLN
+ ! WRITE(*,*) 'shape_func, chi', SHAPE_FUNC(I), CHI_NLN
 
  CHI_NLN = CHI_NLN * SHAPE_FUNC(I) 
 
  RETURN
 
 END FUNCTION CHI_NLN
-
 
 
 !>========================== SUBROUTINE RHOB_NLN =================
@@ -423,8 +457,8 @@ SUBROUTINE COMPUTE_RHOB_NLN()
  ALLOCATE(gradphi_z_in(SIZE_REC))
 
 !!!initialize
-R_CHI_WORK = 0._q
-R_RHOB_WORK = 0._q
+ R_CHI_WORK = 0._q
+ R_RHOB_WORK = 0._q
 
 !susceptibility in real space
  DO I = 1, SIZE_RLNP
@@ -462,8 +496,6 @@ C_RHOB_WORK = C_RHOB_WORK * (4 * PI / EDEPS) * 4 * PI
 END SUBROUTINE COMPUTE_RHOB_NLN
 
 
-
-
 !>==========================SUBROUTINE INIT_EFIELD =======================
 !!
 !! initialozes EFILED = |E| = |\grad \phi|, using Sol_phi from pot_lpcm_cav.F
@@ -475,28 +507,55 @@ SUBROUTINE INIT_EFIELD()
 
  IMPLICIT NONE
 
+ INTEGER(q)   :: I
+ REAL(q)      :: GX,GY,GZ,tmp, E_MAX, E_MIN, E_MID1, E_MID2
+ REAL(q)      :: X, Y, YDER
+ REAL(q), ALLOCATABLE :: E_X(:)
 
- INTEGER(q)   :: I,N1,N2,N3,NC
- REAL(q)      :: GX,GY,GZ,tmp
- 
-!reurns EFIELD = |\grad \phi|^2 in real space
+ !reurns EFIELD = |\grad \phi|^2 in real space
  CALL NABLAN(SOL_PHI, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
 
-! |E| = |\grad \phi| in real space and in atomic units
+ ! |E| = |\grad \phi| in real space and in atomic units
  DO I = 1, SIZE_RLNP
-
-!we only need the magnitude of the electric field
-!in atomic units
+    !we only need the magnitude of the electric field
+    !in atomic units
     EFIELD(I) = SQRT(ABS(EFIELD(I))) * 4 * PI * AUTOA * AUTOA / LATT_CUR_NLN%OMEGA
-!    EFIELD_TMP(I) = EFIELD(I)
-    EFIELD(I) = 0._q
-
+    !    EFIELD_TMP(I) = EFIELD(I)
  ENDDO
+
+ !max and min of electricfield in atomic units
+ E_MIN = 1E-6_q
+ E_MID1 = 0.01_q
+ E_MID2 = 20._q
+ E_MAX = 100._q
+
+ !set the lookup table and the spline coefficients
+ !sets E_X, E_EFF_TAB, E_EFF_SPL
+ IF (PK_COUNTER == 1) THEN 
+    ALLOCATE(E_X(N_EF))
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the lookup table and the spline coeffs"
+#endif
+    CALL SET_EEFF_TABLE(E_MIN, E_MID1, E_MID2, E_MAX, E_X)
+    CALL WRITE_ARRAY_TO_FILE(E_X, N_EF, GRIDC_NLN, 'E_X')
+    CALL WRITE_ARRAY_TO_FILE(E_EFF_TAB, N_EF, GRIDC_NLN, 'EF_TABLE')
+    CALL SPLCPY(E_X, E_EFF_TAB, E_EFF_SPL, N_EF, N_EF, 10E30_q) 
+    DEALLOCATE(E_X)
+ ENDIF
+
+ !spline fit at the nondimensional electric field
+ !set the effective field array
+ DO I = 1, SIZE_RLNP
+    X = EFIELD(I) * pkT
+    CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
+    E_EFF(I) =  Y
+ ENDDO
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'E_EFF', E_EFF)
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'EFIELD', EFIELD)
 
  RETURN
 
 END SUBROUTINE INIT_EFIELD
-
 
 
 !>==========================SUBROUTINE UPDATE_EFIELD =======================
@@ -510,20 +569,32 @@ SUBROUTINE UPDATE_EFIELD()
 
  IMPLICIT NONE
 
- INTEGER(q)   :: I,N1,N2,N3,NC
- REAL(q)      :: GX,GY,GZ,tmp
+ INTEGER(q) :: I,N1,N2,N3,NC
+ REAL(q) :: GX,GY,GZ,tmp
+ REAL(q) :: X, Y, YDER
  
-!reurns EFIELD = |\grad \phi|^2 in real space
+ !returns EFIELD = |\grad \phi|^2 in real space
  CALL NABLAN(PHI_TILDA, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
 
-! |E| = |\grad \phi| in real space and in atomic units
+ ! |E| = |\grad \phi| in real space and in atomic units
  DO I = 1, SIZE_RLNP
-
-!we only need the magnitude of the electric field
-!in atomic units
+    !we only need the magnitude of the electric field
+    !in atomic units
     EFIELD(I) = SQRT(ABS(EFIELD(I))) * 4 * PI * AUTOA * AUTOA / EDEPS
-!    EFIELD_TMP(I) = EFIELD(I)
+    ! EFIELD_TMP(I) = EFIELD(I)
+ ENDDO
 
+!#ifdef debugsol
+! WRITE(*,*) 'MAX efield in a.u', MAXVAL(EFIELD(:))
+! WRITE(*,*) 'MIN efield in a.u', MINVAL(EFIELD(:))
+!#endif
+
+ !spline fit at the nondimensional electric field
+ !set the effective field array
+ DO I = 1, SIZE_RLNP
+    X = EFIELD(I) * pkT
+    CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
+    E_EFF(I) =  Y
  ENDDO
 
  RETURN
@@ -531,13 +602,86 @@ SUBROUTINE UPDATE_EFIELD()
 END SUBROUTINE UPDATE_EFIELD
 
 
+!>==========================SUBROUTINE SET_EEFF_TABLE =======================
+!!
+!! set up the effective field table
+!! input, E_MIN and E_MAX in a.u, E_X =  dimensionless actual electric field
+!!
+!!===========================================================================
+SUBROUTINE SET_EEFF_TABLE(E_MIN, E_MID1, E_MID2, E_MAX, E_X)
+
+ IMPLICIT NONE
+
+ INTEGER(q)   :: I
+ REAL(q)      :: E, E_MIN, E_MAX, E_MID1, E_MID2, DE, E_X(N_EF), DIMLESS_E
+
+ E = E_MIN
+ DO I = 1, N_EF
+    !IF (I <= N_EF1 ) THEN
+    !   DE = (E_MID1 - E_MIN)/N_EF1
+    !ELSE IF (I > N_EF1 .AND. I <= N_EF2) THEN
+    !   DE = (E_MID2 - E_MID1)/N_EF2
+    !ELSE
+    !   DE = (E_MAX - E_MID2)/N_EF3
+    !ENDIF
+    E = E_MIN * (E_MAX/E_MIN)**(REAL(I,q)/REAL(N_EF,q))
+    DIMLESS_E = E * pkT !(E_MIN + DE * (I-1)) * pkT
+    E_X(I) = DIMLESS_E
+    E_EFF_TAB(I) = EF(DIMLESS_E, 1E-8_q)
+    !E = E + DE
+ ENDDO
+
+ RETURN
+
+END SUBROUTINE SET_EEFF_TABLE
+
+!>==========================FUNCTION EF====================================
+!!
+!!  effective electric field, e = (pE/kT) / (1 - alpha * f(e))
+!!  input, DIMLESS_E = pE/kT 
+!!  ouput, EF = e
+!!
+!!==========================================================================
+FUNCTION EF(DIMLESS_E, TOL)
+
+  IMPLICIT NONE
+
+  REAL(q) :: EF, EF0, D_EF, DIMLESS_E, TOL
+  
+  EF0 = DIMLESS_E * 3._q/(3._q - alpha_k)
+  D_EF = EF0
+
+  DO WHILE (ABS(D_EF) > TOL)
+     EF = DIMLESS_E * G_E(EF0)
+     D_EF = EF - EF0
+     EF0 = EF
+  END DO
+
+END FUNCTION EF
+
+!>========================== FUNCTION G_E ====================================
+!!
+!!  g(e) = 1 / (1 - alpha*f(e))
+!!  input, E = e, the effective electric field
+!!  ouput, G_E = g(e)
+!!
+!!==========================================================================
+FUNCTION G_E(E)
+
+  IMPLICIT NONE
+
+  REAL(q) :: E, G_E
+
+  G_E = 1._q /(1._q - alpha_k * F_E(E))
+
+END FUNCTION G_E
+
 
 !>==========================SUBROUTINE COMPUTE_EPSILON_NLN=================
 !!
 !!  \espilon = 1 + \chi, in real space
 !!
 !!==========================================================================
-
 SUBROUTINE COMPUTE_EPSILON_NLN(EPSILON_NLN)
 
  IMPLICIT NONE
@@ -549,17 +693,12 @@ SUBROUTINE COMPUTE_EPSILON_NLN(EPSILON_NLN)
  EPSILON_NLN = 0._q
 
  DO I = 1, SIZE_RLNP
-
     EPSILON_NLN(I) = 1._q + CHI_NLN(I)
-
-!    WRITE(*,*) 'R_PS_TOTN(I), EFIELD(I), EPSILON_NLN(I) ', R_PS_TOTN(I), EFIELD(I), EPSILON_NLN(I)
-
  ENDDO
 
  RETURN
 
 END SUBROUTINE COMPUTE_EPSILON_NLN
-
 
 
 !>==========================SUBROUTINE MINIMIZE_NLN =================
@@ -575,40 +714,46 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
  REAL(q), ALLOCATABLE    :: D_EPS(:)
 
  INTEGER :: NCGSOL, MIN_COUNTER
+ REAL(q) :: ADIEL, ADIEL0, DIFF_ADIEL
 
  ALLOCATE(D_EPS(SIZE_REAL))
 
+ ADIEL = 0._q
+
  MIN_COUNTER = 1
 
-!uncomment the statemt if efields need to initialized from 
-!the previously computed phi, sol_phi
+ !uncomment the statemt if efields need to initialized from 
+ !the previously computed phi, sol_phi
  CALL INIT_EFIELD()
  
  CALL COMPUTE_EPSILON_NLN(D_EPS)
 
-!-------------------------------------------------------------
-!Solves the generalized poisson eqn using CG, returns phi_tilda scaled by edeps/cell vol
-!-------------------------------------------------------------
-     CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, TOTN, PHI_TILDA, NCGSOL, DIFFPHI)
+ !-------------------------------------------------------------
+ !Solves the generalized poisson eqn using CG, returns phi_tilda 
+ !scaled by edeps/cell vol
+ !-------------------------------------------------------------
+ CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, TOTN, PHI_TILDA, NCGSOL, DIFFPHI)
+ ! get the net dielectric energy contribution
+ CALL VACORR_ELECTROSTATIC(TOTN, ADIEL0)
+ DIFF_ADIEL = ADIEL0
 
- DO WHILE ( (SQRT(DIFFPHI) > 1e-6) )
-
+ ! DO WHILE ( (SQRT(DIFFPHI) > 1e-6) )
+ DO WHILE ( (ABS(DIFF_ADIEL) > 1E-6) )
      CALL UPDATE_EFIELD()
- 
      CALL COMPUTE_EPSILON_NLN(D_EPS)
-
-!-------------------------------------------------------------
-!Solves the generalized poisson eqn using CG, returns phi_tilda scaled by edeps/cell vol
-!-------------------------------------------------------------
+     !-------------------------------------------------------------
+     !Solves the generalized poisson eqn using CG, returns phi_tilda 
+     !scaled by edeps/cell vol
+     !-------------------------------------------------------------
      CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, TOTN, PHI_TILDA, NCGSOL, DIFFPHI)
-
+     CALL VACORR_ELECTROSTATIC(TOTN, ADIEL)
+     DIFF_ADIEL = ADIEL - ADIEL0
+     ADIEL0 = ADIEL
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "PK_COUNTER, MIN_COUNTER, &
-                            & DIFFPHI", PK_COUNTER, MIN_COUNTER, DIFFPHI
+                            & DIFFPHI, DIFF_ADIEL", PK_COUNTER, MIN_COUNTER, DIFFPHI, DIFF_ADIEL
 #endif
-
      MIN_COUNTER = MIN_COUNTER + 1
-
  ENDDO
 
  DEALLOCATE(D_EPS)
@@ -618,39 +763,38 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
 END SUBROUTINE MINIMIZE_NLN
 
 
-
 !>==========================SUBROUTINE VACORR_ELECTROSTATIC =================
 !!
 !!  computes the electroststic potential and energy corrections in reciprocal space
 !!
 !!===============================================================================
-SUBROUTINE VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
+SUBROUTINE VACORR_ELECTROSTATIC(TOTN, ADIEL, VEL, VCORR)
 
  IMPLICIT NONE
 
- REAL(q) :: AEL, ARHOB, ACAV, ADM, ATOT, Ecorr1, Ecorr2
- COMPLEX(q) :: TOTN(SIZE_REC), VEL(SIZE_REC), VCORR(SIZE_REC)
+ REAL(q) :: AEL, ARHOB, ACAV, ADM, AEPS, Ecorr1, Ecorr2, ADIEL
+ COMPLEX(q) :: TOTN(SIZE_REC)
+ COMPLEX(q), OPTIONAL :: VEL(SIZE_REC), VCORR(SIZE_REC)
  COMPLEX(q), ALLOCATABLE :: PHI(:), VRHOB(:)
+ COMPLEX(q), ALLOCATABLE :: VDM(:)
 
- ALLOCATE(PHI(SIZE_REC), VRHOB(SIZE_REC))
+ ALLOCATE(PHI(SIZE_REC) )
 
- CALL VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
-
-#ifdef debugsol
-     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ARHOB(in a.u) = ", ARHOB
-#endif
+ IF (PRESENT(VCORR)) THEN
+    ALLOCATE(VRHOB(SIZE_REC))
+    CALL VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
+    VCORR = VCORR + VRHOB
+ ENDIF
 
  CALL SimplePoisson(GRIDC_NLN, LATT_CUR_NLN, TOTN, PHI, 1)
 
-!!!in atomic units
- VEL = (PHI_TILDA - PHI) * 4 * PI * AUTOA / EDEPS
+ !!!in atomic units
+ IF (PRESENT(VEL)) VEL = (PHI_TILDA - PHI) * 4 * PI * AUTOA / EDEPS
 
- VCORR = VCORR + VRHOB
-
-!!!TOTN has the volume factor in it
+ !!!TOTN has the volume factor in it
  CALL MY_D_PROD(Ecorr1, TOTN, PHI_TILDA, GRIDC_NLN)
 
-!!!in atomic units
+ !!!in atomic units
  Ecorr1 = Ecorr1 * 0.5_q * 4 * PI * AUTOA / EDEPS
 
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, Ecorr1, 1))
@@ -661,7 +805,7 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
 
  CALL MY_D_PROD(Ecorr2, TOTN, PHI, GRIDC_NLN)
 
-!!!in atomic units
+ !!!in atomic units
  Ecorr2 = Ecorr2 * 0.5_q * 4 * PI * AUTOA / EDEPS
 
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, Ecorr2, 1))
@@ -670,56 +814,29 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "Ecorr2(in a.u) = ", Ecorr2
 #endif
 
-!!!in atomic units
+ !!!in atomic units
  AEL = Ecorr1 - Ecorr2
 
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "AEL(in a.u) = ", AEL
 #endif
 
-!net correction in atomic units
- ATOT = ATOT + AEL !!!!!+ ARHOB
+ !delta_phi correction in atomic units
+ ADIEL = AEL
 
- DEALLOCATE(PHI, VRHOB)
-
- RETURN
-
-END SUBROUTINE VACORR_ELECTROSTATIC
-
-
-
-!>==========================SUBROUTINE VACORR_NON_ELECTROSTATIC =================
-!!
-!!  computes the non electroststic potential and energy correctionsin recip space
-!!
-!!===============================================================================
-SUBROUTINE VACORR_NON_ELECTROSTATIC(PS_TOTN, VCORR, ATOT)
-
- IMPLICIT NONE
-
- REAL(q) :: ACAV, ADM, ECORR1, ATOT, AEPS
- COMPLEX(q) :: CHTOT
- COMPLEX(q) :: VCORR(SIZE_REC), PS_TOTN(SIZE_REC)
- COMPLEX(q), ALLOCATABLE :: VCAV(:), VDM(:)
-
- ALLOCATE(VCAV(SIZE_REC), VDM(SIZE_REC))
-
- VCAV = 0._q
- VDM = 0._q
-
- ACAV = 0._q
+ !rest of the electrostatic correction
  ADM = 0._q
  AEPS = 0._q
 
-!!!returns pot and energy in atomic units
- CALL VA_CAV(PS_TOTN, VCAV, ACAV)
-
-#ifdef debugsol
-     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ACAV(in a.u) = ", ACAV
-#endif
-
-!!!returns pot and energy in atomic units
- CALL VA_DMED(VDM, ADM, AEPS)
+ !!!returns pot and energy in atomic units
+ IF (PRESENT(VCORR)) THEN
+    ALLOCATE( VDM(SIZE_REC) ) 
+    VDM = 0._q
+    CALL VA_DMED(ADM, AEPS, VDM)
+    VCORR = VCORR + VDM
+ ELSE
+    CALL VA_DMED(ADM, AEPS)
+ ENDIF
 
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ADM(in a.u) = ", ADM
@@ -729,16 +846,53 @@ SUBROUTINE VACORR_NON_ELECTROSTATIC(PS_TOTN, VCORR, ATOT)
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "AEPS(in a.u) = ", AEPS
 #endif
 
- VCORR = VCORR + VCAV + VDM
+!net electrostatic correction
+ ADIEL = ADIEL + ADM + AEPS
 
- ATOT = ATOT + ACAV + ADM + AEPS
+ DEALLOCATE(PHI)
 
- DEALLOCATE(VCAV, VDM)
+ IF (PRESENT(VCORR))  DEALLOCATE(VRHOB, VDM)
+
+ RETURN
+
+END SUBROUTINE VACORR_ELECTROSTATIC
+
+
+!>==========================SUBROUTINE VACORR_NON_ELECTROSTATIC =================
+!!
+!!  computes the non electroststic potential and energy correctionsin recip space
+!!  only cavitation
+!!
+!!===============================================================================
+SUBROUTINE VACORR_NON_ELECTROSTATIC(PS_TOTN, ACAV, VCORR)
+
+ IMPLICIT NONE
+
+ REAL(q) :: ACAV, ECORR1
+ COMPLEX(q) :: CHTOT
+ COMPLEX(q) :: VCORR(SIZE_REC), PS_TOTN(SIZE_REC)
+ COMPLEX(q), ALLOCATABLE :: VCAV(:)
+
+ ALLOCATE(VCAV(SIZE_REC))
+
+ VCAV = 0._q
+
+ ACAV = 0._q
+
+!!!returns pot and energy in atomic units
+ CALL VA_CAV(PS_TOTN, VCAV, ACAV)
+
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ACAV(in a.u) = ", ACAV
+#endif
+
+ VCORR = VCORR + VCAV
+
+ DEALLOCATE(VCAV)
 
  RETURN
 
 END SUBROUTINE VACORR_NON_ELECTROSTATIC
-
 
 
 !>========================== SUBROUTINE VA_RHOB =================
@@ -761,7 +915,7 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
 
  ALLOCATE(VRHOB_WORK(SIZE_REAL))
 
-!!! ARHOB = 0._q
+ !!! ARHOB = 0._q
  VRHOB_WORK = 0._q
 
 #ifdef realmode
@@ -771,43 +925,37 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
 #endif
 
  DO I = 1, SIZE_RLNP
- 
-!      NDIM_E = EFIELD_TMP(I) * pkT
-      NDIM_E = EFIELD(I) * pkT
-
-     EPSILON_DER_I = SHAPE_FUNC_DER(I) * ( 3 * (EB_K - EINFTY_K) * LANG_X_NLN(I) + (EINFTY_K - 1._q) )
-
-!\epsilon_0 d\epsilon/dn in atomic units
-     EPSILON_DER_I = EPSILON_DER_I / (4 * PI * (AUTOA**3) )
-
-!     VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD_TMP(I) * EFIELD_TMP(I)
-     VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD(I) * EFIELD(I)
-
+    !      NDIM_E = EFIELD_TMP(I) * pkT
+    NDIM_E = E_EFF(I) !EFIELD(I) * pkT
+    EPSILON_DER_I = SHAPE_FUNC_DER(I) * ( 3 * (EB_K - EINFTY_K) * LANG_X_NLN(I) + (EINFTY_K - 1._q) )
+    !\epsilon_0 d\epsilon/dn in atomic units
+    EPSILON_DER_I = EPSILON_DER_I / (4 * PI * (AUTOA**3) )
+    ! VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD_TMP(I) * EFIELD_TMP(I)
+    VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD(I) * EFIELD(I)
  ENDDO 
 
  CALL PACK_R2C(VRHOB_WORK, VRHOB, GRIDC_NLN)
 
-!to fourier space
+ !to fourier space
  CALL FFT3D(VRHOB, GRIDC_NLN, -1)
  CALL SETUNB(VRHOB, GRIDC_NLN)
  VRHOB = VRHOB/ GRIDC_NLN%NPLWV
 
-!iterate over the G vectors
-!!! DO I = 1, SIZE_RCNP
-!!!
-!!!    ARHOB = ARHOB + 0.5_q * FACT_K *CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
-!!!                    & * ( PHI_TILDA(I) * 4 * PI * AUTOA / EDEPS ) &
-!!!                    & * LATT_CUR_NLN%OMEGA
-!!!
-!!! ENDDO
-!!! CALLMPI( M_sum_d(GRIDC_NLN%COMM, ARHOB, 1))
+ !iterate over the G vectors
+ !!! DO I = 1, SIZE_RCNP
+ !!!
+ !!!    ARHOB = ARHOB + 0.5_q * FACT_K *CONJG( RHOB_NLN_G(I, TOTN(I)) ) &
+ !!!                    & * ( PHI_TILDA(I) * 4 * PI * AUTOA / EDEPS ) &
+ !!!                    & * LATT_CUR_NLN%OMEGA
+ !!!
+ !!! ENDDO
+ !!! CALLMPI( M_sum_d(GRIDC_NLN%COMM, ARHOB, 1))
 
  DEALLOCATE(VRHOB_WORK)
 
  RETURN
 
 END SUBROUTINE VA_RHOB
-
 
 
 !>========================== SUBROUTINE VA_CAV =================
@@ -849,20 +997,20 @@ SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
  ACAV = 0._q
  VWORK = 0._q
 
-!volume element
+ !volume element
  dv = LATT_CUR_NLN%OMEGA / GRIDC_NLN%NPLWV
 
-!remove the scaling in the reciprocal charge density
+ !remove the scaling in the reciprocal charge density
  PS_TOTN = PS_TOTN / LATT_CUR_NLN%OMEGA
 
-!charge density in rec space, returns \nabla n and |\nabla n|^2 in real space
+ !charge density in rec space, returns \nabla n and |\nabla n|^2 in real space
  CALL NABLAN(PS_TOTN, GRIDC_NLN, LATT_CUR_NLN, GN2_TMP, GN)
 
-!charge density in rec space, returns laplacian of n, Lap(n)
-!Lap(n) = (\nabla \dot \nabla n) in real space
+ !charge density in rec space, returns laplacian of n, Lap(n)
+ !Lap(n) = (\nabla \dot \nabla n) in real space
  CALL LAPLN(PS_TOTN, GRIDC_NLN, LATT_CUR_NLN, DIVN)
 
-!add -Lap(n)/|\nabla n| to Vcav and copy \sqrt(|\nabla n|^2) to gn2_tmp
+ !add -Lap(n)/|\nabla n| to Vcav and copy \sqrt(|\nabla n|^2) to gn2_tmp
  DO I = 1, SIZE_REAL !DIMREAL(GRIDC%MPLWV)
 
    TMP = SQRT(MAX(REAL(GN2_TMP(I),KIND=q), CHGMIN))
@@ -871,24 +1019,24 @@ SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
 
  ENDDO
 
-!PS_TOTN to the real space
+ !PS_TOTN to the real space
  CALL FFT3D(PS_TOTN, GRIDC_NLN, 1)
 
-!unpack complex array to a real array
-!in complex mode, just copies PS_TOTN to RWORK
+ !unpack complex array to a real array
+ !in complex mode, just copies PS_TOTN to RWORK
  CALL UNPACK_C2R(PS_TOTN, 1.0_q, PS_TOTN, 0.0_q, RWORK, GRIDC_NLN)
 
-!charge density must be in real space(unscaled), 
-!returns derivative of shape function wrt the charge density in the real space,
-! term1 = gamma*A / n, where
-! gamma * A = exp( -( log(n/n_c) )^2 / (2 sigma^2) ) / ( sigma * sqrt(2*pi) )
+ !charge density must be in real space(unscaled), 
+ !returns derivative of shape function wrt the charge density in the real space,
+ ! term1 = gamma*A / n, where
+ ! gamma * A = exp( -( log(n/n_c) )^2 / (2 sigma^2) ) / ( sigma * sqrt(2*pi) )
  CALL SHAPE_GRADN(GRIDC_NLN, T_INFO_NLN, P_NLN, LATT_CUR_NLN, RWORK, TERM1)
 
-!quantum surface area
+ !quantum surface area
  QS = 0._q
 
-!quantum surface area, integral of (gamma*A / n) * |\nabla n| 
-!= term1 * \sqrt(gn2_tmp)
+ !quantum surface area, integral of (gamma*A / n) * |\nabla n| 
+ != term1 * \sqrt(gn2_tmp)
  DO I = 1, SIZE_RLNP !GRIDC%RL%NP
    QS = QS + (TERM1(I)) * (GN2_TMP(I)) 
  ENDDO
@@ -897,9 +1045,9 @@ SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
 
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, QS, 1))
 
-!cavitation energy
-!tau is in eV/Angstrom^3 and QS has the units of Angstrom^2
-!==> acav is in eV
+ !cavitation energy
+ !tau is in eV/Angstrom^3 and QS has the units of Angstrom^2
+ !==> acav is in eV
  ACAV = tau * QS 
 
 #ifdef debugsol
@@ -910,31 +1058,31 @@ SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
  ENDIF
 #endif
 
-!to a.u, to be consistent with the rest of the ATOT components
+ !to a.u, to be consistent with the rest of the ATOT components
  ACAV = ACAV/ HART_TO_EV_K
 
-!1/ |nabla n|
+ !1/ |nabla n|
  DO I = 1, SIZE_RLNP !DIMREAL(GRIDC%MPLWV)
    GN2_TMP(I) = 1._q / ( MAX(GN2_TMP(I), CHGMIN) ) 
  ENDDO
 
-!-------------------------------------------------------------
-!Compute cavitation potential, Vcav
-!-------------------------------------------------------------
-!packs the real array into a complex one
-!in complex mode, same as  gn2 = CMPLX(gn2_tmp)
+ !-------------------------------------------------------------
+ !Compute cavitation potential, Vcav
+ !-------------------------------------------------------------
+ !packs the real array into a complex one
+ !in complex mode, same as  gn2 = CMPLX(gn2_tmp)
  CALL PACK_R2C(GN2_TMP, GN2, GRIDC_NLN)
 
-!1/ |nabla n| to reciprocal space to take the gradient
+ !1/ |nabla n| to reciprocal space to take the gradient
  CALL FFT3D(GN2, GRIDC_NLN, -1)
  CALL SETUNB(GN2, GRIDC_NLN)
  GN2 = GN2 / GRIDC_NLN%NPLWV
 
-!\nabla(1 / |\nabla n|), ggn in real space
+ !\nabla(1 / |\nabla n|), ggn in real space
  CALL NABLAN(GN2, GRIDC_NLN, LATT_CUR_NLN, GGN2, GGN)
 
-!add -(\nabla n . \nabla(1/ |\nabla n|)) to Vcav in real space
-!and multiply by term1 = gamma*A/n in real space
+ !add -(\nabla n . \nabla(1/ |\nabla n|)) to Vcav in real space
+ !and multiply by term1 = gamma*A/n in real space
  DO I = 1, SIZE_RLNP !GRIDC%RL%NP
   TMP = ( GN(1,I) * GGN(1,I) &
          & + GN(2,I) * GGN(2,I) &
@@ -944,21 +1092,21 @@ SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
 
  CALL PACK_R2C(VWORK, VCAV, GRIDC_NLN)
 
-!!!Vcav to reciprocal space
+ !!!Vcav to reciprocal space
  CALL FFT3D(VCAV, GRIDC_NLN, -1)
  CALL SETUNB(VCAV, GRIDC_NLN)
  VCAV = VCAV / GRIDC_NLN%NPLWV
 
-!!!ps_totn to rec space
+ !!!ps_totn to rec space
  CALL FFT3D(PS_TOTN, GRIDC_NLN, -1)
  CALL SETUNB(PS_TOTN, GRIDC_NLN)
  PS_TOTN = PS_TOTN / GRIDC_NLN%NPLWV * LATT_CUR_NLN%OMEGA
 
-!!!multiply by the surface tension
-!!!in units of eV/Angstrom
+ !!!multiply by the surface tension
+ !!!in units of eV/Angstrom
  VCAV = VCAV * tau
 
-!to a.u to be consistent
+ !to a.u to be consistent
  VCAV = VCAV * AUTOA / HART_TO_EV_K
 
  DEALLOCATE(RWORK, VWORK)
@@ -971,24 +1119,22 @@ SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
 END SUBROUTINE VA_CAV
 
 
-
 !>========================== SUBROUTINE VA_DMED =================
 !!
 !!  computes the potential and energy due to the dielectric medium
 !!
 !!===============================================================
-SUBROUTINE VA_DMED(VDM, ADM, AEPS)
-
+SUBROUTINE VA_DMED(ADM, AEPS, VDM)
  IMPLICIT NONE
 
  INTEGER(q) :: I
  REAL(q) :: NDIM_E, dv, ADM, ADM_1
- REAL(q) :: AEPS, AEPS_1
+ REAL(q) :: AEPS, AEPS_1, FEFF
  REAL(q) :: EXPX, EXP_X, LOG_TERM
- COMPLEX(q) :: VDM(SIZE_REC)
+ COMPLEX(q), OPTIONAL :: VDM(SIZE_REC)
  RGRID, ALLOCATABLE :: VDM_WORK(:)
 
- ALLOCATE(VDM_WORK(SIZE_REAL))
+ IF (PRESENT(VDM)) ALLOCATE(VDM_WORK(SIZE_REAL))
 
 !volume element
  dv =  LATT_CUR_NLN%OMEGA / GRIDC_NLN%NPLWV
@@ -996,26 +1142,24 @@ SUBROUTINE VA_DMED(VDM, ADM, AEPS)
 !to atomic units
  dv = dv / (AUTOA**3)
 
- VDM_WORK = 0._q
+ IF (PRESENT(VDM)) VDM_WORK = 0._q
 
  ADM = 0._q
  AEPS = 0._q
 
  DO I = 1, SIZE_RLNP
-
-!    NDIM_E = EFIELD_TMP(I) * pkT
-    NDIM_E = EFIELD(I) * pkT
-
+    ! NDIM_E = EFIELD_TMP(I) * pkT
+    NDIM_E = E_EFF(I) !EFIELD(I) * pkT
     EXPX = EXP(NDIM_E)
     EXP_X = EXP(-NDIM_E)
 
-!case 1: x --> 0
-!log(sinh(x)/x) --> 0 as x --> 0
+    !case 1: x --> 0
+    !log(sinh(x)/x) --> 0 as x --> 0
     IF ( (ABS(EXPX - 1._q) < 1E-6_q) .AND. (ABS(EXP_X - 1._q) < 1E-6_q) )  THEN
        LOG_TERM = 0._q
 
-!case 2: x --> \infty, sinh(x) --> exp(x)/2 ==> log(sinh(x)/x) --> ( x - log(2x) )
-!exp(70) ~= 1E30
+       !case 2: x --> \infty, sinh(x) --> exp(x)/2 ==> log(sinh(x)/x) --> ( x - log(2x) )
+       !exp(70) ~= 1E30
     ELSEIF ( (EXPX > 1E30_q) .AND. (ABS(EXP_X) < 1E-6_q) )  THEN
        LOG_TERM = NDIM_E - LOG(2 * NDIM_E)
 
@@ -1024,38 +1168,44 @@ SUBROUTINE VA_DMED(VDM, ADM, AEPS)
        LOG_TERM = LOG(SINH(NDIM_E) / NDIM_E)
     ENDIF
 
-!    WRITE(*,*) 'NDIM_E, LOG_TERM, L/x', NDIM_E, LOG_TERM, LANG_X_NLN(I)
+    !old
+    !ADM_1 = ( (einfty_k - 1._q) / 6._q / (eb_k - einfty_k) + LANG_X_NLN(I) ) * (NDIM_E**2)  - LOG_TERM
 
-    ADM_1 = ( (einfty_k - 1._q) / 6._q / (eb_k - einfty_k) + LANG_X_NLN(I) ) * (NDIM_E**2)  - LOG_TERM
+    !f(e), e = effective field
+    FEFF = LANG_X_NLN(I)
+
+    ADM_1 = ( FEFF - 0.5_q*alpha_k* FEFF**2 + 0.5_q * xx_k * (1._q - alpha_k* FEFF)**2 ) * (NDIM_E**2)
+    ADM_1 = ADM_1 - LOG_TERM
 
     ADM_1 = SHAPE_FUNC(I) * Nsol_k * KT *  ADM_1
 
     ADM = ADM + ADM_1 * dv
 
-!-0.5 \epsilon_0 \int \chi |E|^2
+    !-0.5 \epsilon_0 \int \chi |E|^2
     AEPS = AEPS - 0.5_q * CHI_NLN(I) * EFIELD(I) * EFIELD(I) / 4 / PI * dv
 
-    VDM_WORK(I) = SHAPE_FUNC_DER(I) * ADM_1
+    IF (PRESENT(VDM)) VDM_WORK(I) = SHAPE_FUNC_DER(I) * ADM_1
 
  ENDDO
 
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, ADM, 1))
  CALLMPI( M_sum_d(GRIDC_NLN%COMM, AEPS, 1))
 
- WRITE(*,*) 'AEPS, ADM, ADM - AEPS', AEPS, ADM, ADM - AEPS
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) 'AEPS, ADM, ADM - AEPS (all in a.u) ', AEPS, ADM, ADM - AEPS
+#endif
 
- CALL PACK_R2C(VDM_WORK, VDM, GRIDC_NLN)
-
- CALL FFT3D(VDM, GRIDC_NLN, -1)
- CALL SETUNB(VDM, GRIDC_NLN)
- VDM = VDM/ GRIDC_NLN%NPLWV
- 
- DEALLOCATE(VDM_WORK)
+ IF (PRESENT(VDM)) THEN
+    CALL PACK_R2C(VDM_WORK, VDM, GRIDC_NLN)
+    CALL FFT3D(VDM, GRIDC_NLN, -1)
+    CALL SETUNB(VDM, GRIDC_NLN)
+    VDM = VDM/ GRIDC_NLN%NPLWV
+    DEALLOCATE(VDM_WORK)
+ ENDIF
 
  RETURN
 
 END SUBROUTINE VA_DMED
-
 
 
 !>========================== SUBROUTINE SET_GVEC_NLN ======================
@@ -1063,7 +1213,6 @@ END SUBROUTINE VA_DMED
 !! set the the reciprocal lattice vectors
 !!
 !!===============================================================================
-
 SUBROUTINE SET_GVEC_NLN()
 
  IMPLICIT NONE
@@ -1101,7 +1250,6 @@ SUBROUTINE SET_GVEC_NLN()
 END SUBROUTINE SET_GVEC_NLN
 
 
-
 !>========================== SUBROUTINE VCORRECTION_NLN_PCM ======================
 !!
 !! inputs TOTN and PS_TOTN are in reciprocal space and has the volume scaling 
@@ -1120,12 +1268,14 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
  COMPLEX(q), ALLOCATABLE :: PS_TOTN_TMP(:)
 
  INTEGER :: NCGSOL
- REAL(q)  :: ATOT
+ REAL(q)  :: ADIEL, ACAV, ATOT
 
  ALLOCATE(PS_TOTN_TMP(SIZE_REC))
 
  VEL   = 0._q
  VCORR = 0._q
+ ADIEL  = 0._q
+ ACAV  = 0._q
  ATOT  = 0._q
 
 !!!set R_PS_TOTN, ps-totn in real space with volume scaling removed
@@ -1151,11 +1301,13 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 !!!returns pot and energy in atomic units
 !!!atot = atot + ael + arhob, arhob not used
 !!!atot = atot + ael
- CALL VACORR_ELECTROSTATIC(TOTN, VEL, VCORR, ATOT)
+ CALL VACORR_ELECTROSTATIC(TOTN, ADIEL, VEL, VCORR)
 
 !!!cav and dielectric medium
 !!!atot = atot + acav + adm + aeps
- CALL VACORR_NON_ELECTROSTATIC(PS_TOTN, VCORR, ATOT)
+ CALL VACORR_NON_ELECTROSTATIC(PS_TOTN, ACAV, VCORR)
+
+ ATOT = ADIEL + ACAV
 
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in a.u) = &
@@ -1254,6 +1406,63 @@ SUBROUTINE TEST_K()
 
 
 END SUBROUTINE TEST_K
+
+
+SUBROUTINE WRITE_ARRAY_TO_FILE(ARRAY, N, GRIDC, FNAME)
+
+ USE prec
+ USE mgrid
+
+ IMPLICIT NONE
+
+ TYPE (grid_3d),INTENT(IN) :: GRIDC
+ INTEGER(q) :: N, I
+ REAL(q) :: ARRAY(N)
+ CHARACTER (*) FNAME
+
+ CHARACTER (40) FORM, SZNAM
+ INTEGER :: ISTAT, NODE_ME, IONODE, IU
+ INTEGER :: NALLOC, NZ, NWRITE, NWRITTEN
+
+ NODE_ME = 0
+ IONODE = 0
+ IU = 469
+ SZNAM = 'untitled'
+ FORM = '(1(1X,E17.11))'
+ NWRITE = 5
+
+#ifdef MPI
+ NODE_ME = GRIDC%COMM%NODE_ME
+ IONODE = GRIDC%COMM%IONODE
+#endif
+
+ io_begin
+ OPEN(IU, FILE = FNAME, STATUS = 'UNKNOWN')
+ REWIND IU
+ io_end
+
+ IF (ISTAT>0) RETURN ! can not write immediate exit
+
+ do_io WRITE(IU,'(I5)') N
+
+ NWRITTEN = 0
+
+ io_begin
+ DO I = 1, N
+    NWRITTEN = NWRITTEN + 1
+    IF ( MOD(NWRITTEN,NWRITE) == 0 ) THEN
+       WRITE(IU, FORM) ARRAY(I)
+    ELSE
+       WRITE(IU, FORM, ADVANCE='NO') ARRAY(I)
+    ENDIF
+ ENDDO
+ io_end
+
+ IF ( MOD(NWRITTEN,NWRITE)/=0 ) WRITE(IU,*)' '
+
+ RETURN
+
+END SUBROUTINE WRITE_ARRAY_TO_FILE
 
 
 END MODULE POT_NLN_K
