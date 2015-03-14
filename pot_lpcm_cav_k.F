@@ -68,7 +68,7 @@ SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
  COMPLEX(q),INTENT(IN) ::TOTN(SP_GRIDC%MPLWV),PS_TOTN(SP_GRIDC%MPLWV) 
  REAL(q),ALLOCATABLE :: SP_d_eps(:)
  RGRID,ALLOCATABLE :: RWORK(:)
- INTEGER :: I,J, NCGSOL
+ INTEGER(q) :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
 
  ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)),RWORK(DIMREAL(SP_GRIDC%MPLWV)))
@@ -398,9 +398,9 @@ SUBROUTINE MINIMIZE(MN_GRIDC,MN_LATT_CUR,MN_P,MN_T_INFO,MN_d_eps,MN_TOTN,&
  COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
  COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
 
- INTEGER :: I,NC,N1,N2,N3
- INTEGER :: flag,count
- INTEGER,INTENT(OUT) :: NCGSOL
+ INTEGER(q) :: I,NC,N1,N2,N3
+ INTEGER(q) :: flag,count
+ INTEGER(q), INTENT(OUT) :: NCGSOL
  REAL(q) :: sum_c,sum_n,sum_t,step,phi_diff,r20,maximum,maximum1,rand
  REAL(q) :: max_lp_r,max_lp_i,max_n_r,max_n_i
  REAL(q), OPTIONAL :: DIFFPHI
