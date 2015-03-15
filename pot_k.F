@@ -59,7 +59,6 @@ MODULE POT_K
 !! returns Vcorr and Ecorr
 !!
 !!======================================================================
-
  SUBROUTINE Vcorrection(SP_GRIDC,SP_P,SP_LATT_CUR,SP_T_INFO,WDES,SP_CHTOT,Vcorr,Ecorr)
 
   USE constant 
