@@ -29,16 +29,24 @@ MODULE POT_K
  EXTERNAL initjdftx, getionsigma, minimizefluid
 
  PUBLIC :: Vcorrection, SET_SOL_IO, SOL_INIT, SOL_WRITER, LSOL, EIFOR_SOL
- PRIVATE :: SOL_READER, IONIC_CHARGE, GETRCORE, Fcorrection
+ PRIVATE :: SOL_READER, IONIC_CHARGE, GETRCORE, Fcorrection, READ_FROM_INCAR
 
  INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
+
+ LOGICAL, SAVE                          :: LSOL = .FALSE.
  REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,tau,EDIFFSOL
- REAL(q), PRIVATE, SAVE                 :: p0_k, einfty_k, Nsol_k, T_k
- TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
- LOGICAL, SAVE                          :: LSOL = .FALSE., LBCHG = .FALSE.
+
  LOGICAL, SAVE                          :: LNLSOL = .FALSE.
+ REAL(q), PRIVATE, SAVE                 :: p0_k, einfty_k, Nsol_k, T_k
+
+ INTEGER, PRIVATE, SAVE                 :: NION_COUNT_K
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: NION_K(:), ZION_K(:), RION_K(:)
+
+ TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
+ LOGICAL, SAVE                          :: LBCHG = .FALSE.
+
  LOGICAL, SAVE                          :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE                          :: LJDFTX = .FALSE.
 
@@ -582,88 +590,30 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !---------------------------------------------------------------
 !sigma_nc_k
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_NC_K','=','#',';','F',IDUM,sigma_nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol      
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_NC_K'',the width of ionic gaussians, not specified, using the default'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_nc_k = ',sigma_nc_k          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_nc_k(width of ionic gaussians) = ',sigma_nc_k 
-
-      ENDIF
-#endif
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_NC_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+   CALL READ_FROM_INCAR(LOPEN, 'SIGMA_NC_K', 'F', 1, IDUM, &
+        & SIGMA_NC_K, CDUM, LDUM, 'the width of ionic gaussians (Angstrom)')
 
 !---------------------------------------------------------------
 !sigma_rc_k
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_RC_K','=','#',';','F',IDUM,sigma_rc_k0,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_RC_K'',the width of pseudo-core gaussians, not specified, using the default'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_rc_k = ',sigma_rc_k          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_rc_k(width of pseudo-core gaussians) = ',sigma_rc_k0
-         DO I=1,T_INFO%NTYP
-            sigma_rc_k(I) = sigma_rc_k0
-         ENDDO
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_RC_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+   CALL READ_FROM_INCAR(LOPEN, 'SIGMA_RC_K', 'F', 1, IDUM, &
+        & SIGMA_RC_K0, CDUM, LDUM, 'the width of pseudo-core gaussians (Angstrom)')
+   DO I = 1, T_INFO%NTYP
+      sigma_rc_k(I) = sigma_rc_k0
+   ENDDO
 
 !---------------------------------------------------------------
 !CORE_C
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'CORE_C','=','#',';','F',IDUM,CORE_C,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''CORE_C'', magnitude of pseudo-core charge, not specified, using the default'
-
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'CORE_C = ', CORE_C          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : CORE_C (magnitude of pseudo-core charge) = ', CORE_C 
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''CORE_C''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+   CALL READ_FROM_INCAR(LOPEN, 'CORE_C', 'F', 1, IDUM, &
+        & CORE_C, CDUM, LDUM, 'magnitude of pseudo-core charge (dimensionless)')
 
 !---------------------------------------------------------------
 !LJDFTX
 !---------------------------------------------------------------
 #ifdef jdftx   
-   CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LJDFTX','=','#',';','L',IDUM,RDUM,CDUM,LJDFTX,CHARAC,N,1,IERR)
-#endif
-!error opening INCAR      
-   IF ( IERR == 1 .OR. IERR == 2) THEN
-     IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Error reading INCAR'
-     STOP
-   ENDIF
-#ifdef jdftx
+   CALL READ_FROM_INCAR(LOPEN, 'LJDFTX', 'L', 1, IDUM, &
+        & RDUM, CDUM, LJDFTX, 'Use jdftx library')
 !check for flucar
 #ifdef debugsol
    IF (LIONODE_FLAG .AND. LJDFTX) WRITE(*,*)'Checking for FLUCAR file'       
@@ -744,6 +694,25 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   Nsol_k   = 55.35_q  !!!@ 25C, 997.075/18.015 = 55.35!!!55.5 !mol/L, for water
   T_k      = 298.15_q !!!25C, temperature in kelvin
 
+!!!default ionic species parameters
+! default electrolyte: 1M NaF
+!number of ionic species, used to allocate space for the other ionic params
+  NION_COUNT_K = 2 
+
+!!!ionic concentrations in mol/L
+  ALLOCATE(NION_K(NION_COUNT_K))
+  NION_K = 1._q
+
+!!!charges on ionic species (dimensionless)
+  ALLOCATE(ZION_K(NION_COUNT_K))
+  ZION_K(1) = 1._q
+  ZION_K(2) = -1._q
+
+!!!ionic radii (Angstrom)
+  ALLOCATE(RION_K(NION_COUNT_K))
+  RION_K(1) = 1.16_q
+  RION_K(2) = 1.19_q
+
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR.&
       & If not present, default values will be used'
@@ -763,294 +732,132 @@ END SUBROUTINE SET_SOL_IO
 !!
 !!===========================================================================
 
- SUBROUTINE SOL_READER()
+SUBROUTINE SOL_READER()
 
-      USE setexm
-      USE vaspxml
-
-      IMPLICIT NONE
-
-      INTEGER :: IDUM, N, IERR
-      REAL(q) :: RDUM
-      COMPLEX(q) CDUM
-      LOGICAL LOPEN,LDUM
-      CHARACTER (1) CHARAC
-
-       LOPEN = .FALSE.
+  USE setexm
+  USE vaspxml
   
+  IMPLICIT NONE
+  
+  INTEGER :: IDUM, N, IERR
+  REAL(q) :: RDUM
+  COMPLEX(q) CDUM
+  LOGICAL LOPEN,LDUM
+  CHARACTER (1) CHARAC
+  
+  LOPEN = .FALSE.
       
-      OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
+  OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
 
 !---------------------------------------------------------------
 !LNLSOL
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LNLSOL','=','#',';','L',IDUM,RDUM,CDUM,LNLSOL,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''LNLSOL'', switch for nonlinear solvation'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'LNLSOL = ', LNLSOL          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : LNLSOL(Non-linear solvation) = ', LNLSOL 
-         
-      ENDIF
-#endif
+  CALL READ_FROM_INCAR(LOPEN, 'LNLSOL', 'L', 1, IDUM, &
+       & RDUM, CDUM, LNLSOL, 'switch for nonlinear solvation')
 
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''LNLSOL''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
-!!! if LNLSOL = TRUE, reset the default solvation params, nc_k and tau
-!!! before the values are read from the ICAR
+! read the nonlinear solvation parameters
   IF (LNLSOL) THEN
-       nc_k    = 0.00675_q !!!
-       tau     = 9.23E-4_q !!! for water
-  ENDIF
-
-
-!---------------------------------------------------------------
-!LBCHG
-!---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LBCHG','=','#',';','L',IDUM,RDUM,CDUM,LBCHG,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''LBCHG'', to write the bound charge file, BCHG'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'LBCHG = ', LBCHG          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : LBCHG = ', LBCHG
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''LBCHG''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
-
-!!! read the nonlinear solvation parameters only if needed
-   IF (LNLSOL) THEN
+     !reset the default solvation params, nc_k and tau
+     nc_k    = 0.00675_q 
+     tau     = 9.23E-4_q ! for water
 !---------------------------------------------------------------
 !P0_K
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'P0_K','=','#',';','F',IDUM,P0_K,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''P0_K'', dipole moment of the molecule'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'P0_K = ', P0_K, ' Debye'          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : P0_K = ', P0_K, ' Debye'
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''P0_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+     CALL READ_FROM_INCAR(LOPEN, 'P0_K', 'F', 1, IDUM, &
+          & P0_K, CDUM, LDUM, 'dipole moment of the molecule (Debye)')
 
 !---------------------------------------------------------------
 !EINFTY_K
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EINFTY_K','=','#',';','F',IDUM,EINFTY_K,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EINFTY_K'', \epsilon_{\infty}'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'EINFTY_K = ', EINFTY_K         
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : EINFTY_K = ', EINFTY_K
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EINFTY_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+     CALL READ_FROM_INCAR(LOPEN, 'EINFTY_K', 'F', 1, IDUM, &
+          & EINFTY_K, CDUM, LDUM, '\epsilon_{\infty} (dimensionless)')
 
 !---------------------------------------------------------------
 !NSOL_K
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'NSOL_K','=','#',';','F',IDUM,NSOL_K,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NSOL_K'', Number density of the solvent molecules'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'NSOL_K = ', NSOL_K, ' mol/L'
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : NSOL_K = ', NSOL_K, ' mol/L'
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''NSOL_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+     CALL READ_FROM_INCAR(LOPEN, 'NSOL_K', 'F', 1, IDUM, &
+          & NSOL_K, CDUM, LDUM, 'Solvent concentration (mol/L)')
 
 !---------------------------------------------------------------
 !T_K
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'T_K','=','#',';','F',IDUM,T_K,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''T_K'', Temperature in Kelvin'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'T_K = ', T_K, ' K'         
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : T_K = ', T_K, ' K'
-         
-      ENDIF
-#endif
+     CALL READ_FROM_INCAR(LOPEN, 'T_K', 'F', 1, IDUM, &
+          & T_K, CDUM, LDUM, 'Temperature (in K)')
 
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''T_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-   ENDIF !!! end of if (lnlnsol)
+!---------------------------------------------------------------
+!NION_COUNT_K
+!---------------------------------------------------------------
+     CALL READ_FROM_INCAR(LOPEN, 'NION_COUNT_K', 'I', 1, NION_COUNT_K, &
+          & RDUM, CDUM, LDUM, 'Number of types of ionic species in the solvent')
+     IF (NION_COUNT_K > 2) THEN
+        IF (ALLOCATED(NION_K)) DEALLOCATE(NION_K)
+        IF (ALLOCATED(ZION_K)) DEALLOCATE(ZION_K)
+        IF (ALLOCATED(RION_K)) DEALLOCATE(RION_K)
+     ENDIF
+
+!---------------------------------------------------------------
+!NION_K
+!---------------------------------------------------------------
+     IF (.NOT. ALLOCATED(NION_K)) ALLOCATE(NION_K(NION_COUNT_K))
+     CALL READ_FROM_INCAR(LOPEN, 'NION_K', 'F', NION_COUNT_K, IDUM, &
+          & RDUM, CDUM, LDUM, 'Ionic concentrations (mol/L)', NION_K)
+
+!---------------------------------------------------------------
+!ZION_K
+!---------------------------------------------------------------
+     IF (.NOT. ALLOCATED(ZION_K)) ALLOCATE(ZION_K(NION_COUNT_K))
+     CALL READ_FROM_INCAR(LOPEN, 'ZION_K', 'F', NION_COUNT_K, IDUM, &
+          & RDUM, CDUM, LDUM, 'Charge on each ionic species (dimensionless)', ZION_K)
+
+!---------------------------------------------------------------
+!RION_K
+!---------------------------------------------------------------
+     IF (.NOT. ALLOCATED(RION_K)) ALLOCATE(RION_K(NION_COUNT_K))
+     CALL READ_FROM_INCAR(LOPEN, 'RION_K', 'F', NION_COUNT_K, IDUM, &
+          & RDUM, CDUM, LDUM, 'Ionic radius of  each ionic species (Angstroms)', RION_K)
+  
+  ENDIF !!! end of if (lnlnsol)
 
 !---------------------------------------------------------------
 !sigma_k
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_K','=','#',';','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''SIGMA_K'',the width of dielectric cavity, not specified, using the default(fit parameter for solvent = water)'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'sigma_k = ',sigma_k          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : sigma_k(width of dielectric cavity) = ',sigma_k 
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''SIGMA_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+  CALL READ_FROM_INCAR(LOPEN, 'SIGMA_K', 'F', 1, IDUM, &
+       & SIGMA_K, CDUM, LDUM, 'the width of dielectric cavity (dimensionless)')
 
 !---------------------------------------------------------------
 !nc_k
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'NC_K','=','#',';','F',IDUM,nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''NC_K'', cavity turn-on charge density, not specified, using the default(fit parameter for solvent = water)'
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'nc_k = ', nc_k, ' Angstrom^-3'          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : nc_k (cavity turn-on charge density) = ', nc_k, ' Angstrom^-3'
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''NC_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+  CALL READ_FROM_INCAR(LOPEN, 'NC_K', 'F', 1, IDUM, &
+       & NC_K, CDUM, LDUM, 'cavity turn-on charge density (Angstrom^-3)')
 
 !---------------------------------------------------------------
 !eb_k
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EB_K','=','#',';','F',IDUM,eb_k,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EB_K'', relative permittivity of the bulk solvent, not specified, using the default(for solvent = water)'
-
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'eb_k = ', eb_k          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : eb_k (relative permittivity of the bulk solvent) = ', eb_k 
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EB_K''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+  CALL READ_FROM_INCAR(LOPEN, 'EB_K', 'F', 1, IDUM, &
+       & EB_K, CDUM, LDUM, 'relative permittivity of the bulk solvent (dimensionless)')
 
 !---------------------------------------------------------------
 !tau
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'TAU','=','#',';','F',IDUM,tau,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''TAU'',cavity surface tension, not specified, using the default.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'tau = ',tau, ' eV/Angstrom^2'
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : tau(cavity surface tension) = ',tau, ' eV/Angstrom^2'
-         
-      ENDIF
-#endif
-
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''TAU''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
+  CALL READ_FROM_INCAR(LOPEN, 'TAU', 'F', 1, IDUM, &
+       & TAU, CDUM, LDUM, 'cavity surface tension (eV/Angstrom^2)')
 
 !---------------------------------------------------------------
 !EDIFFSOL
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'EDIFFSOL','=','#',';','F',IDUM,EDIFFSOL,CDUM,LDUM,CHARAC,N,1,IERR)
-#ifdef debugsol
-      IF (IERR == 3 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
+  CALL READ_FROM_INCAR(LOPEN, 'EDIFFSOL', 'F', 1, IDUM, &
+       & EDIFFSOL, CDUM, LDUM, 'solvation convergence tolerance')
 
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'EDIFFSOL = ', EDIFFSOL          
-         
-      ELSE IF (IERR == 0 ) THEN
-      
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Found : EDIFFSOL = ', EDIFFSOL 
-         
-      ENDIF
-#endif
+!---------------------------------------------------------------
+!LBCHG
+!---------------------------------------------------------------
+  CALL READ_FROM_INCAR(LOPEN, 'LBCHG', 'L', 1, IDUM, &
+       & RDUM, CDUM, LBCHG, 'write the bound charge file')
 
-      IF ((IERR/=0).AND.(IERR/=3)) THEN
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Error reading ''EDIFFSOL''from INCAR.'
-         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
-         STOP
-      ENDIF
-
+  RETURN
 
 END SUBROUTINE SOL_READER
+
 
 !>==========================SUBROUTINE SOL_WRITER============================
 !!
@@ -1058,7 +865,6 @@ END SUBROUTINE SOL_READER
 !!for the solvent to outcar
 !!
 !!===========================================================================
-
 SUBROUTINE SOL_WRITER()
 
  IMPLICIT NONE
@@ -1078,17 +884,17 @@ SUBROUTINE SOL_WRITER()
              '   Nsol_K   =',F10.6,  '  molarity (mol/L)' /&
              '   EB_K     =',F10.6,  '  relative permittivity of the bulk solvent' /&
              '   EINFTY_K =',F10.6,  '  relative permittivity(optical) of the bulk solvent' /&
-!             '   P0_K     =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
+             '   P0_K     =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
              '   TAU      =',F10.6,  '  cavity surface tension (eV/Angstrom^2)' /)
 
 END SUBROUTINE SOL_WRITER 
+
 
 !>==========================SUBROUTINE Fcorrection============================
 !!
 !!Force Correction
 !!
 !!===========================================================================
-
 SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
   USE constant 
   USE poscar, ONLY : type_info 
@@ -1287,6 +1093,106 @@ SUBROUTINE GETRCORE(NTYP,RCS)
  RETURN
 
 END SUBROUTINE GETRCORE
+
+!>========================== SUBROUTINE READ_FROM_INCAR ===========
+!!
+!!
+!! The following comment copied from drdatab.F file in vasp.5.lib
+!!
+!  There may be specified five types (given in variable TYPE) for the  
+!  data to be extracted:                                               
+!                                                                      
+!     -- 'S'    read some string       --> result goes to variable STR 
+!     -- 'I'    read integer data list --> result goes to array INTRES 
+!     -- 'F'    read real    data list --> result goes to array FLTRES 
+!     -- 'C'    read complex data list --> result goes to array CMPRES 
+!     -- 'L'    read logical data list --> result goes to array LOGRES 
+!                                                                      
+!  for TYPE=I,F,C and L the variable N returns the number of elements  
+!  found in the data list, if an error occurred (e.g. wrong format) N  
+!  will be zero (and IERR non-zero). For TYPE=S variable N returns the 
+!  position of the last non-blank character in variable STR ... .      
+!                                                                      
+!  IERR returns an error code if any problem occured (normal: IERR=0)  
+!     -- IERR=1   no free I/O-unit found to open file                  
+!     -- IERR=2   OPEN error (e.g. file not found, ...)                
+!     -- IERR=3   'keyword' (WHAT) not found on specified file         
+!     -- IERR=4   invalid data type (TYPE)                             
+!     -- IERR=5   error reading/parsing data list (check format!)      
+!     -- IERR=6   cannot open scratch file for conversion of data      
+!                                                                      
+! RDUM_ARRAY : reading in an array of real values, optional
+!!=====================================================================
+SUBROUTINE READ_FROM_INCAR(LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM, &
+     & RDUM, CDUM, LDUM, MSG, RDUM_ARRAY)
+
+  USE prec
+  USE mgrid
+  
+  IMPLICIT NONE
+
+  INTEGER :: IDUM, N, IERR, VAR_SIZE
+  !INTEGER :: IDUM_ARRAY(VAR_SIZE)
+  REAL(q) :: RDUM
+  REAL(q),OPTIONAL :: RDUM_ARRAY(VAR_SIZE)
+  COMPLEX(q) :: CDUM !, CDUM_ARRAY(VAR_SIZE)
+  LOGICAL :: LOPEN, LDUM !, LDUM_ARRAY(VAR_SIZE)
+  CHARACTER (1) CHARAC
+  CHARACTER (1) VAR_TYPE
+  CHARACTER (*) VAR_NAME
+  CHARACTER (*) MSG
+
+  IF (VAR_SIZE == 1) THEN
+     CALL RDATAB(LOPEN, 'INCAR', SP_IO%IU5, VAR_NAME, '=', '#', ';', VAR_TYPE, &
+          & IDUM, RDUM, CDUM, LDUM, CHARAC, N, VAR_SIZE, IERR)
+  ELSE
+     CALL RDATAB(LOPEN, 'INCAR', SP_IO%IU5, VAR_NAME, '=', '#', ';', VAR_TYPE, &
+          & IDUM, RDUM_ARRAY, CDUM, LDUM, CHARAC, N, VAR_SIZE, IERR)
+  ENDIF
+
+#ifdef debugsol      
+  IF (IERR == 3 ) THEN      
+     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) VAR_NAME, ' not found in INCAR. Default value will be used'
+     WRITE(SP_IO%IU0,*) MSG
+     IF (VAR_TYPE == 'I') THEN
+        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', IDUM
+     ELSEIF (VAR_TYPE == 'C') THEN
+        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
+     ELSEIF (VAR_TYPE == 'L') THEN
+        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
+     ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE > 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
+        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
+     ELSEIF (VAR_TYPE == 'F') THEN
+        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM
+     ENDIF
+  ELSE IF (IERR == 0 ) THEN
+     IF (SP_IO%IU0>=0) THEN
+        WRITE(SP_IO%IU0,*)'Found : ', VAR_NAME, ', ', MSG
+        IF (VAR_TYPE == 'I') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', IDUM
+        ELSEIF (VAR_TYPE == 'C') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
+        ELSEIF (VAR_TYPE == 'L') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
+        ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE > 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
+        ELSEIF (VAR_TYPE == 'F') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM
+        ENDIF
+     ENDIF
+  ELSEIF ( IERR == 1 .OR. IERR == 2) THEN
+     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'Error reading INCAR'
+     STOP
+  ENDIF
+#endif
+
+  IF ((IERR/=0).AND.(IERR/=3)) THEN
+     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'Error reading ', VAR_NAME, 'from INCAR.'
+     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+     STOP
+  ENDIF
+
+END SUBROUTINE READ_FROM_INCAR
 
 
 END MODULE POT_K
