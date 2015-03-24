@@ -37,6 +37,7 @@ MODULE POT_K
  REAL(q), ALLOCATABLE, SAVE             :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
  REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C,tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE                 :: kappa2b_k, lambda_d_k
 
  LOGICAL, SAVE                          :: LNLSOL = .FALSE.
  REAL(q), PRIVATE, SAVE                 :: p0_k, einfty_k, Nsol_k, T_k
@@ -162,7 +163,7 @@ MODULE POT_K
 #endif
 
      CALL SET_PARAMS_LPCM(sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, &
-                            & sigma_rc_k, tau, ediffsol, SP_T_INFO%NTYP)
+                            & sigma_rc_k, tau, ediffsol, SP_T_INFO%NTYP, kappa2b_k)
 
      CALL Vcorrection_lpcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
                            & PS_TOTN, Vcorr, Vdiel, Adiel)
@@ -181,10 +182,11 @@ MODULE POT_K
 #endif
 
      CALL CONSTRUCTOR_NLN(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, &
-                          & sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
-                           & p0_k, einfty_k, Nsol_k, T_k, LBCHG)
+          & sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, sigma_rc_k, tau, ediffsol, &
+          & p0_k, einfty_k, Nsol_k, T_k, &
+          & NION_K, ZION_K, RION_K, NION_COUNT_K, LBCHG, kappa2b_k)
 
-!VCORR= just the poisson difference, VDIEL= the rest
+!VCORR= delta phi, VDIEL= the rest
      CALL VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VDIEL, VCORR, ADIEL )
 
      CALL DESTRUCTOR_NLN()
@@ -513,6 +515,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 
  SUBROUTINE SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
 
+   USE constant
    USE poscar, ONLY : type_info 
    USE lattice, ONLY : latt, DIRKAR 
    USE mgrid, ONLY : grid_3d
@@ -570,14 +573,12 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !   RCS = (/(P(K)%PSRMAX,K=1,T_INFO%NTYP)/) !PSDMAX, maximal r for nonlocal contribution (in fact rmax=PSRMAX/NPSNL*(NPSNL-1))
 
 !   sigma_rc_k = MINVAL(RCS)*2.0/4.0_q   ! sigma for the pseudo core
+
+   sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
+
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'RCOREs = ', RCS      
 #endif
-!STOP
-   sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
-
-!   print *,RCS,sigma_rc_k
-!   stop
 
    CORE_C = 1.0_q
 
@@ -595,11 +596,14 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,flag,Vcorr,Vdi
 !---------------------------------------------------------------
 !sigma_rc_k
 !---------------------------------------------------------------
-   CALL READ_FROM_INCAR(LOPEN, 'SIGMA_RC_K', 'F', 1, IDUM, &
-        & SIGMA_RC_K0, CDUM, LDUM, 'the width of pseudo-core gaussians (Angstrom)')
-   DO I = 1, T_INFO%NTYP
-      sigma_rc_k(I) = sigma_rc_k0
-   ENDDO
+!   CALL READ_FROM_INCAR(LOPEN, 'SIGMA_RC_K', 'F', 1, IDUM, &
+!        & SIGMA_RC_K0, CDUM, LDUM, 'the width of pseudo-core gaussians (Angstrom)')
+!   DO I = 1, T_INFO%NTYP
+!      sigma_rc_k(I) = sigma_rc_k0
+!   ENDDO
+#ifdef debugsol      
+   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'SIGMA_RC_K = ', SIGMA_RC_K
+#endif
 
 !---------------------------------------------------------------
 !CORE_C
@@ -692,6 +696,8 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   einfty_k = 1.78_q   !!!1.33 * 1.33 ! square of water refractive index 
   Nsol_k   = 55.35_q  !!!@ 25C, 997.075/18.015 = 55.35!!!55.5 !mol/L, for water
   T_k      = 298.15_q !!!25C, temperature in kelvin
+!debye length, set to infinity
+  lambda_d_k = 1E100_q
 
 !!!default ionic species parameters
 ! default electrolyte: 1M NaF
@@ -733,6 +739,7 @@ END SUBROUTINE SET_SOL_IO
 
 SUBROUTINE SOL_READER()
 
+  USE constant
   USE setexm
   USE vaspxml
   
@@ -852,6 +859,23 @@ SUBROUTINE SOL_READER()
 !---------------------------------------------------------------
   CALL READ_FROM_INCAR(LOPEN, 'LBCHG', 'L', 1, IDUM, &
        & RDUM, CDUM, LBCHG, 'write the bound charge file')
+
+!---------------------------------------------------------------
+!LAMBDA_D_K
+!---------------------------------------------------------------
+  CALL READ_FROM_INCAR(LOPEN, 'LAMBDA_D_K', 'F', 1, IDUM, &
+       & LAMBDA_D_K, CDUM, LDUM, 'Debye length (Angstroms)')
+
+  !kappa^2 from debye length
+  IF (LAMBDA_D_K > 1E30_q) THEN
+     KAPPA2B_K = 0._q
+  ELSE
+     KAPPA2B_K = 1._q / (LAMBDA_D_K ** 2) * AUTOA**2  ! in 1/a.u^2
+  ENDIF
+
+  ! override kappa^2 for nonlinear sol
+  ! in 1/a.u^2
+  IF (LNLSOL) KAPPA2B_K = 4._q * PI * SUM(NION_K * 6.022 * 1E-4_q * (AUTOA**3) * ZION_K * ZION_K) / (BOLKEV * T_k/(2 * RYTOEV))/ EB_K
 
   RETURN
 
@@ -1151,18 +1175,20 @@ SUBROUTINE READ_FROM_INCAR(LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM, &
 
 #ifdef debugsol      
   IF (IERR == 3 ) THEN      
-     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) VAR_NAME, ' not found in INCAR. Default value will be used'
-     WRITE(SP_IO%IU0,*) MSG
-     IF (VAR_TYPE == 'I') THEN
-        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', IDUM
-     ELSEIF (VAR_TYPE == 'C') THEN
-        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
-     ELSEIF (VAR_TYPE == 'L') THEN
-        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
-     ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE > 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
-        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
-     ELSEIF (VAR_TYPE == 'F') THEN
-        WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM
+     IF (SP_IO%IU0>=0) THEN 
+        WRITE(SP_IO%IU0,*) VAR_NAME, ' not found in INCAR. Default value will be used'
+        WRITE(SP_IO%IU0,*) MSG
+        IF (VAR_TYPE == 'I') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', IDUM
+        ELSEIF (VAR_TYPE == 'C') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
+        ELSEIF (VAR_TYPE == 'L') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
+        ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE > 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
+        ELSEIF (VAR_TYPE == 'F') THEN
+           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM
+        ENDIF
      ENDIF
   ELSE IF (IERR == 0 ) THEN
      IF (SP_IO%IU0>=0) THEN

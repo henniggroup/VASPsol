@@ -26,10 +26,10 @@ MODULE POT_NLN_K
 
  PUBLIC  :: CONSTRUCTOR_NLN, VCORRECTION_NLN_PCM, DESTRUCTOR_NLN
  !private subroutines and functions
- PRIVATE :: SET_PARAMS_NLN, COMPUTE_EPSILON_NLN, SET_GVEC_NLN
- PRIVATE :: VA_RHOB, VA_CAV, VA_DMED
+ PRIVATE :: SET_PARAMS_NLN, COMPUTE_EPSILON_KAPPA2, SET_GVEC_NLN
+ PRIVATE :: VA_RHOB, VA_CAV, VA_DMED, VA_KAPPA2
  PRIVATE :: VACORR_ELECTROSTATIC, VACORR_NON_ELECTROSTATIC
- PRIVATE :: INIT_EFIELD, UPDATE_EFIELD, SET_EEFF_TABLE, MINIMIZE_NLN
+ PRIVATE :: INIT_FIELDS, UPDATE_FIELDS, SET_EEFF_TABLE, MINIMIZE_NLN
  !for test and debug
  PRIVATE :: TEST_K, WRITE_ARRAY_TO_FILE
  !functions
@@ -46,19 +46,28 @@ MODULE POT_NLN_K
 
  !solvation paramters
  REAL(q), PRIVATE, SAVE :: p0_k, einfty_k, Nsol_k, kb_k, T_k
- REAL(q), PRIVATE, SAVE :: KT, XX_k, dv, alpha_k
+ REAL(q), PRIVATE, SAVE :: KT, XX_k, dv, alpha_k, kappa2b_k
  REAL(q), PRIVATE, SAVE :: pkT !p0/k/T
+ INTEGER, PRIVATE, SAVE :: NION_COUNT_K
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: NION_K(:), ZION_K(:), RION_K(:), VION_K(:)
+ REAL(q), PRIVATE, SAVE :: BZ_X_BLK ! bulk packing fraction
+ REAL(q), PRIVATE, SAVE :: NTOT_K !sum(N_i) 
+ REAL(q), ALLOCATABLE, PRIVATE :: BZ_ETA(:,:) ! boltzman factor for each ionic species, \eta_i
+ REAL(q), ALLOCATABLE, PRIVATE :: BZ_X(:) ! packing fraction, x
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: BZ_X_TAB(:) ! lookup table
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: BZ_X_SPL(:,:) ! spline coeffs
 
  REAL(q), PRIVATE, PARAMETER :: HART_TO_EV_K = 2 * RYTOEV
 
  REAL(q), PRIVATE, SAVE :: EDIFFSOL_INNER, EDIFFSOL_OUTER, DIFFPHI=1._q
 
  !soln to the poisson eqn
- COMPLEX(q), PRIVATE, ALLOCATABLE :: PHI_TILDA(:) 
+ COMPLEX(q), PRIVATE, ALLOCATABLE :: PHI_TILDA(:), R_PHI_TMP(:), SYS_TOTN(:)
  !modulus of electri field vector in real space
- REAL(q), PRIVATE, ALLOCATABLE :: EFIELD(:)
+ REAL(q), PRIVATE, ALLOCATABLE :: EFIELD(:), R_PHI(:)
  !ps_totn in real space
- REAL(q), PRIVATE, ALLOCATABLE :: R_PS_TOTN(:) 
+ REAL(q), PRIVATE, ALLOCATABLE :: R_PS_TOTN(:)
+ REAL(q), PRIVATE, ALLOCATABLE :: R_RHOB(:), R_RHOION(:), R_RHOB_DER(:), R_RHOION_DER(:)
  !array of G vectors
  REAL(q), PRIVATE, ALLOCATABLE :: GVEC_NLN(:,:) 
 
@@ -104,30 +113,27 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
  ADIEL  = 0._q
  ACAV  = 0._q
  ATOT  = 0._q
+ !SYS_TOTN = 0._q
+ !SYS_TOTN = SYS_TOTN + TOTN
 
 !!!set R_PS_TOTN, ps-totn in real space with volume scaling removed
-
  PS_TOTN_TMP = PS_TOTN / LATT_CUR_NLN%OMEGA
-
  CALL FFT3D(PS_TOTN_TMP, GRIDC_NLN, 1)
-
  R_PS_TOTN = 0._q
-
 !!!r_ps_totn in the units of 1/Angstrom^3
  CALL UNPACK_C2R(PS_TOTN_TMP, 1.0_q, PS_TOTN_TMP, 0.0_q, R_PS_TOTN, GRIDC_NLN)
-
 !!!end of setting R_PS_TOTN
 
  !nonlinear solver
  CALL MINIMIZE_NLN(TOTN, NCGSOL) 
-
- CALL UPDATE_EFIELD()
+ !update the effective field and the packing fraction
+ CALL UPDATE_FIELDS()
 
 !!!returns pot and energy in atomic units
-!!! ADIEL = ADM + AEPS + AEL
+!!! ADIEL = ADM + AEPS + AKAPPA2 + AEL
 !!! where AEL = 0.5 \int (\phi - \phi_H) \rho_solute
 !!! and VEL is the potential corresponding to AEL
-!!! VCORR = VDM + VRHOB(pot corresponding to AEPS)
+!!! VCORR = VDM + VRHOB + VKAPPA2
  CALL VACORR_ELECTROSTATIC(TOTN, ADIEL, VEL, VCORR)
 
 !!!returns pot and energy in atomic units
@@ -139,8 +145,10 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
  ATOT = ADIEL + ACAV
 
 #ifdef debugsol
+ IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ADIEL(in a.u) = &
+      & ADM + AEPS + AEL + + AKAPPA2   =  ", ADIEL
  IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in a.u) = &
-      & ADM + AEPS + AEL + ACAV  =  ", ATOT
+      & ADIEL + ACAV  =  ", ATOT
 #endif
 
 !!!to eV
@@ -151,9 +159,6 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 #ifdef debugsol
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ATOT(in eV) = ", ATOT
 #endif
-
-!!!compute and write the boundcharge to file, filename: BCHG
- IF (LBCHG) CALL COMPUTE_RHOB_NLN()
 
  DEALLOCATE(PS_TOTN_TMP)
 
@@ -169,7 +174,8 @@ END SUBROUTINE VCORRECTION_NLN_PCM
 !!=====================================================================
 SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1, nc_k1, &
                            & eb_k1, CORE_C1, sigma_rc_k1, tau1, ediffsol1, &
-                           & p0_k1, einfty_k1, Nsol_k1, T_k1, LBCHG_1)
+                           & p0_k1, einfty_k1, Nsol_k1, T_k1, &
+                           & NION_K1, ZION_K1, RION_K1, NION_COUNT_K1, LBCHG_1, kappa2b_k1)
 
  IMPLICIT NONE
 
@@ -182,7 +188,9 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1
  LOGICAL :: LBCHG_1
  REAL(q) :: sigma_nc_k1, sigma_k1, nc_k1
  REAL(q) :: eb_k1, CORE_C1, sigma_rc_k1(T_INFO%NTYP), tau1, ediffsol1
- REAL(q) :: p0_k1, einfty_k1, Nsol_k1, T_k1
+ REAL(q) :: p0_k1, einfty_k1, Nsol_k1, T_k1, kappa2b_k1
+ INTEGER :: NION_COUNT_K1
+ REAL(q) :: NION_K1(NION_COUNT_K1), ZION_K1(NION_COUNT_K1), RION_K1(NION_COUNT_K1)
 
  LBCHG = LBCHG_1
  IO_NLN = IO
@@ -205,25 +213,35 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1
 
  ALLOCATE(P_NLN(T_INFO_NLN%NTYP))
  ALLOCATE(EFIELD(SIZE_REAL), R_PS_TOTN(SIZE_REAL))
- ALLOCATE(PHI_TILDA(SIZE_REC), GVEC_NLN(3, SIZE_RCNP))
- ALLOCATE(E_EFF(SIZE_REAL))
+ ALLOCATE(PHI_TILDA(SIZE_REC), GVEC_NLN(3, SIZE_RCNP), R_PHI_TMP(SIZE_REC))
+ ALLOCATE(R_PHI(SIZE_REAL), E_EFF(SIZE_REAL))
+ ALLOCATE(BZ_X(SIZE_REAL), BZ_ETA(NION_COUNT_K1, SIZE_REAL))
+ ALLOCATE(R_RHOB(SIZE_REAL), R_RHOB_DER(SIZE_REAL))
+ ALLOCATE(R_RHOION(SIZE_REAL), R_RHOION_DER(SIZE_REAL))
+! ALLOCATE(SYS_TOTN(SIZE_REC))
 
  IF (PK_COUNTER == 1)  THEN
-    ALLOCATE(E_EFF_TAB(N_EF))
-    ALLOCATE(E_EFF_SPL(N_EF, 5))
+    ALLOCATE(E_EFF_TAB(N_EF), E_EFF_SPL(N_EF, 5))
+    ALLOCATE(BZ_X_TAB(N_EF), BZ_X_SPL(N_EF, 5))
     E_EFF_TAB = 0._q
     E_EFF_SPL = 0._q
+    BZ_X_TAB = 0._q
+    BZ_X_SPL = 0._q
 
     ALLOCATE(SOL_PHI(SIZE_REC))
     SOL_PHI = 0._q
 
     CALL SET_PARAMS_LPCM(sigma_nc_k1, sigma_k1, nc_k1, eb_k1, CORE_C1, sigma_rc_k1, tau1, &
-                      & ediffsol1, T_INFO_NLN%NTYP)
-    CALL SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
+                      & ediffsol1, T_INFO_NLN%NTYP, kappa2b_k1)
+    CALL SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, &
+         & NION_K1, ZION_K1, RION_K1, NION_COUNT_K1, eb_k1)
+
  ENDIF
 
  P_NLN = P
  PHI_TILDA = 0._q
+ R_PHI_TMP = 0._q
+ R_PHI = 0._q 
 ! EFIELD = 0._q
  R_PS_TOTN = 0._q
  GVEC_NLN = 0._q
@@ -246,6 +264,11 @@ SUBROUTINE DESTRUCTOR_NLN()
  IMPLICIT NONE
 
  DEALLOCATE(P_NLN, EFIELD, R_PS_TOTN, PHI_TILDA, GVEC_NLN, E_EFF)
+ DEALLOCATE(BZ_X, BZ_ETA)
+ DEALLOCATE(R_PHI_TMP, R_PHI)
+ DEALLOCATE(R_RHOB, R_RHOB_DER)
+ DEALLOCATE(R_RHOION, R_RHOION_DER)
+! DEALLOCATE(SYS_TOTN)
 
  PK_COUNTER = PK_COUNTER + 1
 
@@ -259,28 +282,24 @@ END SUBROUTINE DESTRUCTOR_NLN
 !! Sets the params specifi to the nonlinear model
 !!
 !!=====================================================================
-SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
+SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, ZION_K1, RION_K1, NION_COUNT_K1, EB_K1)
 
  IMPLICIT NONE
 
- REAL(q) :: p0_k1, einfty_k1, Nsol_k1, kb_k1, T_k1
+ REAL(q) :: p0_k1, einfty_k1, Nsol_k1, kb_k1, T_k1, EB_K1
+ INTEGER :: NION_COUNT_K1, I
+ REAL(q) :: NION_K1(NION_COUNT_K1), ZION_K1(NION_COUNT_K1), RION_K1(NION_COUNT_K1)
+
+ ALLOCATE(NION_K(NION_COUNT_K1), ZION_K(NION_COUNT_K1))
+ ALLOCATE(RION_K(NION_COUNT_K1), VION_K(NION_COUNT_K1))
+
+ NION_COUNT_K = NION_COUNT_K1
 
 !-----------------------------------------------------------------
 !dimensionless quatity
 !einfty_k = (refractive index)**2
 !-----------------------------------------------------------------
  einfty_k = einfty_k1
-
-!-----------------------------------------------------------------
-!number of solvent molecules per unit volume
-!INCAR input in mol/liter
-! to convert to molecules per Angstrom^3 multiply by 6.022141 * 1E-4
-! eg:- molar concentration of water = 55.5 mol/L
-! ==> 0.033 molecules/Angstrom^3
-! also multiply by AUTOA**3 to convert to atomic units
-!for the above example the value is approximately 0.005 in atomic units
-!-----------------------------------------------------------------
- Nsol_k   = Nsol_k1 * 6.022 * 1E-4_q * (AUTOA**3)
 
 !-----------------------------------------------------------------
 !temperature in kelvin
@@ -320,18 +339,72 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1)
  pkT      = p0_k/KT
 
 !-----------------------------------------------------------------
-!the alpha parameter from the paper
+!number of solvent molecules per unit volume
+!INCAR input in mol/liter
+! to convert to molecules per Angstrom^3 multiply by 6.022141 * 1E-4
+! eg:- molar concentration of water = 55.5 mol/L
+! ==> 0.033 molecules/Angstrom^3
+! also multiply by AUTOA**3 to convert to atomic units
+!for the above example the value is approximately 0.005 in atomic units
 !-----------------------------------------------------------------
- alpha_k =  3._q - (4._q * PI * Nsol_k * p0_k**2) / KT / (eb_k - einfty_k)
+ Nsol_k   = Nsol_k1 * 6.022 * 1E-4_q * (AUTOA**3)
 
 !-----------------------------------------------------------------
-!the X parameter from the paper
+!the alpha parameter from the paper
+!-----------------------------------------------------------------
+ alpha_k =  3._q - (4._q * PI * Nsol_k * p0_k**2) / KT / (eb_k1 - einfty_k)
+
+!-----------------------------------------------------------------
+!non-dimensional \eps_infinty
 !-----------------------------------------------------------------
  XX_k =  KT * (einfty_k - 1._q) / ( 4._q * PI * Nsol_k * p0_k**2 ) 
 
+!-----------------------------------------------------------------
+! ion number density in a.u
+!-----------------------------------------------------------------
+ NION_K   = NION_K1 * 6.022 * 1E-4_q * (AUTOA**3)
+ NTOT_K = SUM(NION_K)
+
+!-----------------------------------------------------------------
+! charge of the ionic species in a.u
+! note: in a.u, unit charge = 1
+!-----------------------------------------------------------------
+ ZION_K   = ZION_K1 
+
+!-----------------------------------------------------------------
+! ionic radii in a.u i.e bohr
+!-----------------------------------------------------------------
+ RION_K   = RION_K1 / AUTOA
+
+!-----------------------------------------------------------------
+! ionic volume in a.u i.e bohr^3
+!-----------------------------------------------------------------
+ VION_K = (4._q/3._q) * PI * RION_K**3
+
+!-----------------------------------------------------------------
+! bulk packing fraction = sum(V_i * N_i) in a.u
+!-----------------------------------------------------------------
+ BZ_X_BLK = SUM(VION_K * NION_K)
+
+!-----------------------------------------------------------------
+! kappa square in the low pot limit = 4*\pi*sum(N_i*Z_i**2)/kT/eb_k
+!-----------------------------------------------------------------
+ kappa2b_k = 4._q * PI * SUM(NION_K * ZION_K * ZION_K) / KT / EB_K1
+
 
 #ifdef debugsol
-     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "eb_k, einfty_k, Nsol_k, p0_k, T_k, KT, pkT, alpha_k, XX_k (all in a.u) ", eb_k, einfty_k, Nsol_k, p0_k, T_k, KT, pkT, alpha_k, XX_k
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "eb_k, einfty_k, Nsol_k, p0_k, T_k (all in a.u) "
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) eb_k, einfty_k, Nsol_k, p0_k, T_k
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "KT, pkT, alpha_k, XX_k (all in a.u) "
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) KT, pkT, alpha_k, XX_k
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "NION_K (in a.u) ", NION_K
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "NTOT_K (in a.u) ", NTOT_K
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "ZION_K (in a.u) ", ZION_K
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "RION_K (in a.u) ", RION_K
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "VION_K (in a.u) ", VION_K
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "BZ_X_BLK (in a.u) ", BZ_X_BLK
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "KAPPA2B_K (in a.u^-2) ", KAPPA2B_K
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "Debye length (in Angstrom) ", SQRT(1._q/KAPPA2B_K) * AUTOA
 #endif
 
  RETURN
@@ -524,69 +597,7 @@ FUNCTION CHI_NLN(I)
 END FUNCTION CHI_NLN
 
 
-!>========================== SUBROUTINE RHOB_NLN ======================
-!!
-!! compute the bound charge in real space
-!! bound charge, rho_b = -\nabla \cdot P 
-!! = - \epsilon_0 \nabla \chi \vec{E}
-!! =  \epsilon_0 \nabla \cdot (\chi (\nabla \phi) )
-!!=====================================================================
-SUBROUTINE COMPUTE_RHOB_NLN()
-
- IMPLICIT NONE
-
- INTEGER(q) :: I
- REAL(q), ALLOCATABLE :: R_CHI_WORK(:), R_RHOB_WORK(:)
- COMPLEX(q), ALLOCATABLE :: C_RHOB_WORK(:)
- COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
- COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
- COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
-
- ALLOCATE(R_CHI_WORK(SIZE_REAL), R_RHOB_WORK(SIZE_RLNP), C_RHOB_WORK(SIZE_REC))
- ALLOCATE(gradphi_x_in(SIZE_REC), gradphi_y_in(SIZE_REC))
- ALLOCATE(gradphi_z_in(SIZE_REC))
-
-!!!initialize
- R_CHI_WORK = 0._q
- R_RHOB_WORK = 0._q
-
-!susceptibility in real space
- DO I = 1, SIZE_RLNP
-    R_CHI_WORK(I) = CHI_NLN(I) * SHAPE_FUNC(I) 
- ENDDO
-
-!!!c_rhob_work = div(chi*grad phi) in reciprocal space
- CALL LEPS(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, PHI_TILDA, R_CHI_WORK, &
-                & gradphi_x_in, gradphi_y_in, gradphi_z_in, C_RHOB_WORK)
-
-!!!note: in the above subroutine call, phi_tilda used was scaled by edeps/volume
-!!!in a.u, without the volume scaling
-!!!C_RHOB_WORK = C_RHOB_WORK * (4 * PI * AUTOA / EDEPS) * (AUTOA**2) * 4 * PI
-!!!==> in units of Angstrom^-3
-C_RHOB_WORK = C_RHOB_WORK * (4 * PI / EDEPS) * 4 * PI
-
-!to real space
- CALL FFT3D(C_RHOB_WORK, GRIDC_NLN, 1)
-
-!!!R_CHI_WORK overwritten
- CALL UNPACK_C2R(C_RHOB_WORK, 1.0_q, C_RHOB_WORK, 0.0_q, R_CHI_WORK, GRIDC_NLN)
-
-!!!multiply by the volume(in ang^3) to be consistent with CHG(or CHGCAR) file format
- DO I = 1, SIZE_RLNP
-    R_RHOB_WORK(I) = R_CHI_WORK(I) * LATT_CUR_NLN%OMEGA
- ENDDO
-
-  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BCHG', R_RHOB_WORK)
-
- DEALLOCATE(R_CHI_WORK, R_RHOB_WORK, C_RHOB_WORK)
- DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in)
-
- RETURN
-
-END SUBROUTINE COMPUTE_RHOB_NLN
-
-
-!>==========================SUBROUTINE INIT_EFIELD ====================
+!>==========================SUBROUTINE INIT_FIELDS ====================
 !!
 !! initializes EFIELD = |E| = |\grad \phi|, using Sol_phi from pot_lpcm_cav.F
 !! Sol_phi doesnt have edeps/omega scaling 
@@ -595,14 +606,21 @@ END SUBROUTINE COMPUTE_RHOB_NLN
 !! the spline coefficents table
 !!
 !!=====================================================================
-SUBROUTINE INIT_EFIELD()
+SUBROUTINE INIT_FIELDS()
 
  IMPLICIT NONE
 
- INTEGER(q)   :: I
- REAL(q)      :: GX,GY,GZ,tmp, E_MAX, E_MIN
- REAL(q)      :: X, Y, YDER
+ INTEGER(q)   :: I, J
+ REAL(q)      :: GX,GY,GZ,tmp, E_MAX, E_MIN, PHI_MIN, PHI_MAX
+ REAL(q)      :: X, Y, YDER, Y1
  REAL(q), ALLOCATABLE :: E_X(:)
+
+ ! pot to real space and to a.u
+ R_PHI_TMP = SOL_PHI
+ CALL FFT3D(R_PHI_TMP, GRIDC_NLN, 1)
+ R_PHI = 0._q
+ CALL UNPACK_C2R(R_PHI_TMP, 1.0_q, R_PHI_TMP, 0.0_q, R_PHI, GRIDC_NLN)
+ R_PHI = R_PHI * 4 * PI * AUTOA / LATT_CUR_NLN%OMEGA
 
  !reurns EFIELD = |\grad \phi|^2 in real space
  CALL NABLAN(SOL_PHI, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
@@ -619,55 +637,82 @@ SUBROUTINE INIT_EFIELD()
  E_MIN = 1E-6_q
  E_MAX = 100._q
 
+ !max and min of pot in atomic units
+ PHI_MIN = -100._q
+ PHI_MAX = 100._q
+
  !set the lookup table and the spline coefficients
  !sets E_X, E_EFF_TAB, E_EFF_SPL
  IF (PK_COUNTER == 1) THEN 
     ALLOCATE(E_X(N_EF))
 #ifdef debugsol
-     IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the lookup table and the spline coeffs"
+    IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the effective field lookup table"
 #endif
+
     CALL SET_EEFF_TABLE(E_MIN, E_MAX, E_X)
 #ifdef debugsol
     CALL WRITE_ARRAY_TO_FILE(E_X, N_EF, GRIDC_NLN, 'E_X')
     CALL WRITE_ARRAY_TO_FILE(E_EFF_TAB, N_EF, GRIDC_NLN, 'EF_TABLE')
+    IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the effective field spline coeffs"
 #endif
     CALL SPLCPY(E_X, E_EFF_TAB, E_EFF_SPL, N_EF, N_EF, 10E30_q) 
+
+#ifdef debugsol
+    IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing fraction lookup table"
+#endif
+    CALL SET_BZX_TABLE(PHI_MIN, PHI_MAX, E_X)
+#ifdef debugsol
+    CALL WRITE_ARRAY_TO_FILE(E_X, N_EF, GRIDC_NLN, 'PHI_X')
+    CALL WRITE_ARRAY_TO_FILE(BZ_X_TAB, N_EF, GRIDC_NLN, 'BZ_X_TABLE')
+    IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing fraction spline coeffs"
+#endif
+    CALL SPLCPY(E_X, BZ_X_TAB, BZ_X_SPL, N_EF, N_EF, 10E30_q) 
+
     DEALLOCATE(E_X)
  ENDIF
 
  !set the effective field array, E_EFF, corresponding to EFIELD 
  !using spline fit
+ ! also set the packing fraction and \eta_i
  DO I = 1, SIZE_RLNP
     X = EFIELD(I) * pkT
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     E_EFF(I) =  Y
+    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_EF, N_EF)
+    BZ_X(I) = Y1
+    DO J = 1, NION_COUNT_K
+       BZ_ETA(J, I) = BZ_ETA_I(J, BZ_X(I), R_PHI(I))
+    ENDDO
  ENDDO
-
-#ifdef debugsol
-  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'E_EFF', E_EFF)
-  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'EFIELD', EFIELD)
-#endif
 
  RETURN
 
-END SUBROUTINE INIT_EFIELD
+END SUBROUTINE INIT_FIELDS
 
 
-!>==========================SUBROUTINE UPDATE_EFIELD ==================
+!>==========================SUBROUTINE UPDATE_FIELDS ==================
 !!
-!! updates EFIELD = |E| = |\grad \phi|
+!! updates EFIELD = |E| = |\grad \phi| and phi in real space
 !! EFIELD in real space and in a.u
-!! also updates the corresponding effective field, E_EFF
+!! also updates the corresponding effective field, E_EFF, packing fraction
+!! and \eta_i
 !!
 !!=====================================================================
-SUBROUTINE UPDATE_EFIELD()
+SUBROUTINE UPDATE_FIELDS()
 
  IMPLICIT NONE
 
- INTEGER(q) :: I,N1,N2,N3,NC
+ INTEGER(q) :: I, J
  REAL(q) :: GX,GY,GZ,tmp
- REAL(q) :: X, Y, YDER
+ REAL(q) :: X, Y, Y1, YDER
  
+ ! pot to real space and to a.u
+ R_PHI_TMP = PHI_TILDA !SOL_PHI
+ CALL FFT3D(R_PHI_TMP, GRIDC_NLN, 1)
+ R_PHI = 0._q
+ CALL UNPACK_C2R(R_PHI_TMP, 1.0_q, R_PHI_TMP, 0.0_q, R_PHI, GRIDC_NLN)
+ R_PHI = R_PHI * 4 * PI * AUTOA / EDEPS !LATT_CUR_NLN%OMEGA
+
  !returns EFIELD = |\grad \phi|^2 in real space
  CALL NABLAN(PHI_TILDA, GRIDC_NLN, LATT_CUR_NLN, EFIELD)
 
@@ -680,15 +725,30 @@ SUBROUTINE UPDATE_EFIELD()
 
  !spline fit at the nondimensional electric field
  !set the effective field array, E_EFF
+ ! also set the packing fraction
  DO I = 1, SIZE_RLNP
     X = EFIELD(I) * pkT
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     E_EFF(I) =  Y
+    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_EF, N_EF)
+    BZ_X(I) = Y1
+    DO J = 1, NION_COUNT_K
+       BZ_ETA(J, I) = BZ_ETA_I(J, BZ_X(I), R_PHI(I)) 
+    ENDDO
  ENDDO
+
+#ifdef debugsol
+! IF (PK_COUNTER == 1) THEN
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'EFIELD', EFIELD)
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'R_PHI', R_PHI)
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'E_EFF', E_EFF)
+  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BZ_X', BZ_X)
+! ENDIF
+#endif
 
  RETURN
 
-END SUBROUTINE UPDATE_EFIELD
+END SUBROUTINE UPDATE_FIELDS
 
 
 !>==========================SUBROUTINE SET_EEFF_TABLE =================
@@ -730,15 +790,20 @@ FUNCTION EF(DIMLESS_E, TOL)
 
   IMPLICIT NONE
 
+  INTEGER(q) :: COUNT, COUNT_MAX
   REAL(q) :: EF, EF0, D_EF, DIMLESS_E, TOL
-  
+
+  COUNT_MAX = 2000
+  COUNT = 0
+
   EF0 = DIMLESS_E * 3._q/(3._q - alpha_k)
   D_EF = EF0
 
-  DO WHILE (ABS(D_EF) > TOL)
+  DO WHILE ( (ABS(D_EF) > TOL) .AND. (COUNT < COUNT_MAX) )
      EF = DIMLESS_E * G_E(EF0)
      D_EF = EF - EF0
      EF0 = EF
+     COUNT = COUNT + 1
   END DO
 
 END FUNCTION EF
@@ -761,28 +826,54 @@ FUNCTION G_E(E)
 END FUNCTION G_E
 
 
-!>==========================SUBROUTINE COMPUTE_EPSILON_NLN=================
+!>==========================SUBROUTINE COMPUTE_EPSILON_KAPPA2 =================
 !!
 !!  \espilon = 1 + \chi * s(n(r)), in real space
+!! kappa^2 in real space too
 !!
 !!==========================================================================
-SUBROUTINE COMPUTE_EPSILON_NLN(EPSILON_NLN)
+SUBROUTINE COMPUTE_EPSILON_KAPPA2(EPSILON_NLN, KAPPA2_NLN)
 
  IMPLICIT NONE
 
- REAL(q), INTENT(OUT) ::  EPSILON_NLN(SIZE_REAL)
-
- INTEGER(q) :: I
+ REAL(q), INTENT(OUT) ::  EPSILON_NLN(SIZE_REAL), KAPPA2_NLN(SIZE_REAL)
+ REAL(q) :: SUM, PHI_DENM
+ INTEGER(q) :: I, J
 
  EPSILON_NLN = 0._q
 
  DO I = 1, SIZE_RLNP
     EPSILON_NLN(I) = 1._q + CHI_NLN(I) * SHAPE_FUNC(I) 
+    SUM = 0._q
+    DO J = 1, NION_COUNT_K
+       SUM  = SUM + 4._q * PI * NION_K(J) * ZION_K(J) * BZ_ETA(J, I)
+    ENDDO
+    IF (ABS(R_PHI(I)) < 1E-10_q) THEN
+       IF (R_PHI(I) < 0._q) THEN
+          PHI_DENM = -1E-10_q
+       ELSE
+          PHI_DENM = 1E-10_q          
+       ENDIF
+    ELSE
+       PHI_DENM = R_PHI(I)
+    ENDIF
+    IF (PK_COUNTER == 1) THEN
+       ! in 1/angstrom^2
+       KAPPA2_NLN(I) = KAPPA2B_K * SHAPE_FUNC(I) / AUTOA**2 
+    ELSE
+       ! in 1/angstrom^2
+       KAPPA2_NLN(I) = -SUM * SHAPE_FUNC(I) / PHI_DENM / AUTOA**2
+    ENDIF
  ENDDO
 
+#ifdef debugsol
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'EPSILON_NLN', EPSILON_NLN)
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'KAPPA2_NLN', KAPPA2_NLN)
+#endif
+!STOP
  RETURN
 
-END SUBROUTINE COMPUTE_EPSILON_NLN
+END SUBROUTINE COMPUTE_EPSILON_KAPPA2
 
 
 !>==========================SUBROUTINE MINIMIZE_NLN ===================
@@ -795,12 +886,12 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
  IMPLICIT NONE
 
  COMPLEX(q),INTENT(IN)   :: TOTN(SIZE_REC)
- REAL(q), ALLOCATABLE    :: D_EPS(:)
+ REAL(q), ALLOCATABLE    :: D_EPS(:), D_KAPPA2(:)
 
  INTEGER(q) :: NCGSOL 
  REAL(q) :: ADIEL, ADIEL0, DIFF_ADIEL
 
- ALLOCATE(D_EPS(SIZE_REAL))
+ ALLOCATE(D_EPS(SIZE_REAL), D_KAPPA2(SIZE_REAL))
 
  ADIEL = 0._q
 
@@ -810,16 +901,20 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
  ! for the scf iteration i.e whne pk_counter = 1, sol_phi = 0
  ! ==> efield = 0
  ! also updates the module variable, E_EFF, the effective field
- CALL INIT_EFIELD()
+ CALL INIT_FIELDS()
+
  !sets the dielectric constant using the module variable, E_EFF, the 
  !effective field computed from the actual field EFIELD
- CALL COMPUTE_EPSILON_NLN(D_EPS)
+ CALL COMPUTE_EPSILON_KAPPA2(D_EPS, D_KAPPA2)
 
  !-------------------------------------------------------------
  !Solves the generalized poisson eqn using CG, returns phi_tilda 
  !scaled by edeps/cell vol
  !-------------------------------------------------------------
- CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, TOTN, PHI_TILDA, NCGSOL, DIFFPHI)
+ CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, D_KAPPA2, TOTN, PHI_TILDA, NCGSOL, DIFFPHI)
+ ! use the module variable PHI_TILDA to update EFIELD
+ !also update E_EFF
+ CALL UPDATE_FIELDS()
  ! get the net electrostatic dielectric energy contribution i.e
  ! skip the caviation energy term and vasp original vacuum contribution
  CALL VACORR_ELECTROSTATIC(TOTN, ADIEL0)
@@ -828,16 +923,14 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
 
  ! DO WHILE ( (SQRT(DIFFPHI) > 1e-6) )
  DO WHILE ( (ABS(DIFF_ADIEL) > 1E-6) )
-    ! use the module variable PHI_TILDA to update EFIELD
-    !also update E_EFF
-    CALL UPDATE_EFIELD()
     !update the dielctric constant using the updated E_EFF
-    CALL COMPUTE_EPSILON_NLN(D_EPS)
+    CALL COMPUTE_EPSILON_KAPPA2(D_EPS, D_KAPPA2)
     !solve the poisson eqn using CG for the given dielctric constant
     ! returns phi_tilda 
     !scaled by edeps/cell vol
-    CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS,&
+    CALL MINIMIZE(GRIDC_NLN, LATT_CUR_NLN, P_NLN, T_INFO_NLN, D_EPS, D_KAPPA2, &
          & TOTN, PHI_TILDA, NCGSOL, DIFFPHI)
+    CALL UPDATE_FIELDS()
     !get the electrostatic contrib to the dielectric energy
     CALL VACORR_ELECTROSTATIC(TOTN, ADIEL)
     DIFF_ADIEL = ADIEL - ADIEL0
@@ -849,7 +942,7 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
     MIN_COUNTER = MIN_COUNTER + 1
  ENDDO
 
- DEALLOCATE(D_EPS)
+ DEALLOCATE(D_EPS, D_KAPPA2)
 
  RETURN
 
@@ -860,24 +953,31 @@ END SUBROUTINE MINIMIZE_NLN
 !!
 !! computes the net electroststic potential and energy contributions
 !! to the dielctric energy ie.e everything except Vcav and  Acav
+!! vcorr = v_rhob + V_dm + V_kappa2 
+!! vel = delta phi 
 !!
 !!=====================================================================
 SUBROUTINE VACORR_ELECTROSTATIC(TOTN, ADIEL, VEL, VCORR)
 
  IMPLICIT NONE
 
- REAL(q) :: AEL, ARHOB, ACAV, ADM, AEPS, Ecorr1, Ecorr2, ADIEL
+ REAL(q) :: AEL, ARHOB, ACAV, ADM, AEPS, Ecorr1, Ecorr2, ADIEL, AKAPPA2
  COMPLEX(q) :: TOTN(SIZE_REC)
  COMPLEX(q), OPTIONAL :: VEL(SIZE_REC), VCORR(SIZE_REC)
  COMPLEX(q), ALLOCATABLE :: PHI(:), VRHOB(:)
- COMPLEX(q), ALLOCATABLE :: VDM(:)
+ COMPLEX(q), ALLOCATABLE :: VDM(:), VKAPPA2(:)
 
  ALLOCATE(PHI(SIZE_REC) )
 
+ !compute rho_b, rho_ion and their derivatives in real space
+ CALL COMPUTE_RHOB()
+ CALL COMPUTE_RHOION()
+! STOP
+
  IF (PRESENT(VCORR)) THEN
     ALLOCATE(VRHOB(SIZE_REC))
-    CALL VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
-    VCORR = VCORR + VRHOB
+    CALL VA_RHOB(VRHOB)
+    VCORR = VRHOB
  ENDIF
 
  CALL SimplePoisson(GRIDC_NLN, LATT_CUR_NLN, TOTN, PHI, 1)
@@ -921,15 +1021,21 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, ADIEL, VEL, VCORR)
  !rest of the electrostatic correction
  ADM = 0._q
  AEPS = 0._q
+ AKAPPA2 = 0._q
 
  !!!returns pot and energy in atomic units
  IF (PRESENT(VCORR)) THEN
     ALLOCATE( VDM(SIZE_REC) ) 
+    ALLOCATE( VKAPPA2(SIZE_REC) ) 
     VDM = 0._q
     CALL VA_DMED(ADM, AEPS, VDM)
     VCORR = VCORR + VDM
+    VKAPPA2 = 0._q
+    CALL VA_KAPPA2(AKAPPA2, VKAPPA2)
+    VCORR = VCORR + VKAPPA2
  ELSE
     CALL VA_DMED(ADM, AEPS)
+    CALL VA_KAPPA2(AKAPPA2)
  ENDIF
 
 #ifdef debugsol
@@ -940,12 +1046,16 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, ADIEL, VEL, VCORR)
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "AEPS(in a.u) = ", AEPS
 #endif
 
+#ifdef debugsol
+     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "AKAPPA2(in a.u) = ", AKAPPA2
+#endif
+
 !net electrostatic correction
- ADIEL = ADIEL + ADM + AEPS
+ ADIEL = ADIEL + ADM + AEPS + AKAPPA2
 
  DEALLOCATE(PHI)
 
- IF (PRESENT(VCORR))  DEALLOCATE(VRHOB, VDM)
+ IF (PRESENT(VCORR))  DEALLOCATE(VRHOB, VDM, VKAPPA2)
 
  RETURN
 
@@ -993,14 +1103,11 @@ END SUBROUTINE VACORR_NON_ELECTROSTATIC
 !!
 !!  computes the potential due to the bound charge
 !! i.e the potential corresponding to 
-!! ARHOB = 0.5 \int \phi \rho_b = 0.5 \int \chi |E|^2 
-!! VRHOB = -\frac{\partial \epsilon}{\partial n} |E|^2
-!! VRHOB = -\frac{\partial \chi}{\partial n} |E|^2
-!! since \chi  = \epsilon - 1
+!! VRHOB = \phi * \partial rho_b / \partial n
 !! returns the potential in reciprocal space
 !!
 !!====================================================================
-SUBROUTINE VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
+SUBROUTINE VA_RHOB(VRHOB)
 
  IMPLICIT NONE
 
@@ -1015,11 +1122,12 @@ SUBROUTINE VA_RHOB(TOTN, VRHOB)!!!, ARHOB)
  VRHOB_WORK = 0._q
 
  DO I = 1, SIZE_RLNP
-    NDIM_E = E_EFF(I) !EFIELD(I) * pkT
-    EPSILON_DER_I = SHAPE_FUNC_DER(I) * CHI_NLN(I) 
-    !\epsilon_0 d\epsilon/dn in atomic units
-    EPSILON_DER_I = EPSILON_DER_I / (4 * PI * (AUTOA**3) )
-    VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD(I) * EFIELD(I)
+    !NDIM_E = E_EFF(I) !EFIELD(I) * pkT
+    !EPSILON_DER_I = SHAPE_FUNC_DER(I) * CHI_NLN(I) 
+    !!!\epsilon_0 d\epsilon/dn in atomic units
+    !EPSILON_DER_I = EPSILON_DER_I / (4 * PI * (AUTOA**3) )
+    !VRHOB_WORK(I) = - EPSILON_DER_I * EFIELD(I) * EFIELD(I)
+    VRHOB_WORK(I) = R_PHI(I) * R_RHOB_DER(I)
  ENDDO 
 
  CALL PACK_R2C(VRHOB_WORK, VRHOB, GRIDC_NLN)
@@ -1200,11 +1308,10 @@ END SUBROUTINE VA_CAV
 !>========================== SUBROUTINE VA_DMED =======================
 !!
 !! computes  A1 = A_dm(e) + A_eps
-!! where A_eps = - 0.5 * \int \chi |E|^2 
+!! where A_eps = 0.5 \int \phi rhob_b = - 0.5 * \int \chi |E|^2 
 !! and the potential corresponding to A_dm
 !! the potential corresponding to A_eps is computed in VA_RHOB
-!! note1: VDM is optional
-!! note2: net A_diel = A1 + 0.5 \int (\phi - \phi_H) \rho_solute 
+!! VDM is optional
 !!
 !!=====================================================================
 SUBROUTINE VA_DMED(ADM, AEPS, VDM)
@@ -1264,7 +1371,7 @@ SUBROUTINE VA_DMED(ADM, AEPS, VDM)
 
     ADM = ADM + ADM_1 * dv
 
-    !-0.5 \epsilon_0 \int \chi |E|^2
+    !0.5 \int \phi \rho_b = -0.5 \epsilon_0 \int \chi |E|^2
     AEPS = AEPS - 0.5_q * SHAPE_FUNC(I) * CHI_NLN(I) * EFIELD(I) * EFIELD(I) / 4 / PI * dv
 
     IF (PRESENT(VDM)) VDM_WORK(I) = SHAPE_FUNC_DER(I) * ADM_1
@@ -1289,6 +1396,340 @@ SUBROUTINE VA_DMED(ADM, AEPS, VDM)
  RETURN
 
 END SUBROUTINE VA_DMED
+
+
+!>========================== FUNCTION BZ_ARG ==========================
+! the argument to the exponential function that defines \eta_i
+!!=====================================================================
+FUNCTION BZ_ARG(ZI, VI, PHI_I, X_I)
+
+  IMPLICIT NONE
+
+  REAL(q) :: PHI_I, X_I, BZ_ARG, VI, ZI
+
+  BZ_ARG = -ZI/KT * PHI_I 
+
+#ifdef debugsol
+  IF (X_I > 1._q) THEN
+     IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) "packing fraction greater than 1 "
+     !STOP
+  ENDIF
+  IF (X_I < BZ_X_BLK*0.999_q) THEN
+     IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) "packing fraction less than the bulk packing fraction"
+     WRITE(IO_NLN%IU0,*) X_I
+     !STOP
+  ENDIF
+#endif
+  BZ_ARG = BZ_ARG - NTOT_K * VI * 2._q * (X_I - BZ_X_BLK)/ BZ_X_BLK/ (1._q - BZ_X_BLK) / (1._q - X_I)**3
+
+END FUNCTION BZ_ARG
+
+
+!>========================== FUNCTION BZ_ETA_I ========================
+!\eta_i at given Z_i, \phi(r) and x(r)
+!!=====================================================================
+FUNCTION BZ_ETA_I(ION_I, X_I, PHI_I)
+
+  IMPLICIT NONE
+
+  INTEGER(q) :: ION_I, I
+  REAL(q) :: BZ_ETA_I, X_I, PHI_I, TMP
+
+  TMP = BZ_ARG(ZION_K(ION_I), VION_K(ION_I), PHI_I, X_I )
+
+  !handle extremly large and small numbers
+  IF (TMP > 500._q) THEN
+     TMP = 500._q ! exp(500) ~ 1e200
+  ELSEIF (TMP < -500._q) THEN
+     TMP = -500._q ! exp(-500) ~ 1e-200
+  ENDIF
+  
+  BZ_ETA_I = EXP( TMP )
+
+END FUNCTION BZ_ETA_I
+
+
+!>========================== SUBROUTINE VA_KAPPA2 =======================
+!!
+!! computes  A = A_entropy + A_packing + 0.5 * \int \phi * \rho_ion
+!! and the potential corresponding to A_entropy + A_packing 
+!! + phi * derivative of rho_ion wrt n
+!! note1: Vkappa is optional
+!!
+!!=====================================================================
+SUBROUTINE VA_KAPPA2(AKAPPA2, VKAPPA2)
+
+ IMPLICIT NONE
+
+ INTEGER(q) :: I, J
+ REAL(q) :: dv, AKAPPA2, AKAPPA2_1, AKAPPA2_2
+ COMPLEX(q), OPTIONAL :: VKAPPA2(SIZE_REC)
+ RGRID, ALLOCATABLE :: VKAPPA2_WORK(:)
+
+ IF (PRESENT(VKAPPA2)) ALLOCATE(VKAPPA2_WORK(SIZE_REAL))
+
+!volume element
+ dv =  LATT_CUR_NLN%OMEGA / GRIDC_NLN%NPLWV
+
+!to atomic units
+ dv = dv / (AUTOA**3)
+
+ IF (PRESENT(VKAPPA2)) VKAPPA2_WORK = 0._q
+
+ AKAPPA2 = 0._q
+
+ DO I = 1, SIZE_RLNP
+    AKAPPA2_1 = 0._q
+    AKAPPA2_2 = 0._q
+    DO J = 1, NION_COUNT_K
+       ! entropy contrib
+       AKAPPA2_1 = AKAPPA2_1 + NION_K(J) * ( BZ_ETA(J, I)*(LOG(BZ_ETA(J,I)) - 1._q) + 1._q )
+       ! hard-sphere contrib
+       AKAPPA2_1 = AKAPPA2_1 + NION_K(J) * ( (BZ_X(I) - BZ_X_BLK)**2 / BZ_X_BLK / (1._q-BZ_X_BLK)**2 / (1._q-BZ_X(I))**2 )
+       !rho_ion = \sum_i N_i * Z_i * \eta_i
+       AKAPPA2_2 = AKAPPA2_2  + NION_K(J) * ZION_K(J) * BZ_ETA(J, I)
+    ENDDO
+    !entropy + pack frac term
+    AKAPPA2_1 =  KT *  AKAPPA2_1
+    !0.5 * phi * rho_ion
+    AKAPPA2_2 = 0.5_q * R_PHI(I) *  AKAPPA2_2
+
+    AKAPPA2 = AKAPPA2 + (AKAPPA2_1 + AKAPPA2_2) * SHAPE_FUNC(I) * dv
+
+    IF (PRESENT(VKAPPA2)) VKAPPA2_WORK(I) = SHAPE_FUNC_DER(I) * AKAPPA2_1  + R_PHI(I) * R_RHOION_DER(I)
+ ENDDO
+
+ CALLMPI( M_sum_d(GRIDC_NLN%COMM, AKAPPA2, 1))
+
+#ifdef debugsol
+ IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) 'AKAPPA2 (in a.u) ', AKAPPA2
+#endif
+
+ IF (PRESENT(VKAPPA2)) THEN
+    ! to rec space
+    CALL PACK_R2C(VKAPPA2_WORK, VKAPPA2, GRIDC_NLN)
+    CALL FFT3D(VKAPPA2, GRIDC_NLN, -1)
+    CALL SETUNB(VKAPPA2, GRIDC_NLN)
+    VKAPPA2 = VKAPPA2/ GRIDC_NLN%NPLWV
+    DEALLOCATE(VKAPPA2_WORK)
+ ENDIF
+
+ RETURN
+
+END SUBROUTINE VA_KAPPA2
+
+
+!>==========================SUBROUTINE SET_BZX_TABLE ================
+!!
+!! set up the pack frac table on a log grid of the potential
+!! input, PHI_MIN and PHI_MAX in a.u 
+!! also sets PHI_X, real space pot in a.u
+!! PHI_X is used later to set the spline coefficients table
+!!
+!!===================================================================
+SUBROUTINE SET_BZX_TABLE(PHI_MIN, PHI_MAX, PHI_X)
+
+ IMPLICIT NONE
+
+ INTEGER(q)   :: I, J
+ REAL(q)      :: PHI, PHI_MIN, PHI_MAX, PHI_X(N_EF), PHI0
+
+ PHI0 = 1E-6_q
+
+ J = N_EF / 2
+
+ DO I = 1, N_EF/2
+    PHI = PHI0 * (PHI_MAX/PHI0)**(REAL(J,q)/REAL(N_EF/2,q))
+    PHI_X(I) = -PHI
+    BZ_X_TAB(I) = BZ_X_I(-PHI, 1E-8_q)
+    J = J - 1
+ ENDDO
+
+ J = 1
+
+ DO I = N_EF/2, N_EF
+    PHI = PHI0 * (PHI_MAX/PHI0)**(REAL(J,q)/REAL(N_EF/2,q))
+    PHI_X(I) = PHI
+    BZ_X_TAB(I) = BZ_X_I(PHI, 1E-8_q)
+    J = J + 1
+ ENDDO
+
+
+ RETURN
+
+END SUBROUTINE SET_BZX_TABLE
+
+
+!>==========================FUNCTION BZ_X_I =========================
+!return packing fraction for the given phi in a.u
+!uses the bisection method to solve the transcendental eqn
+!!===================================================================
+FUNCTION BZ_X_I(PHI, TOL)
+
+  IMPLICIT NONE
+
+  INTEGER(q) :: J, COUNT, COUNT_MAX
+  REAL(q) :: BZ_X_I, X_MAX, X_MIN, X, PHI, TOL
+  REAL(q) :: TMP1, TMP2, TMP3
+  
+  COUNT_MAX = 2000
+
+  COUNT = 0
+  X_MAX = 1._q
+  X_MIN = BZ_X_BLK
+  X = (X_MAX + X_MIN) / 2._q
+
+  DO WHILE ( (ABS(P_FRAC_MX(X, PHI)) > TOL) .AND. (COUNT < COUNT_MAX) )
+     TMP1 = P_FRAC_MX(X, PHI)
+     TMP2 = P_FRAC_MX(X_MAX, PHI)
+     TMP3 = P_FRAC_MX(X_MIN, PHI)
+     !WRITE(*, *) 'BZ_X_I', X, TMP1, TMP2, TMP3
+     IF ((TMP1 * TMP2) > 0._q) THEN
+        X_MAX = X
+     ELSE
+        X_MIN = X
+     ENDIF
+     X = (X_MAX + X_MIN) / 2._q
+     BZ_X_I = X
+     COUNT  = COUNT + 1
+  END DO
+
+END FUNCTION BZ_X_I
+
+
+!>==========================FUNCTION P_FRAC_MX ======================
+!return the (packing fraction -x) for the given x and phi
+!!===================================================================
+FUNCTION P_FRAC_MX(X, PHI)
+
+  IMPLICIT NONE
+
+  INTEGER(q) :: J
+  REAL(q) :: P_FRAC_MX, X, PHI
+  
+  P_FRAC_MX = 0._q
+  DO J = 1, NION_COUNT_K
+     P_FRAC_MX = P_FRAC_MX + NION_K(J)* VION_K(J) * BZ_ETA_I(J, X, PHI) 
+  ENDDO
+  P_FRAC_MX = P_FRAC_MX - X
+
+END FUNCTION P_FRAC_MX
+
+!>========================== SUBROUTINE COMPUTE_RHOB ======================
+!!
+!! compute the bound charge and it derivative wrt n in real space
+!! bound charge, rho_b = -\nabla \cdot P 
+!!
+!!=====================================================================
+SUBROUTINE COMPUTE_RHOB()
+
+ IMPLICIT NONE
+
+ INTEGER(q) :: I
+ REAL(q), ALLOCATABLE :: MOD_P(:), R_RHOB_WORK(:), R_KAPPA2(:), TEST_WORK(:)
+ COMPLEX(q), ALLOCATABLE :: C_RHOB_WORK(:), C_MOD_P(:)
+ COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
+ COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
+ COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
+ COMPLEX(q),ALLOCATABLE :: phi_work(:)
+
+ ALLOCATE(MOD_P(SIZE_REAL), R_KAPPA2(SIZE_REAL))
+ ALLOCATE(R_RHOB_WORK(SIZE_RLNP), C_RHOB_WORK(SIZE_REC))
+ ALLOCATE(gradphi_x_in(SIZE_REC), gradphi_y_in(SIZE_REC))
+ ALLOCATE(gradphi_z_in(SIZE_REC), phi_work(SIZE_REC))
+ ALLOCATE(C_MOD_P(SIZE_REC))
+ ALLOCATE(TEST_WORK(SIZE_REAL))
+
+!!!initialize
+ MOD_P = 0._q
+ R_RHOB_WORK = 0._q
+ R_KAPPA2 = 0._q
+ C_MOD_P = 0._q
+
+!|P| in real space
+!|P| =(  f(e) + x (1-alpha f(e)) ) * e * s(r)
+! Nmol*Pmol factor multiplied later
+ DO I = 1, SIZE_RLNP
+    MOD_P(I) = ( LANG_X_NLN(I) + XX_K * (1._q - ALPHA_K * LANG_X_NLN(I)) ) * E_EFF(I) * SHAPE_FUNC(I) 
+    TEST_WORK(I) = LANG_X_NLN(I)
+ ENDDO
+
+!|P| to rec space
+ CALL PACK_R2C(MOD_P, C_MOD_P, GRIDC_NLN)
+ CALL FFT3D(C_MOD_P, GRIDC_NLN, -1)
+ CALL SETUNB(C_MOD_P, GRIDC_NLN)
+ C_MOD_P = C_MOD_P / GRIDC_NLN%NPLWV
+
+#ifdef debugsol
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'LANG_X_NLN', TEST_WORK)
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'MOD_P', MOD_P)
+#endif
+
+! c_rhob_work = div(|P|*grad |P|) in reciprocal space
+! input e in rec space
+ CALL LEPS(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, C_MOD_P, MOD_P, R_KAPPA2, &
+                & gradphi_x_in, gradphi_y_in, gradphi_z_in, phi_work, C_RHOB_WORK)
+
+!add tot net system charge densiyt in reciprocal space
+!SYS_TOTN = SYS_TOTN + C_RHOB_WORK
+
+! rhob in real space
+ CALL FFT3D(C_RHOB_WORK, GRIDC_NLN, 1)
+ CALL UNPACK_C2R(C_RHOB_WORK, 1.0_q, C_RHOB_WORK, 0.0_q, R_RHOB, GRIDC_NLN)
+
+ !set the density and its derivative in real space
+ ! also muliply by Nmol*Pmol
+ R_RHOB_DER = - (R_RHOB/SHAPE_FUNC(I) )* SHAPE_FUNC_DER(I) * P0_K * NSOL_K
+ R_RHOB = - R_RHOB * P0_K * NSOL_K 
+
+#ifdef debugsol
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'RHOB', R_RHOB)
+#endif
+!!!multiply by the volume(in ang^3) to be consistent with CHG(or CHGCAR) file format
+! DO I = 1, SIZE_RLNP
+!    R_RHOB_WORK(I) = R_RHOB(I) * LATT_CUR_NLN%OMEGA
+ !ENDDO
+ !IF (LBCHG) CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BCHG', R_RHOB_WORK)
+
+ DEALLOCATE(MOD_P, R_RHOB_WORK, C_RHOB_WORK, R_KAPPA2)
+ DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in, phi_work)
+ DEALLOCATE(C_MOD_P)
+ DEALLOCATE(TEST_WORK)
+
+ RETURN
+
+END SUBROUTINE COMPUTE_RHOB
+
+
+!>========================== SUBROUTINE COMPUTE_RHOION ===============
+!!
+!! rho_ion and its derivative wrt n in real space
+!! rho_ion = s(r) * \sum_i N_i * Z_i * \eta_i 
+!!
+!!=====================================================================
+SUBROUTINE COMPUTE_RHOION()
+
+ IMPLICIT NONE
+
+ INTEGER(q) :: I, J
+ REAL(q) :: SUM
+
+ DO I = 1, SIZE_RLNP
+    SUM = 0._q
+    DO J = 1, NION_COUNT_K
+       SUM = SUM + NION_K(J)* ZION_K(J) * BZ_ETA(J, I) 
+    ENDDO
+    R_RHOION(I) = SUM * SHAPE_FUNC(I)
+    R_RHOION_DER(I) = SUM * SHAPE_FUNC_DER(I)
+ ENDDO
+
+#ifdef debugsol
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'RHOION', R_RHOION)
+#endif
+
+ RETURN
+
+END SUBROUTINE COMPUTE_RHOION
 
 
 !>========================== SUBROUTINE SET_GVEC_NLN ==================
