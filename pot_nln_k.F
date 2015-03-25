@@ -75,7 +75,7 @@ MODULE POT_NLN_K
  INTEGER(q), PRIVATE :: SIZE_RLNP, SIZE_RCNP !actual size
 
  !effective field table size
- INTEGER(q), PRIVATE, PARAMETER :: N_EF = 9000
+ INTEGER(q), PRIVATE, PARAMETER :: N_EF = 9000, N_BZX = 18000
  !effective field table
  REAL(q), PRIVATE, ALLOCATABLE, SAVE  :: E_EFF_TAB(:)
  !spline coefficients for the effective field
@@ -83,7 +83,7 @@ MODULE POT_NLN_K
  !effective field corresponding to each 
  !actual field (obtained from spline fit)
  REAL(q), PRIVATE, ALLOCATABLE :: E_EFF(:)
- REAL(q), PRIVATE, SAVE :: MIN_COUNTER = 1
+ INTEGER(q), PRIVATE, SAVE :: MIN_COUNTER = 1
 
  CONTAINS
 
@@ -222,7 +222,7 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1, sigma_k1
 
  IF (PK_COUNTER == 1)  THEN
     ALLOCATE(E_EFF_TAB(N_EF), E_EFF_SPL(N_EF, 5))
-    ALLOCATE(BZ_X_TAB(N_EF), BZ_X_SPL(N_EF, 5))
+    ALLOCATE(BZ_X_TAB(N_BZX), BZ_X_SPL(N_BZX, 5))
     E_EFF_TAB = 0._q
     E_EFF_SPL = 0._q
     BZ_X_TAB = 0._q
@@ -613,8 +613,9 @@ SUBROUTINE INIT_FIELDS()
  INTEGER(q)   :: I, J
  REAL(q)      :: GX,GY,GZ,tmp, E_MAX, E_MIN, PHI_MIN, PHI_MAX
  REAL(q)      :: X, Y, YDER, Y1
- REAL(q), ALLOCATABLE :: E_X(:)
+ REAL(q), ALLOCATABLE :: E_X(:), PHI_X(:), BZ_ETA_TEST(:,:)
 
+ !ALLOCATE(BZ_ETA_TEST(2,N_BZX))
  ! pot to real space and to a.u
  R_PHI_TMP = SOL_PHI
  CALL FFT3D(R_PHI_TMP, GRIDC_NLN, 1)
@@ -644,7 +645,7 @@ SUBROUTINE INIT_FIELDS()
  !set the lookup table and the spline coefficients
  !sets E_X, E_EFF_TAB, E_EFF_SPL
  IF (PK_COUNTER == 1) THEN 
-    ALLOCATE(E_X(N_EF))
+    ALLOCATE(E_X(N_EF), PHI_X(N_BZX))
 #ifdef debugsol
     IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the effective field lookup table"
 #endif
@@ -660,15 +661,16 @@ SUBROUTINE INIT_FIELDS()
 #ifdef debugsol
     IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing fraction lookup table"
 #endif
-    CALL SET_BZX_TABLE(PHI_MIN, PHI_MAX, E_X)
+    CALL SET_BZX_TABLE(PHI_MIN, PHI_MAX, PHI_X)
 #ifdef debugsol
-    CALL WRITE_ARRAY_TO_FILE(E_X, N_EF, GRIDC_NLN, 'PHI_X')
-    CALL WRITE_ARRAY_TO_FILE(BZ_X_TAB, N_EF, GRIDC_NLN, 'BZ_X_TABLE')
+    CALL WRITE_ARRAY_TO_FILE(PHI_X, N_BZX, GRIDC_NLN, 'PHI_X')
+    CALL WRITE_ARRAY_TO_FILE(BZ_X_TAB, N_BZX, GRIDC_NLN, 'BZ_X_TABLE')
     IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing fraction spline coeffs"
 #endif
-    CALL SPLCPY(E_X, BZ_X_TAB, BZ_X_SPL, N_EF, N_EF, 10E30_q) 
+    CALL SPLCPY(PHI_X, BZ_X_TAB, BZ_X_SPL, N_BZX, N_BZX, 10E30_q) 
 
     DEALLOCATE(E_X)
+    DEALLOCATE(PHI_X)
  ENDIF
 
  !set the effective field array, E_EFF, corresponding to EFIELD 
@@ -678,13 +680,27 @@ SUBROUTINE INIT_FIELDS()
     X = EFIELD(I) * pkT
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     E_EFF(I) =  Y
-    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_EF, N_EF)
+    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
     BZ_X(I) = Y1
     DO J = 1, NION_COUNT_K
        BZ_ETA(J, I) = BZ_ETA_I(J, BZ_X(I), R_PHI(I))
     ENDDO
  ENDDO
 
+!!test
+! DO I = 1, N_BZX
+!    CALL SPLVAL(PHI_X(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
+!    DO J = 1, NION_COUNT_K
+!       BZ_ETA_TEST(J, I) = BZ_ETA_I(J, Y1, PHI_X(I))
+!       WRITE(*,*) 'bz_eta_test', J, I, BZ_ETA_TEST(J,I)
+!    ENDDO
+! ENDDO
+
+! CALL WRITE_ARRAY_TO_FILE(BZ_ETA_TEST(1,:), N_BZX, GRIDC_NLN, 'BZ_ETA_TEST_1')
+! CALL WRITE_ARRAY_TO_FILE(BZ_ETA_TEST(2,:), N_BZX, GRIDC_NLN, 'BZ_ETA_TEST_2')
+
+! DEALLOCATE(BZ_ETA_TEST)
+!STOP
  RETURN
 
 END SUBROUTINE INIT_FIELDS
@@ -730,7 +746,7 @@ SUBROUTINE UPDATE_FIELDS()
     X = EFIELD(I) * pkT
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     E_EFF(I) =  Y
-    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_EF, N_EF)
+    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
     BZ_X(I) = Y1
     DO J = 1, NION_COUNT_K
        BZ_ETA(J, I) = BZ_ETA_I(J, BZ_X(I), R_PHI(I)) 
@@ -848,29 +864,33 @@ SUBROUTINE COMPUTE_EPSILON_KAPPA2(EPSILON_NLN, KAPPA2_NLN)
     DO J = 1, NION_COUNT_K
        SUM  = SUM + 4._q * PI * NION_K(J) * ZION_K(J) * BZ_ETA(J, I)
     ENDDO
-    IF (ABS(R_PHI(I)) < 1E-10_q) THEN
-       IF (R_PHI(I) < 0._q) THEN
-          PHI_DENM = -1E-10_q
-       ELSE
-          PHI_DENM = 1E-10_q          
-       ENDIF
-    ELSE
+    !IF (ABS(R_PHI(I)) < 1E-6_q) THEN
+    !   !IF (R_PHI(I) < 0._q) THEN
+    !   !   PHI_DENM = -1E-6_q
+    !   !ELSE
+    !      PHI_DENM = 1E-10_q          
+    !   !ENDIF
+    !ELSE
        PHI_DENM = R_PHI(I)
-    ENDIF
-    IF (PK_COUNTER == 1) THEN
+    !ENDIF
+    IF (PK_COUNTER == 1 .AND. MIN_COUNTER == 1) THEN
        ! in 1/angstrom^2
        KAPPA2_NLN(I) = KAPPA2B_K * SHAPE_FUNC(I) / AUTOA**2 
     ELSE
        ! in 1/angstrom^2
-       KAPPA2_NLN(I) = -SUM * SHAPE_FUNC(I) / PHI_DENM / AUTOA**2
+       KAPPA2_NLN(I) = -SUM * SHAPE_FUNC(I) / PHI_DENM / AUTOA**2/EB_K
     ENDIF
  ENDDO
 
 #ifdef debugsol
  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'EPSILON_NLN', EPSILON_NLN)
  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'KAPPA2_NLN', KAPPA2_NLN)
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BZ_ETA_1', BZ_ETA(1,:))
+ CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BZ_ETA_2', BZ_ETA(2,:))
 #endif
-!STOP
+
+! IF (MIN_COUNTER == 3) STOP
+
  RETURN
 
 END SUBROUTINE COMPUTE_EPSILON_KAPPA2
@@ -936,8 +956,11 @@ SUBROUTINE MINIMIZE_NLN(TOTN, NCGSOL)
     DIFF_ADIEL = ADIEL - ADIEL0
     ADIEL0 = ADIEL
 #ifdef debugsol
-    IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) "PK_COUNTER, MIN_COUNTER, &
-         & DIFFPHI, DIFF_ADIEL", PK_COUNTER, MIN_COUNTER, DIFFPHI, DIFF_ADIEL
+    IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) "PK_COUNTER, MIN_COUNTER ", &
+         & PK_COUNTER, MIN_COUNTER
+    IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) "DIFFPHI, DIFF_ADIEL", &
+         & DIFFPHI, DIFF_ADIEL
+
 #endif
     MIN_COUNTER = MIN_COUNTER + 1
  ENDDO
@@ -1405,9 +1428,19 @@ FUNCTION BZ_ARG(ZI, VI, PHI_I, X_I)
 
   IMPLICIT NONE
 
-  REAL(q) :: PHI_I, X_I, BZ_ARG, VI, ZI
+  REAL(q) :: PHI_I, X_I, BZ_ARG, VI, ZI, PHI_I_TMP
 
-  BZ_ARG = -ZI/KT * PHI_I 
+    !IF (ABS(PHI_I) < 1E-6_q) THEN
+    !   !IF (R_PHI(I) < 0._q) THEN
+    !   !   PHI_DENM = -1E-6_q
+    !   !ELSE
+    !      PHI_I_TMP = 1E-10_q          
+    !   !ENDIF
+    !ELSE
+       PHI_I_TMP = PHI_I
+    !ENDIF
+
+  BZ_ARG = -ZI/KT * PHI_I_TMP 
 
 #ifdef debugsol
   IF (X_I > 1._q) THEN
@@ -1532,14 +1565,14 @@ SUBROUTINE SET_BZX_TABLE(PHI_MIN, PHI_MAX, PHI_X)
  IMPLICIT NONE
 
  INTEGER(q)   :: I, J
- REAL(q)      :: PHI, PHI_MIN, PHI_MAX, PHI_X(N_EF), PHI0
+ REAL(q)      :: PHI, PHI_MIN, PHI_MAX, PHI_X(N_BZX), PHI0
 
  PHI0 = 1E-6_q
 
- J = N_EF / 2
+ J = N_BZX/ 2
 
- DO I = 1, N_EF/2
-    PHI = PHI0 * (PHI_MAX/PHI0)**(REAL(J,q)/REAL(N_EF/2,q))
+ DO I = 1, N_BZX/2
+    PHI = PHI0 * (PHI_MAX/PHI0)**(REAL(J,q)/REAL(N_BZX/2,q))
     PHI_X(I) = -PHI
     BZ_X_TAB(I) = BZ_X_I(-PHI, 1E-8_q)
     J = J - 1
@@ -1547,8 +1580,8 @@ SUBROUTINE SET_BZX_TABLE(PHI_MIN, PHI_MAX, PHI_X)
 
  J = 1
 
- DO I = N_EF/2, N_EF
-    PHI = PHI0 * (PHI_MAX/PHI0)**(REAL(J,q)/REAL(N_EF/2,q))
+ DO I = N_BZX/2, N_BZX
+    PHI = PHI0 * (PHI_MAX/PHI0)**(REAL(J,q)/REAL(N_BZX/2,q))
     PHI_X(I) = PHI
     BZ_X_TAB(I) = BZ_X_I(PHI, 1E-8_q)
     J = J + 1
@@ -1787,7 +1820,7 @@ SUBROUTINE WRITE_ARRAY_TO_FILE(ARRAY, N, GRIDC, FNAME)
 
  TYPE (grid_3d),INTENT(IN) :: GRIDC
  INTEGER(q) :: N, I
- REAL(q) :: ARRAY(N)
+ REAL(q) :: ARRAY(N), ARRAY_I
  CHARACTER (*) FNAME
 
  CHARACTER (40) FORM, SZNAM
@@ -1820,10 +1853,15 @@ SUBROUTINE WRITE_ARRAY_TO_FILE(ARRAY, N, GRIDC, FNAME)
  io_begin
  DO I = 1, N
     NWRITTEN = NWRITTEN + 1
-    IF ( MOD(NWRITTEN,NWRITE) == 0 ) THEN
-       WRITE(IU, FORM) ARRAY(I)
+    IF (ABS(ARRAY(I)) < 1E-30_q) THEN
+       ARRAY_I = 0._q
     ELSE
-       WRITE(IU, FORM, ADVANCE='NO') ARRAY(I)
+       ARRAY_I = ARRAY(I)
+    ENDIF
+    IF ( MOD(NWRITTEN,NWRITE) == 0 ) THEN
+       WRITE(IU, FORM) ARRAY_I
+    ELSE
+       WRITE(IU, FORM, ADVANCE='NO') ARRAY_I
     ENDIF
  ENDDO
  io_end
