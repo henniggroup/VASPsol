@@ -675,7 +675,7 @@ SUBROUTINE INIT_FIELDS()
 
     CALL SET_EEFF_TABLE(E_MIN, E_MAX, E_X)
 
-#ifdef debugsol
+#ifdef debugsol_km
     CALL WRITE_ARRAY_TO_FILE(E_X, N_EF, GRIDC_NLN, 'E_X')
     CALL WRITE_ARRAY_TO_FILE(E_EFF_TAB, N_EF, GRIDC_NLN, 'EF_TABLE')
     IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the effective &
@@ -691,7 +691,7 @@ SUBROUTINE INIT_FIELDS()
 
     CALL SET_BZX_TABLE(PHI_MIN, PHI_MAX, PHI_X)
 
-#ifdef debugsol
+#ifdef debugsol_km
     CALL WRITE_ARRAY_TO_FILE(PHI_X, N_BZX, GRIDC_NLN, 'PHI_X')
     CALL WRITE_ARRAY_TO_FILE(BZ_X_TAB, N_BZX, GRIDC_NLN, 'BZ_X_TABLE')
     IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing &
