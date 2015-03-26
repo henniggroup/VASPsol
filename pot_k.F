@@ -26,6 +26,10 @@ MODULE POT_K
  USE constant
  USE base
  USE mpimy 
+ USE pot_nln_k, ONLY : SET_PARAMS_LPCM, Vcorrection_lpcm, MY_D_PROD
+ USE pot_nln_k, ONLY : CONSTRUCTOR_NLN, Vcorrection_nln_pcm, DESTRUCTOR_NLN
+ USE pot_nln_k, ONLY : GET_VAC_LEVEL, VACPOT_POIS
+
 
  EXTERNAL initjdftx, getionsigma, minimizefluid
 
@@ -46,7 +50,7 @@ MODULE POT_K
  INTEGER, PRIVATE, SAVE                 :: NION_COUNT_K
  REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: NION_K(:), ZION_K(:), RION_K(:)
 
- TYPE (in_struct), PRIVATE, SAVE        :: SP_IO
+ TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
  LOGICAL, SAVE                          :: LBCHG = .FALSE.
 
  LOGICAL, SAVE                          :: LDEFAULTPCM = .FALSE.
@@ -69,9 +73,6 @@ MODULE POT_K
   USE mgrid, ONLY : grid_3d
   USE pseudo, ONLY : potcar
   USE wave, ONLY : wavedes
-!  USE pot_lpcm_k, ONLY : Vcorrection_lpcm, MY_D_PROD
-  USE pot_nln_k, ONLY : SET_PARAMS_LPCM, Vcorrection_lpcm, MY_D_PROD
-  USE pot_nln_k, ONLY : CONSTRUCTOR_NLN, Vcorrection_nln_pcm, DESTRUCTOR_NLN
 
   IMPLICIT NONE
 

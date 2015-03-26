@@ -260,39 +260,40 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 \ No newline at end of file
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
-+++ VASPsol/pot.F	2015-03-10 21:35:10.795163057 -0400
-@@ -2,6 +2,7 @@
++++ VASPsol/pot.F	2015-03-26 15:38:16.907683620 -0400
+@@ -2,6 +2,8 @@
        MODULE pot
        USE prec
        USE charge
-+      USE POT_K, ONLY : Vcorrection, LSOL, SOL_INIT
++      USE POT_K, ONLY : LSOL, SOL_INIT, SP_IO
++      USE POT_K, ONLY : Vcorrection, GET_VAC_LEVEL, VACPOT_POIS
        CONTAINS
  !************************ SUBROUTINE POTLOK ****************************
  ! RCS:  $Id: pot.F,v 1.5 2003/06/27 13:22:22 kresse Exp kresse $
-@@ -62,6 +63,12 @@
+@@ -62,6 +64,12 @@
        COMPLEX(q), ALLOCATABLE::  CWORK1(:),CWORK(:,:)
        REAL(q) ELECTROSTATIC
        LOGICAL, EXTERNAL :: L_NO_LSDA_GLOBAL
 +!start solv
-+      COMPLEX(q), ALLOCATABLE :: Vcorr(:)     
-+      REAL(q) Ecorr
++      COMPLEX(q), ALLOCATABLE :: Vcorr(:), CWORK_PSP(:), CWORK_HAR(:)
++      REAL(q) :: Ecorr, VACPOT, VACPOT_PSP
 +      INTEGER :: ierror
 +!end solv
 +
  
  #ifdef libbeef
        LOGICAL LBEEFCALCBASIS, LBEEFBAS
-@@ -74,6 +81,9 @@
+@@ -74,6 +82,9 @@
        
        MWORK1=MAX(GRIDC%MPLWV,GRID_SOFT%MPLWV)
        ALLOCATE(CWORK1(MWORK1),CWORK(GRIDC%MPLWV,WDES%NCDIJ))
-+      IF (LSOL) ALLOCATE(Vcorr(GRIDC%MPLWV))
++      IF (LSOL) ALLOCATE(Vcorr(GRIDC%MPLWV), CWORK_PSP(GRIDC%MPLWV), CWORK_HAR(GRIDC%MPLWV))
 +      IF (LSOL) CALL SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
 +
  !-----------------------------------------------------------------------
  !
  !  calculate the exchange correlation potential and the dc. correction
-@@ -310,6 +320,18 @@
+@@ -310,6 +321,19 @@
           CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
        ENDDO
  !-----------------------------------------------------------------------
@@ -302,6 +303,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 +      CALL Vcorrection(GRIDC,P, LATT_CUR,T_INFO,WDES,CHTOT,Vcorr,Ecorr) 
 +         DO I=1,GRIDC%RC%NP
 +            CVTOT(I,1) = CVTOT(I,1) + Vcorr(I)
++            CWORK_HAR(I) = CWORK(I,1)
 +         ENDDO
 +         E%ediel = Ecorr
 +ELSE
@@ -311,11 +313,39 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
        IF(INFO%TURBO==0)THEN
-@@ -365,6 +387,7 @@
+@@ -338,6 +362,27 @@
+       DO I=1,GRIDC%RC%NP
+          CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
+       ENDDO
++
++      !sol
++      IF (LSOL) THEN
++         DO I=1,GRIDC%RC%NP
++            CWORK_PSP(I) = CWORK_HAR(I) + CWORK(I,1)
++         ENDDO
++    ! vacuum level
++#ifdef debugsol_km
++         CALL GET_VAC_LEVEL(GRIDC, LATT_CUR, T_INFO, CHTOT, &
++              & CWORK_PSP, VACPOT_PSP, 'POT_PSP')
++#else
++         CALL GET_VAC_LEVEL(GRIDC, LATT_CUR, T_INFO, CHTOT, &
++              & CWORK_PSP, VACPOT_PSP)
++#endif
++         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
++         VACPOT = VACPOT_POIS - VACPOT_PSP
++         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'VACPOT_POIS - VACPOT_PSP = ', &
++              & VACPOT
++      ENDIF
++      !sol
++
+       CALL POT_FLIP(CVTOT, GRIDC,WDES%NCDIJ )
+ !=======================================================================
+ ! if overlap is used :
+@@ -365,6 +410,7 @@
        ENDDO
  
        DEALLOCATE(CWORK1,CWORK)
-+      IF (LSOL) DEALLOCATE(Vcorr)
++      IF (LSOL) DEALLOCATE(Vcorr, CWORK_PSP, CWORK_HAR)
        RETURN
      END SUBROUTINE POTLOK
  

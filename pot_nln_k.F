@@ -40,7 +40,7 @@ MODULE POT_NLN_K
  TYPE(potcar), PRIVATE, ALLOCATABLE :: P_NLN(:)
  TYPE (latt), PRIVATE :: LATT_CUR_NLN
  TYPE(grid_3d), PRIVATE :: GRIDC_NLN
- TYPE (in_struct), PRIVATE :: IO_NLN
+ TYPE (in_struct), PUBLIC :: IO_NLN
 
  LOGICAL, SAVE :: LBCHG = .FALSE.
 
@@ -82,7 +82,7 @@ MODULE POT_NLN_K
  REAL(q), ALLOCATABLE, PRIVATE :: BZ_ETA(:,:) 
 
  !soln to the poisson eqn
- COMPLEX(q), PRIVATE, ALLOCATABLE :: PHI_TILDA(:), R_PHI_TMP(:)
+ COMPLEX(q), PRIVATE, ALLOCATABLE :: PHI_TILDA(:), R_PHI_TMP(:), C_PS_TOTN(:)
  !COMPLEX(q), PRIVATE, ALLOCATABLE :: SYS_TOTN(:)
  !modulus of electri field vector in real space
  REAL(q), PRIVATE, ALLOCATABLE :: EFIELD(:), R_PHI(:)
@@ -130,6 +130,7 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
  !set R_PS_TOTN, ps-totn in real space with volume scaling removed
  !in the units of 1/Angstrom^3
  PS_TOTN_TMP = PS_TOTN / LATT_CUR_NLN%OMEGA
+ C_PS_TOTN = PS_TOTN_TMP
  CALL FFT3D(PS_TOTN_TMP, GRIDC_NLN, 1)
  R_PS_TOTN = 0._q
  CALL UNPACK_C2R(PS_TOTN_TMP, 1.0_q, PS_TOTN_TMP, 0.0_q, R_PS_TOTN, &
@@ -231,6 +232,7 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1,&
  ALLOCATE(BZ_X(SIZE_REAL), BZ_ETA(NION_COUNT_K1, SIZE_REAL))
  ALLOCATE(R_RHOB(SIZE_REAL), R_RHOB_DER(SIZE_REAL))
  ALLOCATE(R_RHOION(SIZE_REAL), R_RHOION_DER(SIZE_REAL))
+ ALLOCATE(C_PS_TOTN(SIZE_REC))
  ! ALLOCATE(SYS_TOTN(SIZE_REC))
 
  IF (PK_COUNTER == 1)  THEN
@@ -281,6 +283,7 @@ SUBROUTINE DESTRUCTOR_NLN()
  DEALLOCATE(R_PHI_TMP, R_PHI)
  DEALLOCATE(R_RHOB, R_RHOB_DER)
  DEALLOCATE(R_RHOION, R_RHOION_DER)
+ DEALLOCATE(C_PS_TOTN)
  ! DEALLOCATE(SYS_TOTN)
 
  PK_COUNTER = PK_COUNTER + 1
@@ -399,7 +402,7 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, &
 !-----------------------------------------------------------------
 ! bulk packing fraction = sum(V_i * N_i) in a.u
 !-----------------------------------------------------------------
- IF (NTOT_K > 1E-10_q) THEN
+ IF (NTOT_K > 1E-10_q .AND. SUM(RION_K)<1000._q) THEN
     BZ_X_BLK = SUM(VION_K * NION_K)
  ELSE
     BZ_X_BLK = SUM(VION_K)
@@ -689,7 +692,7 @@ SUBROUTINE INIT_FIELDS()
     CALL SPLCPY(E_X, E_EFF_TAB, E_EFF_SPL, N_EF, N_EF, 10E30_q) 
 
     !setup table only if the ionic radii and conc of ions non zero
-    IF (NTOT_K > 1E-10_q .AND. SUM(RION_K)<2000._q) THEN
+    IF (NTOT_K > 1E-10_q .AND. SUM(RION_K)<1000._q) THEN
 #ifdef debugsol
        IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing & 
             & fraction lookup table"
@@ -716,7 +719,7 @@ SUBROUTINE INIT_FIELDS()
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     E_EFF(I) =  Y
     ! if ionic radii not provided set the packing fraction to the bulk
-    IF (SUM(RION_K)<2000._q) THEN
+    IF (SUM(RION_K)<1000._q) THEN
        CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
        BZ_X(I) = Y1
     ELSE
@@ -772,7 +775,7 @@ SUBROUTINE UPDATE_FIELDS()
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     !effective field
     E_EFF(I) =  Y
-    IF (SUM(RION_K)<2000._q ) THEN
+    IF (SUM(RION_K)<1000._q ) THEN
        CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
        !packing fraction
        BZ_X(I) = Y1
@@ -1064,6 +1067,16 @@ SUBROUTINE VACORR_ELECTROSTATIC(TOTN, ADIEL, VEL, VCORR)
 
  !!!returns pot and energy in atomic units
  IF (PRESENT(VCORR)) THEN
+    ! vacuum level
+#ifdef debugsol_km
+    CALL GET_VAC_LEVEL(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, C_PS_TOTN, &
+         & PHI, VACPOT_POIS, 'POT_POIS')
+#else
+    CALL GET_VAC_LEVEL(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, C_PS_TOTN, &
+         & PHI, VACPOT_POIS)
+#endif
+    IF (IO_NLN%IU0>=0) WRITE(SP_IO%IU0,*) 'VACPOT_POIS = ', VACPOT_POIS
+
     ALLOCATE( VDM(SIZE_REC) ) 
     ALLOCATE( VKAPPA2(SIZE_REC) ) 
     VDM = 0._q
@@ -1272,7 +1285,7 @@ SUBROUTINE VA_CAV(PS_TOTN, VCAV, ACAV)
  ACAV = tau * QS 
 
 #ifdef debugsol
- IF (SP_IO%IU0>=0) THEN
+ IF (IO_NLN%IU0>=0) THEN
    print *,'tau (eV/Angstrom^2)', tau
    print *,'surface area (Angstrom^2)', QS
    print *,'Acav (eV)', ACAV
@@ -1725,17 +1738,18 @@ SUBROUTINE COMPUTE_RHOB()
  R_RHOB_DER = - (R_RHOB/SHAPE_FUNC(I) )* SHAPE_FUNC_DER(I) * P0_K * NSOL_K
  R_RHOB = - R_RHOB * P0_K * NSOL_K 
 
-#ifdef debugsol
+#ifdef debugsol_km
  !in a.u.^-3
  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'RHOB', R_RHOB)
 #endif
  !convert to angstroms and
  !multiply by the volume(in angstrom^3) to be consistent with 
  !CHG(or CHGCAR) file format
- !DO I = 1, SIZE_RLNP
- !    R_RHOB_WORK(I) = R_RHOB(I) * LATT_CUR_NLN%OMEGA
- !ENDDO
- !IF (LBCHG) CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BCHG', R_RHOB_WORK)
+ DO I = 1, SIZE_RLNP
+     R_RHOB_WORK(I) = R_RHOB(I) * LATT_CUR_NLN%OMEGA / AUTOA**3
+ ENDDO
+ IF (LBCHG) CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'BCHG', &
+      & R_RHOB_WORK)
 
  DEALLOCATE(MOD_P, R_RHOB_WORK, C_RHOB_WORK, R_KAPPA2)
  DEALLOCATE(gradphi_x_in,gradphi_y_in,gradphi_z_in, phi_work)
@@ -1769,7 +1783,7 @@ SUBROUTINE COMPUTE_RHOION()
     R_RHOION_DER(I) = SUM * SHAPE_FUNC_DER(I)
  ENDDO
 
-#ifdef debugsol
+#ifdef debugsol_km
  !in a.u.^-3
  CALL WRITE_TO_FILE(GRIDC_NLN, LATT_CUR_NLN, T_INFO_NLN, 'RHOION', &
       & R_RHOION)

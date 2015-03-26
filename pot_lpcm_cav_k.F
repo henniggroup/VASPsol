@@ -34,15 +34,16 @@ MODULE POT_LPCM_K
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD
  PUBLIC :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
  PUBLIC :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
- PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
+ PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE, GET_VAC_LEVEL
 
- INTEGER, PUBLIC, SAVE                 :: PK_counter = 1
- REAL(q), PUBLIC, SAVE                 :: CHGMIN = 1E-10_q
+ INTEGER, PUBLIC, SAVE :: PK_counter = 1
+ REAL(q), PUBLIC, SAVE :: CHGMIN = 1E-10_q, VACPOT_POIS
  COMPLEX(q), PUBLIC, ALLOCATABLE, SAVE :: Sol_phi(:)
- REAL(q), PUBLIC, ALLOCATABLE, SAVE    :: sigma_rc_k(:)
- REAL(q), PUBLIC, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
- REAL(q), PRIVATE, SAVE                :: kappa2b_k
- TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
+ COMPLEX(q), PRIVATE, ALLOCATABLE :: C_PS_TOTN(:)
+ REAL(q), PUBLIC, ALLOCATABLE, SAVE :: sigma_rc_k(:)
+ REAL(q), PUBLIC, SAVE :: sigma_nc_k,sigma_k,nc_k,eb_k,CORE_C, tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE :: kappa2b_k
+ TYPE (in_struct), PUBLIC, SAVE :: SP_IO
 
  CONTAINS
 
@@ -72,9 +73,11 @@ SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
  INTEGER(q) :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
 
- ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)), SP_KAPPA2(DIMREAL(SP_GRIDC%MPLWV)), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
+ ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)) )
+ ALLOCATE(SP_KAPPA2(DIMREAL(SP_GRIDC%MPLWV)), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV),phi(SP_GRIDC%MPLWV))
  ALLOCATE(Vcav(SP_GRIDC%MPLWV))
+ ALLOCATE(C_PS_TOTN(SP_GRIDC%MPLWV))
       
  IF (PK_COUNTER == 1)  THEN
    ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
@@ -90,6 +93,7 @@ SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
  Vcav = 0._q
  SP_KAPPA2 = 0._q
  SP_IO = IO
+ C_PS_TOTN = PS_TOTN / SP_LATT_CUR%OMEGA
 
 !-------------------------------------------------------------
 !create the positon-dependent dielectric constant in real space
@@ -131,12 +135,16 @@ SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
 !add the cavitation correction
 ! Vcorr = Vcorr + Vcav
 !both Vel and Vcav are the derivatives of the free enrgy wrt the n_cavity=n+pseudo core
-!the reason for seperating Vcorr(coulomb) and Vel is becasue for the force corrections due Vcorr we need to multiply by the derivative of total charge density with respect to the positions wheras for Vel we need to multiply by the derivativer of the n_cavity wrt the positions
+!the reason for seperating Vcorr(coulomb) and Vel is becasue for the force corrections
+! due Vcorr we need to multiply by the derivative of total charge density with respect 
+!to the positions wheras for Vel we need to multiply by the derivativer of the n_cavity
+! wrt the positions
  Vel = Vel + Vcav
 
 !-------------------------------------------------------------
 !compute the components of E_correction, Ecorr
-!all energies are computed with chargedensities scaled by the lattice volme inorder to be consistent with vasp
+!all energies are computed with chargedensities scaled by the lattice 
+!volume inorder to be consistent with vasp
 !-------------------------------------------------------------
 !0.5*phi_tilda*(n+N)
 !-------------------------------------------------------------
@@ -168,9 +176,20 @@ SUBROUTINE Vcorrection_lpcm(IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, TOTN, &
 
  ENDIF
 
+ ! vacuum level
+#ifdef debugsol_km
+ CALL GET_VAC_LEVEL(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, C_PS_TOTN, PHI, &
+      & VACPOT_POIS, 'POT_POIS')
+#else
+ CALL GET_VAC_LEVEL(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, C_PS_TOTN, PHI, &
+      & VACPOT_POIS)
+#endif
+ IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'VACPOT_POIS = ', VACPOT_POIS
+
  PK_COUNTER = PK_COUNTER + 1
       
- DEALLOCATE(SP_d_eps,phi_tilda,phi,Vcav,RWORK)
+ DEALLOCATE(SP_d_eps,SP_KAPPA2, phi_tilda,phi,Vcav,RWORK)
+ DEALLOCATE(C_PS_TOTN)
 
  RETURN
 
@@ -819,7 +838,7 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR,EPP_T_INFO,EPP_P,EPP_PS_TOTN,EPP_phi
 !-------------------------------------------------------------------------
    CALL FFT3D(EPP_phi, EPP_GRIDC, 1)
    CALL UNPACK_C2R(EPP_phi, 1.0_q, EPP_phi, 0.0_q, RWORK_1, EPP_GRIDC)
-#ifdef debugsolwf
+#ifdef debugsol_km
    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'Writing PHI_PBZ'
    CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'PHI_PBZ', RWORK_1)
 #endif
@@ -1293,13 +1312,13 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 END SUBROUTINE UNPACK_C2R
 
 
-
-!>==========================SUBROUTINE WRITE_TO_FILE============================
+!>==========================SUBROUTINE WRITE_TO_FILE===================
 !!
 !! write real space quantities to file
-!! writes poscar first and then CVTOT(could be any quantity defined on RL grid)
+!! writes poscar first and then CVTOT(could be any quantity defined on 
+!! RL grid)
 !!
-!!=============================================================================
+!!=====================================================================
 
 SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
@@ -1339,7 +1358,8 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  io_begin
      OPEN(IU, FILE = FNAME, STATUS = 'UNKNOWN')
      REWIND IU
-     CALL OUTPOS(IU, .FALSE., SZNAM, T_INFO, LATT_CUR%SCALE, LATT_CUR%A, .FALSE., T_INFO%POSION)
+     CALL OUTPOS(IU, .FALSE., SZNAM, T_INFO, LATT_CUR%SCALE, LATT_CUR%A, &
+          & .FALSE., T_INFO%POSION)
  io_end
 
  IF (ISTAT>0) RETURN ! can not write the potential immediate exit
@@ -1384,6 +1404,99 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  RETURN
 
 END SUBROUTINE WRITE_TO_FILE
+
+
+!>========================== SUBROUTINE GET_VAC_LEVEL ====================
+!!
+!! Get the vacuum level
+!! uses the AVERAG subroutine from dipol.F
+!! input: chtot and pot in rec space
+!! output: vacpot
+!!
+!!========================================================================
+SUBROUTINE GET_VAC_LEVEL(GRIDC, LATT_CUR, T_INFO, REC_CHTOT, REC_CVTOT, &
+     & VACPOT, FNAME)
+
+  IMPLICIT NONE
+
+  TYPE (grid_3d),INTENT(IN) :: GRIDC
+  TYPE(type_info),INTENT(IN) :: T_INFO
+  TYPE (latt),INTENT(IN) :: LATT_CUR
+
+  CHARACTER(*), OPTIONAL ::  FNAME
+
+  INTEGER(q) :: DIRECTION, IND, NOUT, II, INDMINDEN, II_IND
+  INTEGER,PARAMETER :: NWIN = 3
+
+  COMPLEX(q) :: REC_CHTOT(GRIDC%MPLWV), REC_CVTOT(GRIDC%MPLWV)
+  COMPLEX(q), ALLOCATABLE :: CHTOT_TMP(:), CVTOT_TMP(:)
+
+  RGRID, ALLOCATABLE :: WORK_CHTOT(:), WORK_CVTOT(:) 
+  REAL(q), ALLOCATABLE :: DENLIN(:)
+  REAL(q) :: DENMIN , DEN, VACPOT
+  REAL(q) :: WINDOW(-NWIN:NWIN) = (/0.1,0.2,0.3,0.4,0.3,0.2,0.1/)
+
+  ALLOCATE(DENLIN(MAX(GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ)) )
+  ALLOCATE(WORK_CHTOT(DIMREAL(GRIDC%MPLWV)), WORK_CVTOT(DIMREAL(GRIDC%MPLWV)))
+  ALLOCATE(CHTOT_TMP(GRIDC%MPLWV), CVTOT_TMP(GRIDC%MPLWV) )
+
+  ! pot to real space
+  CALL RC_ADD(REC_CVTOT, 1.0, REC_CVTOT, 0.0, CVTOT_TMP, GRIDC)
+  CALL FFT3D(CVTOT_TMP, GRIDC, 1)
+  CALL UNPACK_C2R(CVTOT_TMP, 1.0_q, CVTOT_TMP, 0.0_q, WORK_CVTOT, GRIDC)
+
+  IF (PRESENT(FNAME)) THEN
+     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'Writing the pot to file'
+     CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, WORK_CVTOT)
+  ENDIF
+
+  ! charge density to real space
+  CALL RC_ADD(REC_CHTOT, 1.0, REC_CHTOT, 0.0, CHTOT_TMP, GRIDC)
+  CALL FFT3D(CHTOT_TMP, GRIDC, 1)
+  CALL UNPACK_C2R(CHTOT_TMP, 1.0_q, CHTOT_TMP, 0.0_q, WORK_CHTOT, GRIDC)
+ 
+  DENMIN = 1E9
+
+  !x-->1, y-->2, z-->3
+  DIRECTION = 3
+  NOUT = GRIDC%NGPTAR(DIRECTION)
+
+  !average chargedensity along direction, DIRECTION
+  DENLIN = 0._q
+  CALL AVERAG(GRIDC, DIRECTION, WORK_CHTOT, DENLIN, .TRUE.)
+  !set vacuum to be the point in space where the electronic charge 
+  !density is the minimum
+  !get the index corresponding to the minimum charge density
+  DO IND = 1, NOUT
+     !use a sliding average to smoothen in charge density
+     DEN = 0
+     DO II = -NWIN, NWIN
+        II_IND = MOD(IND+II-1+NOUT, NOUT) + 1
+        DEN = DEN + DENLIN(II_IND) * WINDOW(II)
+     ENDDO
+     IF (DEN < DENMIN) THEN
+        DENMIN = DEN
+        INDMINDEN = IND
+     ENDIF
+  ENDDO
+
+  !average potential along direction, DIRECTION
+  DENLIN = 0._q
+  CALL AVERAG(GRIDC, DIRECTION, WORK_CVTOT, DENLIN, .FALSE.)
+  VACPOT = DENLIN(MOD(INDMINDEN + NOUT, NOUT))
+
+#ifdef debugsol
+  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'DENMIN = ', DENMIN
+  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'INDMINDEN = ', &
+       & INDMINDEN, MOD(INDMINDEN + NOUT, NOUT)
+  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'VACPOT = ', VACPOT
+#endif
+
+  DEALLOCATE(DENLIN, WORK_CHTOT, WORK_CVTOT, CHTOT_TMP, CVTOT_TMP)
+
+  RETURN
+
+END SUBROUTINE GET_VAC_LEVEL
 
 
 END MODULE POT_LPCM_K
