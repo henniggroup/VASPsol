@@ -399,7 +399,11 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, &
 !-----------------------------------------------------------------
 ! bulk packing fraction = sum(V_i * N_i) in a.u
 !-----------------------------------------------------------------
- BZ_X_BLK = SUM(VION_K * NION_K)
+ IF (NTOT_K > 1E-10_q) THEN
+    BZ_X_BLK = SUM(VION_K * NION_K)
+ ELSE
+    BZ_X_BLK = SUM(VION_K)
+ ENDIF
 
 !-----------------------------------------------------------------
 ! kappa square in the low pot limit = 4*\pi*sum(N_i*Z_i**2)/kT/eb_k
@@ -424,7 +428,7 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, &
           & BZ_X_BLK
      IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "KAPPA2B_K (in a.u^-2) ",&
           &  KAPPA2B_K
-     IF (IO_NLN%IU0>=0)   WRITE(IO_NLN%IU0,*) "Debye length (in Angstrom) ",&
+     IF (IO_NLN%IU0>=0 .AND. NTOT_K>1E-10_q)   WRITE(IO_NLN%IU0,*) "Debye length (in Angstrom) ",&
           &  SQRT(1._q/KAPPA2B_K) * AUTOA
 #endif
 
@@ -684,21 +688,21 @@ SUBROUTINE INIT_FIELDS()
 
     CALL SPLCPY(E_X, E_EFF_TAB, E_EFF_SPL, N_EF, N_EF, 10E30_q) 
 
+    !setup table only if the ionic radii and conc of ions non zero
+    IF (NTOT_K > 1E-10_q .AND. SUM(RION_K)<2000._q) THEN
 #ifdef debugsol
-    IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing & 
-         & fraction lookup table"
+       IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing & 
+            & fraction lookup table"
 #endif
-
-    CALL SET_BZX_TABLE(PHI_MIN, PHI_MAX, PHI_X)
-
+       CALL SET_BZX_TABLE(PHI_MIN, PHI_MAX, PHI_X)
 #ifdef debugsol_km
-    CALL WRITE_ARRAY_TO_FILE(PHI_X, N_BZX, GRIDC_NLN, 'PHI_X')
-    CALL WRITE_ARRAY_TO_FILE(BZ_X_TAB, N_BZX, GRIDC_NLN, 'BZ_X_TABLE')
-    IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing &
-         & fraction spline coeffs"
+       CALL WRITE_ARRAY_TO_FILE(PHI_X, N_BZX, GRIDC_NLN, 'PHI_X')
+       CALL WRITE_ARRAY_TO_FILE(BZ_X_TAB, N_BZX, GRIDC_NLN, 'BZ_X_TABLE')
+       IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing &
+            & fraction spline coeffs"
 #endif
-
-    CALL SPLCPY(PHI_X, BZ_X_TAB, BZ_X_SPL, N_BZX, N_BZX, 10E30_q) 
+       CALL SPLCPY(PHI_X, BZ_X_TAB, BZ_X_SPL, N_BZX, N_BZX, 10E30_q) 
+    ENDIF
 
     DEALLOCATE(E_X, PHI_X)
 
@@ -711,11 +715,17 @@ SUBROUTINE INIT_FIELDS()
     X = EFIELD(I) * pkT
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     E_EFF(I) =  Y
-    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
-    BZ_X(I) = Y1
+    ! if ionic radii not provided set the packing fraction to the bulk
+    IF (SUM(RION_K)<2000._q) THEN
+       CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
+       BZ_X(I) = Y1
+    ELSE
+       BZ_X(I) = BZ_X_BLK
+    ENDIF
     DO J = 1, NION_COUNT_K
        BZ_ETA(J, I) = BZ_ETA_I(J, BZ_X(I), R_PHI(I))
     ENDDO
+
  ENDDO
 
  RETURN
@@ -762,9 +772,13 @@ SUBROUTINE UPDATE_FIELDS()
     CALL SPLVAL(X, Y, YDER, E_EFF_SPL, N_EF, N_EF)
     !effective field
     E_EFF(I) =  Y
-    CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
-    !packing fraction
-    BZ_X(I) = Y1
+    IF (SUM(RION_K)<2000._q ) THEN
+       CALL SPLVAL(R_PHI(I), Y1, YDER, BZ_X_SPL, N_BZX, N_BZX)
+       !packing fraction
+       BZ_X(I) = Y1
+    ELSE
+       BZ_X(I) = BZ_X_BLK
+    ENDIF
     DO J = 1, NION_COUNT_K
        BZ_ETA(J, I) = BZ_ETA_I(J, BZ_X(I), R_PHI(I)) 
     ENDDO
@@ -1429,10 +1443,10 @@ FUNCTION BZ_ARG(ZI, VI, PHI_I, X_I)
   BZ_ARG = -ZI/KT * PHI_I_TMP 
 
 #ifdef debugsol
-  IF (X_I > 1._q) THEN
-     IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) "packing fraction greater than 1 "
-     !STOP
-  ENDIF
+  !IF (X_I > 1._q) THEN
+  !   IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "WARNING: packing fraction greater than 1 "
+  !   !STOP
+  !ENDIF
   IF (X_I < BZ_X_BLK*0.999_q) THEN
      IF (IO_NLN%IU0>=0)  WRITE(IO_NLN%IU0,*) "packing fraction less than the bulk packing fraction"
      WRITE(IO_NLN%IU0,*) X_I

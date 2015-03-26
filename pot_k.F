@@ -23,6 +23,7 @@
 MODULE POT_K
 
  USE prec
+ USE constant
  USE base
  USE mpimy 
 
@@ -705,18 +706,20 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   NION_COUNT_K = 2 
 
 !!!ionic concentrations in mol/L
+!default is no electrolyte
   ALLOCATE(NION_K(NION_COUNT_K))
-  NION_K = 1._q
+  NION_K = 0._q
 
 !!!charges on ionic species (dimensionless)
   ALLOCATE(ZION_K(NION_COUNT_K))
-  ZION_K(1) = 1._q
-  ZION_K(2) = -1._q
+  ZION_K(1) = 0._q
+  ZION_K(2) = 0._q
 
 !!!ionic radii (Angstrom)
+  !default set to some impossible value
   ALLOCATE(RION_K(NION_COUNT_K))
-  RION_K(1) = 1.16_q
-  RION_K(2) = 1.19_q
+  RION_K(1) = 1000._q * AUTOA
+  RION_K(2) = 1000._q * AUTOA
 
 #ifdef debugsol
   IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR.&
