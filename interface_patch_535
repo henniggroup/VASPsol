@@ -1,6 +1,6 @@
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/base.F VASPsol/base.F
 --- vasp.5.3.5/base.F	2014-06-12 15:16:16.000000000 -0400
-+++ VASPsol/base.F	2015-01-03 14:25:47.750349750 -0500
++++ VASPsol/base.F	2015-02-25 16:30:15.266355797 -0500
 @@ -43,6 +43,7 @@
          LOGICAL LPOTOK               ! local potential ok ?
          LOGICAL LMIX                 ! mixing done
@@ -19,7 +19,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
          REAL(q)    EXCM              ! E(xc) (metaGGA)
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_all.F VASPsol/electron_all.F
 --- vasp.5.3.5/electron_all.F	2014-06-12 15:16:19.000000000 -0400
-+++ VASPsol/electron_all.F	2015-01-03 14:25:47.750349750 -0500
++++ VASPsol/electron_all.F	2015-02-25 16:30:15.266355797 -0500
 @@ -389,7 +389,7 @@
  ! calculate old band structure energy
        E%EBANDSTR=BANDSTRUCTURE_ENERGY(WDES, W)
@@ -40,7 +40,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        io_begin
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron.F VASPsol/electron.F
 --- vasp.5.3.5/electron.F	2014-06-12 15:16:20.000000000 -0400
-+++ VASPsol/electron.F	2015-01-03 14:25:47.750349750 -0500
++++ VASPsol/electron.F	2015-02-25 16:30:15.266355797 -0500
 @@ -439,7 +439,7 @@
  ! TOTEN = total free energy of the system
  !=======================================================================
@@ -82,7 +82,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       &        '  energy without entropy =',F18.8, &
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_lhf.F VASPsol/electron_lhf.F
 --- vasp.5.3.5/electron_lhf.F	2014-06-12 15:16:16.000000000 -0400
-+++ VASPsol/electron_lhf.F	2015-01-03 14:25:47.750349750 -0500
++++ VASPsol/electron_lhf.F	2015-02-25 16:30:15.266355797 -0500
 @@ -526,7 +526,7 @@
       LHFCALC_FORCE=.FALSE.
  
@@ -94,7 +94,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       io_begin
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_OEP.F VASPsol/electron_OEP.F
 --- vasp.5.3.5/electron_OEP.F	2014-06-12 15:16:19.000000000 -0400
-+++ VASPsol/electron_OEP.F	2015-01-03 14:25:47.750349750 -0500
++++ VASPsol/electron_OEP.F	2015-02-25 16:30:15.266355797 -0500
 @@ -584,7 +584,7 @@
  ! TOTEN = total free energy of the system
  !=======================================================================
@@ -106,7 +106,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       DESUM(N)=TOTEN-TOTENL
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/elinear_response.F VASPsol/elinear_response.F
 --- vasp.5.3.5/elinear_response.F	2014-06-12 15:16:16.000000000 -0400
-+++ VASPsol/elinear_response.F	2015-01-03 14:25:47.758349740 -0500
++++ VASPsol/elinear_response.F	2015-02-25 16:30:15.266355797 -0500
 @@ -433,7 +433,7 @@
         W1%CELTOT=   WXI%CELTOT
  
@@ -118,7 +118,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         IF (IO%IU0>=0) THEN
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/force.F VASPsol/force.F
 --- vasp.5.3.5/force.F	2014-06-12 15:16:18.000000000 -0400
-+++ VASPsol/force.F	2015-01-03 14:25:47.758349740 -0500
++++ VASPsol/force.F	2015-02-25 16:30:15.266355797 -0500
 @@ -1075,6 +1075,9 @@
      USE vdwforcefield
      USE fileio
@@ -164,7 +164,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
                   NORDER=0 ; IF (KPOINTS%ISMEAR>=0) NORDER=KPOINTS%ISMEAR
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/ilinear_response.F VASPsol/ilinear_response.F
 --- vasp.5.3.5/ilinear_response.F	2014-06-12 15:16:20.000000000 -0400
-+++ VASPsol/ilinear_response.F	2015-01-03 14:25:47.758349740 -0500
++++ VASPsol/ilinear_response.F	2015-02-25 16:30:15.266355797 -0500
 @@ -624,7 +624,7 @@
         E1%EENTROPY=(E1%EENTROPY-E2%EENTROPY)*(1/POTIM)
  
@@ -176,7 +176,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         IF (IO%IU0>=0) THEN
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/linear_response.F VASPsol/linear_response.F
 --- vasp.5.3.5/linear_response.F	2014-06-12 15:16:22.000000000 -0400
-+++ VASPsol/linear_response.F	2015-01-03 14:25:47.758349740 -0500
++++ VASPsol/linear_response.F	2015-02-25 16:30:15.266355797 -0500
 @@ -341,7 +341,7 @@
               LMDIM,CDIJ,CQIJ, RMS,DESUM,ICOUEV, SV, E%EXHF, IO%IU6,IO%IU0, .FALSE., .TRUE., .FALSE.)
  
@@ -188,7 +188,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
            WRITE(IO%IU0,1000) I, TOTEN_, TOTEN_-TOTEN, DESUM, ICOUEV, RMS
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/main.F VASPsol/main.F
 --- vasp.5.3.5/main.F	2014-06-12 15:16:17.000000000 -0400
-+++ VASPsol/main.F	2015-01-03 14:25:47.758349740 -0500
++++ VASPsol/main.F	2015-02-25 16:30:15.266355797 -0500
 @@ -139,6 +139,7 @@
        USE relativistic
        USE rhfatm
@@ -250,27 +250,33 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
        CALL STOP_TIMING("G",IO%IU6,'EDDIAG')
  
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/NOTES VASPsol/NOTES
+--- vasp.5.3.5/NOTES	1969-12-31 19:00:00.000000000 -0500
++++ VASPsol/NOTES	2015-03-16 00:12:03.210793437 -0400
+@@ -0,0 +1,3 @@
++check the log terms
++check the division by phi
++check the pre-conditioner in minimze
+\ No newline at end of file
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
-+++ VASPsol/pot.F	2015-02-24 20:50:27.010721268 -0500
-@@ -2,6 +2,16 @@
++++ VASPsol/pot.F	2015-03-28 13:01:19.103318069 -0400
+@@ -2,6 +2,14 @@
        MODULE pot
        USE prec
        USE charge
-+!!!solpbz
-+      USE pot_lpcm_k, ONLY : UNPACK_C2R, SP_IO
-+      USE pot_lpcm_k, ONLY : GET_VAC_LEVEL, VACPOT_POIS
-+!!!solpbz
++      !sol
 +      USE POT_K, ONLY : Vcorrection, LSOL, SOL_INIT
-+!!!solpbz
++      USE POT_K, ONLY : UNPACK_C2R, SP_IO, GET_VAC_LEVEL, VACPOT_POIS
 +#ifdef debugsolwf
-+      USE pot_lpcm_k, ONLY : WRITE_TO_FILE
++      USE POT_K, ONLY : WRITE_TO_FILE
 +#endif
-+!!!solpbz
++      !sol
++
        CONTAINS
  !************************ SUBROUTINE POTLOK ****************************
  ! RCS:  $Id: pot.F,v 1.5 2003/06/27 13:22:22 kresse Exp kresse $
-@@ -62,6 +72,12 @@
+@@ -62,6 +70,12 @@
        COMPLEX(q), ALLOCATABLE::  CWORK1(:),CWORK(:,:)
        REAL(q) ELECTROSTATIC
        LOGICAL, EXTERNAL :: L_NO_LSDA_GLOBAL
@@ -283,138 +289,141 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
  #ifdef libbeef
        LOGICAL LBEEFCALCBASIS, LBEEFBAS
-@@ -71,9 +87,27 @@
+@@ -71,9 +85,29 @@
        LOGICAL SAVELUSE_VDW
        INTEGER BEEFCOUNTER
  #endif
 +
-+!!!solpbz
++      !sol
 +      RGRID, ALLOCATABLE :: RWORK_HAR(:), RWORK_PSP(:)
 +      RGRID, ALLOCATABLE :: RWORK_CHG(:) !, RWORK_VCORR(:)
 +      COMPLEX(q), ALLOCATABLE::  CWORK_K(:)      
 +      REAL(q) :: VACPOT_PSP, VACPOT
-+!!!solpbz
++      !sol
        
        MWORK1=MAX(GRIDC%MPLWV,GRID_SOFT%MPLWV)
        ALLOCATE(CWORK1(MWORK1),CWORK(GRIDC%MPLWV,WDES%NCDIJ))
-+      IF (LSOL) ALLOCATE(Vcorr(GRIDC%MPLWV))
-+      IF (LSOL) CALL SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
 +
-+!!!solpbz
-+      ALLOCATE(RWORK_HAR(DIMREAL(GRIDC%MPLWV)))
-+      ALLOCATE(RWORK_PSP(DIMREAL(GRIDC%MPLWV)))
-+      !ALLOCATE(RWORK_VCORR(DIMREAL(GRIDC%MPLWV)))
-+      ALLOCATE(RWORK_CHG(DIMREAL(GRIDC%MPLWV)))
-+      ALLOCATE(CWORK_K(GRIDC%MPLWV))
-+!!!solpbz
++      !sol
++      IF (LSOL) THEN
++         ALLOCATE(Vcorr(GRIDC%MPLWV))
++         ALLOCATE(RWORK_HAR(DIMREAL(GRIDC%MPLWV)))
++         ALLOCATE(RWORK_PSP(DIMREAL(GRIDC%MPLWV)))
++         !ALLOCATE(RWORK_VCORR(DIMREAL(GRIDC%MPLWV)))
++         ALLOCATE(RWORK_CHG(DIMREAL(GRIDC%MPLWV)))
++         ALLOCATE(CWORK_K(GRIDC%MPLWV))
++         CALL SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
++      ENDIF
++      !sol
 +
  !-----------------------------------------------------------------------
  !
  !  calculate the exchange correlation potential and the dc. correction
-@@ -309,6 +343,40 @@
+@@ -309,6 +343,35 @@
        DO I=1,GRIDC%RC%NP
           CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
        ENDDO
 +
-+!!!solpbz
-+      CALL FFT3D(CWORK, GRIDC, 1) 
-+      CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_HAR, GRIDC)
-+!!!#ifdef debugsolwf
-+!!!      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_HAR'
-+!!!      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_HAR', RWORK_HAR)
-+!!!#endif
-+!!!solpbz
++      !sol
++      IF (LSOL) THEN
++         CALL FFT3D(CWORK, GRIDC, 1) 
++         CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_HAR, GRIDC)
++      ENDIF
++      !#ifdef debugsolwf
++      !      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_HAR'
++      !      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_HAR', RWORK_HAR)
++      !#endif
 +!-----------------------------------------------------------------------
 +! add the dielectric corrections to CVTOT and the energy
 +!-----------------------------------------------------------------------
-+IF (LSOL) THEN
-+      CALL Vcorrection(GRIDC,P, LATT_CUR,T_INFO,WDES,CHTOT,Vcorr,Ecorr) 
-+!!test
-+         !Vcorr(1) = 0._q
-+         !WRITE(*,*) 'Vcorr(1)',Vcorr(1)
-+!!test
++      IF (LSOL) THEN
++         CALL Vcorrection(GRIDC,P, LATT_CUR,T_INFO,WDES,CHTOT,Vcorr,Ecorr) 
 +         DO I=1,GRIDC%RC%NP
 +            CVTOT(I,1) = CVTOT(I,1) + Vcorr(I)
 +         ENDDO
 +         E%ediel = Ecorr
-+ELSE
++      ELSE
 +         E%ediel = 0._q
-+ENDIF
-+
-+!!!solpbz
-+!!!      CALL FFT3D(Vcorr, GRIDC, 1) 
-+!!!      CALL UNPACK_C2R(Vcorr, 1.0_q, Vcorr, 0.0_q, RWORK_VCORR, GRIDC)
-+!!!#ifdef debugsolwf
-+!!!      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_VCORR'
-+!!!      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_VCORR', RWORK_VCORR)
-+!!!#endif
-+!!!solpbz
++      ENDIF
++      ! CALL FFT3D(Vcorr, GRIDC, 1) 
++      ! CALL UNPACK_C2R(Vcorr, 1.0_q, Vcorr, 0.0_q, RWORK_VCORR, GRIDC)
++      !#ifdef debugsolwf
++      !  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_VCORR'
++      !    CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_VCORR', RWORK_VCORR)
++      !#endif
++      !sol
  !-----------------------------------------------------------------------
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
-@@ -338,6 +406,36 @@
+@@ -338,6 +401,38 @@
        DO I=1,GRIDC%RC%NP
           CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
        ENDDO
 +
-+!!!solpbz
-+      CALL FFT3D(CWORK, GRIDC, 1) 
-+      CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_PSP, GRIDC)
-+!!!#ifdef debugsolwf
-+!!!      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PSP'
-+!!!      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP', RWORK_PSP)
-+!!!#endif
-+      RWORK_PSP = RWORK_PSP + RWORK_HAR
-+      !copy CHTOT to CWORK_K
-+      CALL RC_ADD(CHTOT, 1.0, CHTOT, 0.0, CWORK_K, GRIDC)
-+      !to real space
-+      CALL FFT3D(CWORK_K, GRIDC, 1) 
-+      CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, GRIDC)
-+      CALL GET_VAC_LEVEL(GRIDC, RWORK_CHG, RWORK_PSP, VACPOT_PSP)
++      !sol
++      IF (LSOL) THEN
++         CALL FFT3D(CWORK, GRIDC, 1) 
++         CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_PSP, GRIDC)
++         !#ifdef debugsolwf
++         !      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PSP'
++         !      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP', RWORK_PSP)
++         !#endif
++         RWORK_PSP = RWORK_PSP + RWORK_HAR
++         !copy CHTOT to CWORK_K
++         CALL RC_ADD(CHTOT, 1.0, CHTOT, 0.0, CWORK_K, GRIDC)
++         !to real space
++         CALL FFT3D(CWORK_K, GRIDC, 1) 
++         CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, GRIDC)
++         CALL GET_VAC_LEVEL(GRIDC, RWORK_CHG, RWORK_PSP, VACPOT_PSP)
 +#ifdef debugsol
-+      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
++         IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
 +#endif
-+      VACPOT = VACPOT_POIS - VACPOT_PSP
-+      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_POIS - VACPOT_PSP = ', VACPOT
++         VACPOT = VACPOT_POIS - VACPOT_PSP
++         IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) ' FERMI_SHIFT = ', VACPOT
 +#ifdef debugsolwf
-+      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
-+      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RWORK_PSP)
-+      !shift by vacpot
-+      RWORK_PSP = RWORK_PSP + VACPOT
-+      IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR (shifted by VACPOT)'
-+      CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR_SHIFTED', RWORK_PSP)
++         IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
++         CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RWORK_PSP)
++         !shift by vacpot
++         RWORK_PSP = RWORK_PSP + VACPOT
++         IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR (shifted by VACPOT)'
++         CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR_SHIFTED', RWORK_PSP)
 +#endif
-+!!!solpbz
++      ENDIF
++      !sol
 +
        CALL POT_FLIP(CVTOT, GRIDC,WDES%NCDIJ )
  !=======================================================================
  ! if overlap is used :
-@@ -363,8 +461,22 @@
+@@ -363,9 +458,25 @@
  #endif
           CALL FFT3D(CVTOT(1,ISP),GRIDC,1)
        ENDDO
+-
 +      
-+!!!solpbz
-+      !shift SV and CVTOT by VACPOT
-+      !SV = SV + VACPOT
-+      !CVTOT = CVTOT + CMPLX(VACPOT, VACPOT)
-+!!!solpbz
- 
        DEALLOCATE(CWORK1,CWORK)
-+      IF (LSOL) DEALLOCATE(Vcorr)
-+!!!solpbz
-+      DEALLOCATE(RWORK_HAR)
-+      DEALLOCATE(RWORK_PSP)
-+      !DEALLOCATE(RWORK_VCORR)
-+      DEALLOCATE(RWORK_CHG)
-+      DEALLOCATE(CWORK_K)
-+!!!solpbz
++
++      !sol
++      IF (LSOL) THEN
++         !shift SV and CVTOT by VACPOT
++         !SV = SV + VACPOT
++         !CVTOT = CVTOT + CMPLX(VACPOT, VACPOT)
++         DEALLOCATE(Vcorr)
++         DEALLOCATE(RWORK_HAR)
++         DEALLOCATE(RWORK_PSP)
++         !DEALLOCATE(RWORK_VCORR)
++         DEALLOCATE(RWORK_CHG)
++         DEALLOCATE(CWORK_K)
++      ENDIF
++      !sol
++
        RETURN
++
      END SUBROUTINE POTLOK
  
+ !***********************************************************************
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/reader.F VASPsol/reader.F
 --- vasp.5.3.5/reader.F	2014-06-12 15:16:18.000000000 -0400
-+++ VASPsol/reader.F	2015-01-03 14:25:47.762349648 -0500
++++ VASPsol/reader.F	2015-02-25 16:30:15.270355762 -0500
 @@ -16,7 +16,7 @@
       &        ENAUG,LORBIT,LELF,ROPT,ENINI, &
       &        NGX,NGY,NGZ,NGXF,NGYF,NGZF,NBANDS,NEDOS,NBLK,LATT_CUR, &
@@ -462,7 +471,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/subrot_scf.F VASPsol/subrot_scf.F
 --- vasp.5.3.5/subrot_scf.F	2014-06-12 15:16:17.000000000 -0400
-+++ VASPsol/subrot_scf.F	2015-01-03 14:25:47.762349648 -0500
++++ VASPsol/subrot_scf.F	2015-02-25 16:30:15.270355762 -0500
 @@ -320,7 +320,7 @@
  !=======================================================================
        E%EBANDSTR=BANDSTRUCTURE_ENERGY(W%WDES, W)

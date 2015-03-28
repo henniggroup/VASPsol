@@ -1,5 +1,5 @@
-!***********************************************************************
-! Copyright 2013
+!*********************************************************************
+! Copyright 2014
 ! Kiran Mathew and Richard Hennig
 !
 ! This file is part of VASPsol.
@@ -16,7 +16,7 @@
 !
 ! You should have received a copy of the GNU General Public License
 ! along with VASPsol.  If not, see <http://www.gnu.org/licenses/>.
-!***********************************************************************
+!*********************************************************************
 
 #include "symbol.inc"
 
@@ -31,35 +31,36 @@ MODULE POT_LPCM_K
  USE mgrid, ONLY : grid_3d
  USE pseudo, ONLY : potcar
 
- PUBLIC :: Vcorrection_lpcm, MY_D_PROD
+ PUBLIC :: Vcorrection_lpcm, MY_D_PROD, GET_VAC_LEVEL
+ PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
  PRIVATE :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
  PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
- PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE, GET_VAC_LEVEL
 
- INTEGER, PRIVATE, SAVE                 :: PK_counter = 1
- REAL(q), PRIVATE, SAVE                 :: CHGMIN = 1E-10_q
+ INTEGER, PRIVATE, SAVE :: PK_counter = 1
+ REAL(q), PRIVATE, SAVE :: CHGMIN = 1E-10_q
  COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE :: Sol_phi(:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE    :: sigma_rc_k(:)
- REAL(q), PRIVATE, SAVE                 :: sigma_nc_k,sigma_k,nc_k,eb_k,&
-                                           & kappa2b_k,CORE_C, tau,EDIFFSOL
- TYPE (in_struct), PUBLIC, SAVE        :: SP_IO
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:)
+ REAL(q), PRIVATE, SAVE :: sigma_nc_k,sigma_k,nc_k,eb_k, &
+      & kappa2b_k,CORE_C, tau,EDIFFSOL
+ TYPE (in_struct), PUBLIC, SAVE :: SP_IO
  REAL(q), PUBLIC, SAVE :: VACPOT_POIS = 0._q
 
  CONTAINS
 
-!>==========================SUBROUTINE Vcorrection_lpcm==========================
+!>==========================SUBROUTINE Vcorrection_lpcm===============
 !!
 !!Solves the poisson's eqn, returns Vcorr, Vdiel and Atot
 !! Vcorr = phi_tilda - phi, only the electrostatic contrib.
 !! Vdiel = epsilon and kappa derivative terms + pot. due to cavitation
-!! Atot  = Ael + Acav = electrostatic contribution to the solv. energy + cavitation 
+!! Atot  = Ael + Acav = electrostatic contribution to the solv.energy 
+!!+ cavitation 
 !!
-!!================================================================================
+!!====================================================================
 
-SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTOT, TOTN,&
-                            & PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k1, sigma_k1,&
-                            & nc_k1, eb_k1, kappa2b_k1, CORE_C1, sigma_rc_k1,&
-                            & tau1, ediffs )
+SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
+     & SP_T_INFO,SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, &
+     & sigma_nc_k1, sigma_k1,nc_k1, eb_k1, kappa2b_k1, CORE_C1, &
+     & sigma_rc_k1, tau1, ediffs )
 
  IMPLICIT NONE
 
@@ -67,7 +68,7 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTO
  TYPE(potcar),INTENT(IN) :: SP_P (SP_T_INFO%NTYP)
  TYPE (latt),INTENT(IN) :: SP_LATT_CUR
  TYPE(grid_3d),INTENT(IN) :: SP_GRIDC
- TYPE (in_struct),INTENT(IN) :: IO
+ !TYPE (in_struct),INTENT(IN) :: IO
 
  COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
  COMPLEX(q),ALLOCATABLE :: phi_tilda(:),phi(:),Vcav(:)
@@ -78,14 +79,16 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTO
  RGRID,ALLOCATABLE :: RWORK(:)
  INTEGER :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
- REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1,CORE_C1,tau1,ediffs
+ REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1
+ REAL(q) :: CORE_C1,tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
 !!!vacuum level
  RGRID,ALLOCATABLE :: RWORK_PHI(:), RWORK_CHG(:)
  COMPLEX(q),ALLOCATABLE :: CWORK_K(:)
 !!!vacuum level
 
- ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)), SP_kappa2(DIMREAL(SP_GRIDC%MPLWV)))
+ ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)) )
+ ALLOCATE(SP_kappa2(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV), phi(SP_GRIDC%MPLWV))
  ALLOCATE(Vcav(SP_GRIDC%MPLWV), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
 !!!vacuum level
@@ -122,7 +125,7 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTO
  Vdiel = 0._q
  Vcorr = 0._q
  Vcav = 0._q
- SP_IO = IO
+! SP_IO = IO
 
 !-------------------------------------------------------------
 !create the positon-dependent dielectric constant in real space
@@ -130,14 +133,14 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTO
 !returns Vcav(cavitaion pot in rec space) and Acav
 !-------------------------------------------------------------
  CALL CREATECAVITY(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, PS_TOTN,&
-                  & SP_d_eps, SP_kappa2, Vcav, Acav)
+      & SP_d_eps, SP_kappa2, Vcav, Acav)
 
 !-------------------------------------------------------------
 !Solves the generalized poisson eqn using CG, 
 !returns phi_tilda scaled by edeps/cell vol
 !-------------------------------------------------------------
  CALL MINIMIZE(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_d_eps,&
-             & SP_kappa2, TOTN, phi_tilda, NCGSOL)
+      & SP_kappa2, TOTN, phi_tilda, NCGSOL)
 
 !-------------------------------------------------------------
 !ps_totn is unscaled and in real space
@@ -152,8 +155,8 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTO
 !the kappa derivative
 !ps_totn is unscaled and in real space
 !-------------------------------------------------------------
- CALL EPS_POT(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, SP_P,RWORK, phi_tilda,&
-            & SP_d_eps, SP_kappa2, Vdiel)
+ CALL EPS_POT(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, SP_P,RWORK,phi_tilda,&
+      & SP_d_eps, SP_kappa2, Vdiel)
 
 !-------------------------------------------------------------
 ! multiply by 0.5*e/permittivity of free space
@@ -166,22 +169,25 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTO
 !-------------------------------------------------------------
  CALL SimplePoisson(SP_GRIDC, SP_LATT_CUR, TOTN, phi, 1)
 
-!-----------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !compute V_correction,Vcorr
-!the hartree potential difference between the vacuum case and the solvent case
-!-----------------------------------------------------------------------------
+!the hartree potential difference between the vacuum case and 
+! the solvent case
+!---------------------------------------------------------------------
  Vcorr = phi_tilda - phi
 
-!-----------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !add the cavitation correction
 !! Vcorr = Vcorr + Vcav
-!both Vdiel and Vcav are the derivatives of the free enrgy wrt n_cavity
+!both Vdiel and Vcav are the derivatives of the free enrgy wrt 
+!n_cavity
 !where n_cavity=n+pseudo core
-!the reason for seperating Vcorr(coulomb) and Vdiel is becasue for the 
-!force corrections due Vcorr we need to multiply by the derivative of total charge 
-!density with respect to the positions wheras for Vdiel we need to multiply by 
-!the derivativer of the n_cavity wrt the positions
-!-----------------------------------------------------------------------------
+!the reason for seperating Vcorr(coulomb) and Vdiel is becasue for the
+!force corrections due Vcorr we need to multiply by the derivative of
+!total charge density with respect to the positions wheras for 
+!Vdiel we need to multiply by the derivativer of the n_cavity wrt 
+!the positions
+!---------------------------------------------------------------------
  Vdiel = Vdiel + Vcav
 
 !-------------------------------------------------------------
@@ -224,20 +230,21 @@ SUBROUTINE Vcorrection_lpcm( IO, SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO, SP_CHTO
 
  PK_COUNTER = PK_COUNTER + 1
 !!!vacuum level
-      CALL FFT3D(phi, SP_GRIDC, 1) 
-      CALL UNPACK_C2R(phi, 1.0_q, phi, 0.0_q, RWORK_PHI, SP_GRIDC)
+ CALL FFT3D(phi, SP_GRIDC, 1) 
+ CALL UNPACK_C2R(phi, 1.0_q, phi, 0.0_q, RWORK_PHI, SP_GRIDC)
 #ifdef debugsolwf
-      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_POIS'
-      CALL WRITE_TO_FILE(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, 'PHI_POIS', RWORK_PHI)
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_POIS'
+ CALL WRITE_TO_FILE(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, 'PHI_POIS', &
+      & RWORK_PHI)
 #endif
-      !copy CHTOT to CWORK_K
-      CALL RC_ADD(SP_CHTOT, 1.0, SP_CHTOT, 0.0, CWORK_K, SP_GRIDC)
-      !to real space
-      CALL FFT3D(CWORK_K, SP_GRIDC, 1) 
-      CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, SP_GRIDC)
-      CALL GET_VAC_LEVEL(SP_GRIDC, RWORK_CHG, RWORK_PHI, VACPOT_POIS)
+ !copy CHTOT to CWORK_K
+ CALL RC_ADD(SP_CHTOT, 1.0, SP_CHTOT, 0.0, CWORK_K, SP_GRIDC)
+ !to real space
+ CALL FFT3D(CWORK_K, SP_GRIDC, 1) 
+ CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, SP_GRIDC)
+ CALL GET_VAC_LEVEL(SP_GRIDC, RWORK_CHG, RWORK_PHI, VACPOT_POIS)
 #ifdef debugsol
-      IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'VACPOT_POIS = ', VACPOT_POIS
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'VACPOT_POIS = ', VACPOT_POIS
 #endif
 !!!vacuum level
       
@@ -258,10 +265,10 @@ END SUBROUTINE Vcorrection_lpcm
 !!calculates the cavitation energy and cavitation potential
 !!Acav and Vcav
 !!
-!!======================================================================
+!!====================================================================
 
-SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
-                      & CE_d_eps,CE_kappa2,Vcav,Acav)  
+SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
+     & CE_PS_TOTN,CE_d_eps,CE_kappa2,Vcav,Acav)  
 
  IMPLICIT NONE
 
@@ -270,20 +277,22 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
  TYPE(grid_3d),INTENT(IN)   :: CE_GRIDC
  TYPE(latt),INTENT(IN)      :: CE_LATT_CUR
 
- COMPLEX(q)             :: CE_PS_TOTN(CE_GRIDC%MPLWV), Vcav(CE_GRIDC%MPLWV)
- REAL(q),INTENT(OUT)    :: CE_d_eps(DIMREAL(CE_GRIDC%MPLWV)),CE_kappa2(DIMREAL(CE_GRIDC%MPLWV))
+ COMPLEX(q)  :: CE_PS_TOTN(CE_GRIDC%MPLWV), Vcav(CE_GRIDC%MPLWV)
+ REAL(q),INTENT(OUT) :: CE_d_eps(DIMREAL(CE_GRIDC%MPLWV))
+ REAL(q),INTENT(OUT) :: CE_kappa2(DIMREAL(CE_GRIDC%MPLWV))
 
- REAL(q),ALLOCATABLE        :: CE_S(:), VWORK(:) ! shape func & Vcav
- REAL(q),ALLOCATABLE        :: CE_gn(:,:), CE_gn2_tmp(:) !\nabla n and |\naba n|^2
- COMPLEX(q),ALLOCATABLE     :: CE_gn2(:) ! |\naba n|^2
- REAL(q),ALLOCATABLE        :: CE_ggn(:,:) !\nabla |\nabla n|
- REAL(q),ALLOCATABLE        :: CE_ggn2(:) !| \nabla |\nabla n| |^2
- REAL(q),ALLOCATABLE        :: CE_divn(:) ! laplacian of n
- REAL(q),ALLOCATABLE        :: CE_term1(:) ! grad shape func wrt n
-! REAL(q), ALLOCATABLE       :: RWORK(:)
- RGRID, ALLOCATABLE       :: RWORK(:)
-
- REAL(q), EXTERNAL      :: ERRFC !compimentary error function implemented in errf.F in vasp.5.lib
+ REAL(q),ALLOCATABLE :: CE_S(:), VWORK(:) ! shape func & Vcav
+ !\nabla n and |\naba n|^2
+ REAL(q),ALLOCATABLE :: CE_gn(:,:), CE_gn2_tmp(:) 
+ COMPLEX(q),ALLOCATABLE :: CE_gn2(:) ! |\naba n|^2
+ REAL(q),ALLOCATABLE :: CE_ggn(:,:) !\nabla |\nabla n|
+ REAL(q),ALLOCATABLE :: CE_ggn2(:) !| \nabla |\nabla n| |^2
+ REAL(q),ALLOCATABLE :: CE_divn(:) ! laplacian of n
+ REAL(q),ALLOCATABLE :: CE_term1(:) ! grad shape func wrt n
+ ! REAL(q), ALLOCATABLE       :: RWORK(:)
+ RGRID, ALLOCATABLE :: RWORK(:)
+ !compimentary error function implemented in errf.F in vasp.5.lib
+ REAL(q), EXTERNAL :: ERRFC 
  INTEGER(q)             :: I, J, NPC, NPR, RLNP, RCNP
  REAL(q)                :: Acav,CE_qs,dv,tmp,tmp1,tmp2
 !! test 7/8/14
@@ -298,7 +307,7 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
 
 #ifdef debugsol
  IF (SP_IO%IU0>=0) print *, 'NPLWV, MPLWV, RL%NP, RC%NP',&
-                   & CE_GRIDC%NPLWV, CE_GRIDC%MPLWV, CE_GRIDC%RL%NP, CE_GRIDC%RC%NP
+      & CE_GRIDC%NPLWV, CE_GRIDC%MPLWV, CE_GRIDC%RL%NP, CE_GRIDC%RC%NP
 #endif
 
  ALLOCATE(CE_gn2(NPC)) !complex
@@ -319,7 +328,8 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
  CE_PS_TOTN = CE_PS_TOTN / CE_LATT_CUR%OMEGA
 
 !-------------------------------------------------------------
-!charge density in rec space, returns \nabla n and |\nabla n|^2 in real space
+!charge density in rec space, returns \nabla n and |\nabla n|^2 
+!in real space
 !-------------------------------------------------------------
  CALL NABLAN(CE_PS_TOTN, CE_GRIDC, CE_LATT_CUR, CE_gn2_tmp, CE_gn)
 
@@ -336,7 +346,8 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
  VWORK = 0._q
 
 !-------------------------------------------------------------
-!add -Lap(n)/|\nabla n| to Vcav and copy \sqrt(|\nabla n|^2) to CE_gn2_tmp
+!add -Lap(n)/|\nabla n| to Vcav and copy \sqrt(|\nabla n|^2) 
+!to CE_gn2_tmp
 !-------------------------------------------------------------
  DO I=1,DIMREAL(CE_GRIDC%MPLWV)
    tmp = SQRT(MAX(REAL(CE_gn2_tmp(I),KIND=q),CHGMIN))
@@ -357,11 +368,13 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
 
 !-------------------------------------------------------------
 !charge density must be in real space(unscaled), 
-!returns derivative of shape function wrt the charge density in the real space,
+!returns derivative of shape function wrt the charge density 
+!in the real space,
 ! CE_term1 = gamma*A / n, where
-! gamma * A = exp( -( log(n/n_c) )^2 / (2 sigma^2) ) / ( sigma * sqrt(2*pi) )
+! gamma * A = exp(-(log(n/n_c))^2 /(2 sigma^2)) /(sigma * sqrt(2*pi) )
 !-------------------------------------------------------------
- CALL SHAPE_GRADN(CE_GRIDC, CE_T_INFO, CE_P, CE_LATT_CUR, RWORK, CE_term1)
+ CALL SHAPE_GRADN(CE_GRIDC, CE_T_INFO, CE_P, CE_LATT_CUR, RWORK, &
+      & CE_term1)
 
 !-------------------------------------------------------------
 ! CE_S = shapefunction = N_lq/N_b, density of the solvent as a 
@@ -473,15 +486,15 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, CE_PS_TOTN,&
 
 END SUBROUTINE CREATECAVITY
 
-!>=====================SUBROUTINE MINIMIZE==============================
+!>=====================SUBROUTINE MINIMIZE============================
 !!
 !!routine for solving poissons eqn using conjugate gradient or 
 !!steepest descent
 !!
-!!======================================================================
+!!====================================================================
 
 SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
-                  & MN_kappa2, MN_TOTN, MN_phi, NCGSOL)
+     & MN_kappa2, MN_TOTN, MN_phi, NCGSOL)
 
  IMPLICIT NONE
 
@@ -497,7 +510,8 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
  COMPLEX(q),ALLOCATABLE :: MN_Lp(:)
 !parameters in CG
  REAL(q) :: MN_beta,MN_alpha,GX,GY,GZ,rinvLr,eps_bar,r2
- REAL(q),INTENT(IN) ::  MN_d_eps(DIMREAL(MN_GRIDC%MPLWV)),MN_kappa2(DIMREAL(MN_GRIDC%MPLWV))
+ REAL(q),INTENT(IN) ::  MN_d_eps(DIMREAL(MN_GRIDC%MPLWV))
+ REAL(q),INTENT(IN) ::  MN_kappa2(DIMREAL(MN_GRIDC%MPLWV))
  COMPLEX(q),ALLOCATABLE :: MN_GSQU(:)
 
  COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
@@ -521,7 +535,6 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
  ALLOCATE(gradphi_x_in(MN_GRIDC%MPLWV),gradphi_y_in(MN_GRIDC%MPLWV))
  ALLOCATE(gradphi_z_in(MN_GRIDC%MPLWV), phi_work(MN_GRIDC%MPLWV))
 
-
  count=0
  MN_beta=0._q
  MN_alpha=0._q
@@ -536,41 +549,37 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 !calculating 1/G^2 for preconditioning
 !-------------------------------------------------------------
  col: DO NC=1,MN_GRIDC%RC%NCOL
-         N2= MN_GRIDC%RC%I2(NC)
-         N3= MN_GRIDC%RC%I3(NC)
-         row: DO N1=1,MN_GRIDC%RC%NROW
-                 I = I +1
-!GX,GY,GZ
-                 GX = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1)+MN_GRIDC%LPCTY(N2)*&
-                     & MN_LATT_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
+    N2= MN_GRIDC%RC%I2(NC)
+    N3= MN_GRIDC%RC%I3(NC)
+    row: DO N1=1,MN_GRIDC%RC%NROW
+       I = I +1
+       !GX,GY,GZ
+       GX = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(1,1)+MN_GRIDC%LPCTY(N2)*&
+            & MN_LATT_CUR%B(1,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(1,3))
 
-                 GY = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2)*&
-                     & MN_LATT_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
+       GY = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(2,1)+MN_GRIDC%LPCTY(N2)*&
+            & MN_LATT_CUR%B(2,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(2,3))
 
-                 GZ = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2)*&
-                     & MN_LATT_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
+       GZ = (MN_GRIDC%LPCTX(N1)*MN_LATT_CUR%B(3,1)+MN_GRIDC%LPCTY(N2)*&
+            & MN_LATT_CUR%B(3,2)+MN_GRIDC%LPCTZ(N3)*MN_LATT_CUR%B(3,3))
 
-!set G=0 component to 1/kappa2b_k if kappa2b_k is not zero
-                 IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
-                     &(MN_GRIDC%LPCTZ(N3)==0)) THEN
+       !set G=0 component to 1/kappa2b_k if kappa2b_k is not zero
+       IF ((MN_GRIDC%LPCTX(N1)==0).AND.(MN_GRIDC%LPCTY(N2)==0).AND.&
+            &(MN_GRIDC%LPCTZ(N3)==0)) THEN
+          
+          IF (kappa2b_k<1E-10) THEN
+             MN_GSQU(I)= (0.0_q,0.0_q)
+          ELSE
+             MN_GSQU(I)= 1._q/kappa2b_k 
+          ENDIF
 
-                    IF (kappa2b_k<1E-10) THEN
-
-                        MN_GSQU(I)= (0.0_q,0.0_q)
-
-                    ELSE
-
-                        MN_GSQU(I)= 1._q/kappa2b_k 
-
-                    ENDIF
-
-                 ELSE
-! 1/(G^2 + kappa2b_k)
-                    MN_GSQU(I) = 1._q/((GX*GX+GY*GY+GZ*GZ) * (TPI**2) + kappa2b_k)
-                 ENDIF
- 
-              ENDDO row
-      ENDDO col
+       ELSE
+          ! 1/(G^2 + kappa2b_k)
+          MN_GSQU(I) = 1._q/((GX*GX+GY*GY+GZ*GZ) * (TPI**2) + kappa2b_k)
+       ENDIF
+       
+    ENDDO row
+ ENDDO col
 
 !*********************************************************
 ! start of Pre-conditioned Conjugate Gradient
@@ -582,11 +591,11 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 !unscaled charge density used
 !-------------------------------------------------------------
  IF (PK_counter ==1) THEN
-   DO I=1,MN_GRIDC%RC%NP
-     MN_phi(I) = REAL(MN_GSQU(I)) * (MN_TOTN(I) * EDEPS / MN_LATT_CUR%OMEGA)
-   ENDDO
+    DO I=1,MN_GRIDC%RC%NP
+       MN_phi(I) = REAL(MN_GSQU(I)) * (MN_TOTN(I) * EDEPS / MN_LATT_CUR%OMEGA)
+    ENDDO
  ELSE
-   MN_phi = Sol_phi !phi from previous vasp iteration, unscaled
+    MN_phi = Sol_phi !phi from previous vasp iteration, unscaled
  ENDIF
 
 !-------------------------------------------------------------
@@ -596,8 +605,9 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 !Both kappa^2 and epsilon are in real space
 !Lp = - A*phi
 !-------------------------------------------------------------
- CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_phi, MN_d_eps, MN_kappa2,&
-         & gradphi_x_in, gradphi_y_in, gradphi_z_in, phi_work, MN_Lp)
+ CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_phi, MN_d_eps, & 
+      & MN_kappa2, gradphi_x_in, gradphi_y_in, gradphi_z_in, &
+      & phi_work, MN_Lp)
 
 !-------------------------------------------------------------
 ! the residue
@@ -640,55 +650,56 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 
  DO WHILE ( (count < 20000) .AND. (sqrt(r2) > EDIFFSOL).AND. (sqrt(rinvLr) > 1e-10) )
 
-   CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_d, MN_d_eps, MN_kappa2,&
-           & gradphi_x_in, gradphi_y_in, gradphi_z_in, phi_work, MN_Lp)
+    CALL Leps(MN_GRIDC, MN_LATT_CUR, MN_T_INFO, MN_d, MN_d_eps, &
+         & MN_kappa2, gradphi_x_in, gradphi_y_in, gradphi_z_in, &
+         & phi_work, MN_Lp)
 
-!   MN_alpha = DOT_PRODUCT(MN_d,MN_Lp)
-   CALL MY_D_PROD(MN_alpha, MN_d, MN_Lp, MN_GRIDC)
+    !   MN_alpha = DOT_PRODUCT(MN_d,MN_Lp)
+    CALL MY_D_PROD(MN_alpha, MN_d, MN_Lp, MN_GRIDC)
 
-   CALLMPI( M_sum_d(MN_GRIDC%COMM, MN_alpha, 1))
+    CALLMPI( M_sum_d(MN_GRIDC%COMM, MN_alpha, 1))
 
-   MN_alpha = 1._q/MN_alpha
+    MN_alpha = 1._q/MN_alpha
 
-   MN_alpha = -rinvLr*MN_alpha
+    MN_alpha = -rinvLr*MN_alpha
 
-   MN_phi = MN_phi + MN_alpha * MN_d
+    MN_phi = MN_phi + MN_alpha * MN_d
 
-   MN_RESID = MN_RESID +  (MN_alpha*MN_Lp)
+    MN_RESID = MN_RESID +  (MN_alpha*MN_Lp)
 
-   DO I = 1, MN_GRIDC%RC%NP
-     MN_Z(I) = (REAL(MN_GSQU(I))) * MN_RESID(I)
-   ENDDO
+    DO I = 1, MN_GRIDC%RC%NP
+       MN_Z(I) = (REAL(MN_GSQU(I))) * MN_RESID(I)
+    ENDDO
 
-   MN_beta = 1._q/rinvLr
+    MN_beta = 1._q/rinvLr
 
-   CALL MY_D_PROD(rinvLr, MN_RESID, MN_Z, MN_GRIDC)
+    CALL MY_D_PROD(rinvLr, MN_RESID, MN_Z, MN_GRIDC)
 
-   CALLMPI( M_sum_d(MN_GRIDC%COMM, rinvLr, 1))
+    CALLMPI( M_sum_d(MN_GRIDC%COMM, rinvLr, 1))
 
-   MN_beta = MN_beta * rinvLr
+    MN_beta = MN_beta * rinvLr
 
-   MN_d = MN_Z + MN_beta * MN_d
+    MN_d = MN_Z + MN_beta * MN_d
 
-   r2 = 0._q
+    r2 = 0._q
 
-   CALL MY_D_PROD(r2, MN_RESID, MN_RESID, MN_GRIDC)
+    CALL MY_D_PROD(r2, MN_RESID, MN_RESID, MN_GRIDC)
 
-   CALLMPI( M_sum_d(MN_GRIDC%COMM, r2, 1))
+    CALLMPI( M_sum_d(MN_GRIDC%COMM, r2, 1))
 
 #ifdef debugsol
-   IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) SQRT(rinvLr), SQRT(r2)
+    IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) SQRT(rinvLr), SQRT(r2)
 #endif
-   count = count+1
+    count = count+1
 
  END DO
 !-------------------------------------------------------------
 !end of CG loop
 !-------------------------------------------------------------
-NCGSOL = count
+ NCGSOL = count
 
 #ifdef debugsol
-IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
+ IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
 #endif
 
 !-------------------------------------------------------------
@@ -705,7 +716,7 @@ IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
 !test
 !MN_phi(1) = 0._q
 #ifdef debugsol
-   IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) MN_phi(1)
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) MN_phi(1)
 #endif
 !test
 
@@ -720,15 +731,16 @@ IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)"CG loop count", count
 
 END SUBROUTINE MINIMIZE
 
-!>======================SUBROUTINE Leps==================================
+!>======================SUBROUTINE Leps===============================
 !!
 !!subroutine that evaluates the fourier transform of div(epsilon*grad phi)
 !!Ax in Ax=b
 !!
-!!=======================================================================
+!!====================================================================
 
-SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kappa2,&
-                &gradphi_x_in, gradphi_y_in, gradphi_z_in, phi_work, LPS_Lp)
+SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, &
+     & LPS_d_eps, LPS_kappa2, gradphi_x_in, gradphi_y_in, &
+     & gradphi_z_in, phi_work, LPS_Lp)
 
  IMPLICIT NONE
 
@@ -736,7 +748,8 @@ SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kap
  TYPE (type_info) LPS_T_INFO
  TYPE (latt) LPS_LATT_CUR
 
- REAL(q),INTENT(IN) ::  LPS_d_eps(DIMREAL(LPS_GRIDC%MPLWV)),LPS_kappa2(DIMREAL(LPS_GRIDC%MPLWV))
+ REAL(q),INTENT(IN) ::  LPS_d_eps(DIMREAL(LPS_GRIDC%MPLWV))
+ REAL(q),INTENT(IN) ::  LPS_kappa2(DIMREAL(LPS_GRIDC%MPLWV))
  COMPLEX(q),INTENT(INOUT) ::  LPS_phi(LPS_GRIDC%MPLWV)
  COMPLEX(q),INTENT(OUT) :: LPS_Lp(LPS_GRIDC%MPLWV)
  REAL(q) :: RINPL,GX,GY,GZ
@@ -751,80 +764,79 @@ SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kap
       
  N = LPS_GRIDC%NPLWV
 
-
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !Fourier transform of grad phi
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,LPS_GRIDC%RC%NP
 
-   N1= MOD((I-1),LPS_GRIDC%RC%NROW) +1
-   NC= (I-1)/LPS_GRIDC%RC%NROW+1
-   N2= LPS_GRIDC%RC%I2(NC)
-   N3= LPS_GRIDC%RC%I3(NC)
+    N1= MOD((I-1),LPS_GRIDC%RC%NROW) +1
+    NC= (I-1)/LPS_GRIDC%RC%NROW+1
+    N2= LPS_GRIDC%RC%I2(NC)
+    N3= LPS_GRIDC%RC%I3(NC)
 
-   GX = (LPS_GRIDC%LPCTX(N1)*LPS_LATT_CUR%B(1,1)+LPS_GRIDC%LPCTY(N2)*&
-       &LPS_LATT_CUR%B(1,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(1,3))
-   GY = (LPS_GRIDC%LPCTX(N1)*LPS_LATT_CUR%B(2,1)+LPS_GRIDC%LPCTY(N2)*&
-       &LPS_LATT_CUR%B(2,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(2,3))
-   GZ = (LPS_GRIDC%LPCTX(N1)*LPS_LATT_CUR%B(3,1)+LPS_GRIDC%LPCTY(N2)*&
-       &LPS_LATT_CUR%B(3,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(3,3))
+    GX = (LPS_GRIDC%LPCTX(N1)*LPS_LATT_CUR%B(1,1)+LPS_GRIDC%LPCTY(N2)*&
+         &LPS_LATT_CUR%B(1,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(1,3))
+    GY = (LPS_GRIDC%LPCTX(N1)*LPS_LATT_CUR%B(2,1)+LPS_GRIDC%LPCTY(N2)*&
+         &LPS_LATT_CUR%B(2,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(2,3))
+    GZ = (LPS_GRIDC%LPCTX(N1)*LPS_LATT_CUR%B(3,1)+LPS_GRIDC%LPCTY(N2)*&
+         &LPS_LATT_CUR%B(3,2)+LPS_GRIDC%LPCTZ(N3)*LPS_LATT_CUR%B(3,3))
 
-   gradphi_x_in(I) = CITPI*GX*LPS_phi(I)
-   gradphi_y_in(I) = CITPI*GY*LPS_phi(I)
-   gradphi_z_in(I) = CITPI*GZ*LPS_phi(I)
+    gradphi_x_in(I) = CITPI*GX*LPS_phi(I)
+    gradphi_y_in(I) = CITPI*GY*LPS_phi(I)
+    gradphi_z_in(I) = CITPI*GZ*LPS_phi(I)
 
  ENDDO 
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !gradphi to real space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(gradphi_x_in,LPS_GRIDC,1) 
  CALL FFT3D(gradphi_y_in,LPS_GRIDC,1) 
  CALL FFT3D(gradphi_z_in,LPS_GRIDC,1) 
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !phi to real space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(LPS_phi, LPS_GRIDC, 1) 
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !multiply grad phi with epsilon in real space
 ! Also compute:
 !!phi_work = phi * eb_k * kappa^2, both phi and kappa2 in real space
-!-------------------------------------------------------------------------
+!--------------------------------------------------------------------
 #ifdef realmode
 
  k = 1
 
  DO j = 1, DIMREAL(LPS_GRIDC%MPLWV), 2
-   gradphi_x_in(k) = CMPLX( REAL(gradphi_x_in(k),KIND=q)*LPS_d_eps(j),&
-                          & AIMAG(gradphi_x_in(k))*LPS_d_eps(j+1),KIND=q)
-   gradphi_y_in(k) = CMPLX( REAL(gradphi_y_in(k),KIND=q)*LPS_d_eps(j),&
-                         & AIMAG(gradphi_y_in(k))*LPS_d_eps(j+1),KIND=q)
-   gradphi_z_in(k) = CMPLX( REAL(gradphi_z_in(k),KIND=q)*LPS_d_eps(j),&
-                          & AIMAG(gradphi_z_in(k))*LPS_d_eps(j+1),KIND=q)
+    gradphi_x_in(k) = CMPLX( REAL(gradphi_x_in(k),KIND=q)*LPS_d_eps(j),&
+         & AIMAG(gradphi_x_in(k))*LPS_d_eps(j+1),KIND=q)
+    gradphi_y_in(k) = CMPLX( REAL(gradphi_y_in(k),KIND=q)*LPS_d_eps(j),&
+         & AIMAG(gradphi_y_in(k))*LPS_d_eps(j+1),KIND=q)
+    gradphi_z_in(k) = CMPLX( REAL(gradphi_z_in(k),KIND=q)*LPS_d_eps(j),&
+         & AIMAG(gradphi_z_in(k))*LPS_d_eps(j+1),KIND=q)
 
-   phi_work(k) = CMPLX( REAL(LPS_phi(k),KIND=q) * eb_k * LPS_kappa2(j),&
-                     & AIMAG(LPS_phi(k)) * eb_k * LPS_kappa2(j+1), KIND=q )
+    phi_work(k) = CMPLX( REAL(LPS_phi(k),KIND=q) * eb_k * LPS_kappa2(j),&
+         & AIMAG(LPS_phi(k)) * eb_k * LPS_kappa2(j+1), KIND=q )
 
-   k = k + 1
+    k = k + 1
 
  ENDDO
 
 #else
 
  DO j = 1,LPS_GRIDC%RL%NP
-   gradphi_x_in(j) = gradphi_x_in(j)*LPS_d_eps(j)
-   gradphi_y_in(j) = gradphi_y_in(j)*LPS_d_eps(j)
-   gradphi_z_in(j) = gradphi_z_in(j)*LPS_d_eps(j)
-!phi_work = phi * eb_k * kappa^2, both phi and kappa2 in real space
-   phi_work(j) = LPS_phi(j) * eb_k * LPS_kappa2(j)
+    gradphi_x_in(j) = gradphi_x_in(j)*LPS_d_eps(j)
+    gradphi_y_in(j) = gradphi_y_in(j)*LPS_d_eps(j)
+    gradphi_z_in(j) = gradphi_z_in(j)*LPS_d_eps(j)
+    !phi_work = phi * eb_k * kappa^2, both phi and kappa2 in real space
+    phi_work(j) = LPS_phi(j) * eb_k * LPS_kappa2(j)
 
  ENDDO
 #endif
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !epsilon*grad phi in kspace
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(gradphi_x_in,LPS_GRIDC,-1)   
  CALL FFT3D(gradphi_y_in,LPS_GRIDC,-1)   
  CALL FFT3D(gradphi_z_in,LPS_GRIDC,-1)   
@@ -833,22 +845,22 @@ SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kap
  CALL SETUNB(gradphi_y_in,LPS_GRIDC)   
  CALL SETUNB(gradphi_z_in,LPS_GRIDC)   
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !phi_work in kspace
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(phi_work, LPS_GRIDC, -1)   
 
  CALL SETUNB(phi_work, LPS_GRIDC)   
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !phi to k space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(LPS_phi, LPS_GRIDC, -1) 
  CALL SETUNB(LPS_phi, LPS_GRIDC)   
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !scaling
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,LPS_GRIDC%RC%NP
    gradphi_x_in(I) = gradphi_x_in(I)/N
    gradphi_y_in(I) = gradphi_y_in(I)/N
@@ -860,10 +872,10 @@ SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kap
 
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !div(epsilon*grad phi) in kspace
 !add the kappa^2 contrib, -phi_work
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,LPS_GRIDC%RC%NP
    N1= MOD((I-1),LPS_GRIDC%RC%NROW) +1
    NC= (I-1)/LPS_GRIDC%RC%NROW+1
@@ -884,17 +896,19 @@ SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, LPS_d_eps, LPS_kap
  
  END SUBROUTINE Leps
 
-!>===========================SUBROUTINE  EPS_POT=======================
+
+!>===========================SUBROUTINE  EPS_POT======================
 !!
 !!subroutine that evaluates the V
-!!returns -(depsilon(n)/dn)*|grad phi|^2 - eb_k*(dkappa^2(n)/dn)*(phi)^2
+!!returns -(depsilon(n)/dn)*|grad phi|^2 
+!! - eb_k*(dkappa^2(n)/dn)*(phi)^2
 !! in fourier space
 !! Both terms are computed in real space first and then FFT to k space
 !!
 !!====================================================================
 
-SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
-                  & EPP_phi, EPP_deps, EPP_kappa2, EPP_CWORK)
+SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, &
+     & EPP_PS_TOTN, EPP_phi, EPP_deps, EPP_kappa2, EPP_CWORK)
 
  IMPLICIT NONE
 
@@ -919,74 +933,76 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
  ALLOCATE(phisq(DIMREAL(EPP_GRIDC%MPLWV)), RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
  ALLOCATE(RWORK_1(DIMREAL(EPP_GRIDC%MPLWV)))
 
-!-------------------------------------------------------------------------
-!SHAPE_GRADN returns eprime, the derivative of shape function wrt the charge 
-!density in real space
+!---------------------------------------------------------------------
+!SHAPE_GRADN returns eprime, the derivative of shape function wrt 
+!the charge density in real space
 ! shapefunction = erfc = 1 - erf
 ! ==> -d erfc/dx = d erf/dx
-! eprime = d erf/dx, so the minus sign in the potenials are taken care of
-!-------------------------------------------------------------------------
-  CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, EPP_PS_TOTN, eprime)
+!eprime = d erf/dx, 
+!so the minus sign in the potenials are taken care of
+!---------------------------------------------------------------------
+  CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, &
+       & EPP_PS_TOTN, eprime)
 !!!soltest
-!  CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'EPRIME', eprime)
+!CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'EPRIME', eprime)
 !!!soltest
-   kprime = eprime * kappa2b_k
-   eprime = eprime * (eb_k - 1._q)
+  kprime = eprime * kappa2b_k
+  eprime = eprime * (eb_k - 1._q)
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !EPP_phi,the solution to the generalized poisson equation,
 ! is in reciprocal space, 
 !NABLAN returns |\nabla phi| ^2 in real space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL NABLAN(EPP_phi,EPP_GRIDC,EPP_LATT_CUR,phisq)
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !phi to real space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(EPP_phi, EPP_GRIDC, 1) 
 
  CALL UNPACK_C2R(EPP_phi, 1.0_q, EPP_phi, 0.0_q, RWORK_1, EPP_GRIDC)
 
 #ifdef debugsolwf
  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PBZ'
- CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'PHI_PBZ', RWORK_1)
+ CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'PHI_PBZ', &
+      & RWORK_1)
 #endif
 
-
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! eps potential in real space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  EPP_CWORK_temp = 0._q
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !multiply eprime and phisq in real space
 !add kappa^2 term, eb_k * kprime * phi^2 in real space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  RWORK = 0._q
 
  DO I = 1, EPP_GRIDC%RL%NP
     EPP_CWORK_temp = eprime(I) * phisq(I) + &
-                     & eb_k * kprime(I) * RWORK_1(I) * RWORK_1(I)
+         & eb_k * kprime(I) * RWORK_1(I) * RWORK_1(I)
     RWORK(I) = EPP_CWORK_temp
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !phi to k space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(EPP_phi, EPP_GRIDC, -1) 
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !scale phi
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,EPP_GRIDC%RC%NP
    EPP_phi(I) = EPP_phi(I)/EPP_GRIDC%NPLWV
  ENDDO
 
  CALL PACK_R2C(RWORK, EPP_CWORK, EPP_GRIDC)
    
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 !take the eps potential to reciprocal space
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL FFT3D(EPP_CWORK,EPP_GRIDC,-1)
  CALL SETUNB(EPP_CWORK,EPP_GRIDC)
  EPP_CWORK = EPP_CWORK/EPP_GRIDC%NPLWV
@@ -997,14 +1013,14 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, EPP_PS_TOTN,&
 
 END SUBROUTINE EPS_POT
 
-!>======================SUBROUTINE SHAPE_GRADN============================
+
+!>======================SUBROUTINE SHAPE_GRADN========================
 !!
 !!calculates first derivative of the shape function  wrt CHTOT in realspace
 !!
-!!=====================================================================
-
-SUBROUTINE SHAPE_GRADN(EPR_GRIDC, EPR_T_INFO, EPR_P, EPR_LATT_CUR,&
-                     & EPR_PS_TOTN, eprime)
+!!====================================================================
+SUBROUTINE SHAPE_GRADN(EPR_GRIDC, EPR_T_INFO, EPR_P, EPR_LATT_CUR, &
+     & EPR_PS_TOTN, eprime)
 
  IMPLICIT NONE
 
@@ -1024,22 +1040,22 @@ SUBROUTINE SHAPE_GRADN(EPR_GRIDC, EPR_T_INFO, EPR_P, EPR_LATT_CUR,&
  EPR_C = 1._q / sqrt(2*PI) / sigma_k
 
  DO I=1, EPR_GRIDC%RL%NP
-   EPR_Z = log(MAX(REAL(EPR_PS_TOTN(I),KIND=q),CHGMIN)/nc_k) / sqrt(2._q) / sigma_k
-   eprime(I) = EPR_C * (EXP(-(EPR_Z)**2)) / (MAX(REAL(EPR_PS_TOTN(I),KIND=q),CHGMIN))
+    EPR_Z = log(MAX(REAL(EPR_PS_TOTN(I),KIND=q),CHGMIN)/nc_k) / sqrt(2._q) / sigma_k
+    eprime(I) = EPR_C * (EXP(-(EPR_Z)**2)) / (MAX(REAL(EPR_PS_TOTN(I),KIND=q),CHGMIN))
  END DO
 
  RETURN
 
 END SUBROUTINE SHAPE_GRADN
 
-!>==========================SUBROUTINE NABLAN===============================
+
+!>==========================SUBROUTINE NABLAN=========================
 !!
 !! input : D_PHI , in reciprocal space, unscaled
 !! calculate |\nabla D_PHI |^2 = D_PHI2 in real space
 !! optional arg, D_grad = \nabla D_PHI, real space vector
 !!
-!!======================================================================
-
+!!====================================================================
 SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
 
  IMPLICIT NONE
@@ -1061,9 +1077,9 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
 
  D_PHI2 = 0._q
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! x-component:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,D_GRIDC%RC%NP
    N1= MOD((I-1),D_GRIDC%RC%NROW) +1
    NC= (I-1)/D_GRIDC%RC%NROW+1
@@ -1075,9 +1091,9 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
 
    CR(I) = D_PHI(I) * GX * CITPI
  ENDDO
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! gradphi_x to real space:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL SETUNB(CR,D_GRIDC)
  CALL FFT3D(CR,D_GRIDC,1)
 
@@ -1088,9 +1104,9 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    D_PHI2(I) = D_PHI2(I) + tmp * tmp
    IF (PRESENT(D_grad)) D_grad(1,I) = tmp
   ENDDO
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! y-component:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,D_GRIDC%RC%NP
    N1= MOD((I-1),D_GRIDC%RC%NROW) +1
    NC= (I-1)/D_GRIDC%RC%NROW+1
@@ -1103,9 +1119,9 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    CR(I) = D_PHI(I) * GY * CITPI
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! grad_y to real space:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL SETUNB(CR,D_GRIDC)
  CALL FFT3D(CR,D_GRIDC,1)
 
@@ -1116,9 +1132,9 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    D_PHI2(I) = D_PHI2(I) + tmp * tmp
    IF (PRESENT(D_grad)) D_grad(2,I) = tmp
   ENDDO
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! z-component:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,D_GRIDC%RC%NP
    N1= MOD((I-1),D_GRIDC%RC%NROW) +1
    NC= (I-1)/D_GRIDC%RC%NROW+1
@@ -1131,9 +1147,9 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
    CR(I)=D_PHI(I) * GZ * CITPI
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! grad_z to real space:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL SETUNB(CR,D_GRIDC)
  CALL FFT3D(CR,D_GRIDC,1)
 
@@ -1151,23 +1167,23 @@ SUBROUTINE NABLAN(D_PHI, D_GRIDC, D_LATT_CUR, D_PHI2, D_grad)
 
 END SUBROUTINE NABLAN
 
-!>==========================SUBROUTINE LAPLN===============================
+
+!>==========================SUBROUTINE LAPLN==========================
 !!
 !! calculate the Laplacian of D_PHI in real space
 !! D_PHI, the input in reciprocal space
 !! D_PHI2, the output in real space
-!!======================================================================
-
+!!====================================================================
 SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
 
  IMPLICIT NONE
 
-!dummy variables
+ !dummy variables
  TYPE(grid_3d),INTENT(IN) ::  D_GRIDC
  TYPE(latt),INTENT(IN)    :: D_LATT_CUR
  COMPLEX(q),INTENT(IN)    :: D_PHI(D_GRIDC%MPLWV)
  REAL(q),INTENT(OUT)      :: D_PHI2(DIMREAL(D_GRIDC%MPLWV))
-!local variables
+ !local variables
  COMPLEX(q),ALLOCATABLE   :: CR(:)
  RGRID, ALLOCATABLE       :: RWORK(:)
  INTEGER(q)               :: I,N1,N2,N3,NC
@@ -1177,9 +1193,9 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
 
  D_PHI2 = 0._q
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! x-component:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,D_GRIDC%RC%NP
    N1= MOD((I-1),D_GRIDC%RC%NROW) +1
    NC= (I-1)/D_GRIDC%RC%NROW+1
@@ -1192,9 +1208,9 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
    CR(I) = D_PHI(I) * (GX*CITPI)**2.0
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! gradphi to real space:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL SETUNB(CR,D_GRIDC)
  CALL FFT3D(CR,D_GRIDC,1)
 
@@ -1204,9 +1220,9 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
     D_PHI2(I) = D_PHI2(I) + REAL(RWORK(I),KIND=q)
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! y-component:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,D_GRIDC%RC%NP
    N1= MOD((I-1),D_GRIDC%RC%NROW) +1
    NC= (I-1)/D_GRIDC%RC%NROW+1
@@ -1219,9 +1235,9 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
    CR(I) = D_PHI(I) * (GY*CITPI)**2
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! grad_y to real space:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL SETUNB(CR,D_GRIDC)
  CALL FFT3D(CR,D_GRIDC,1)
 
@@ -1230,9 +1246,9 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
  DO I=1, D_GRIDC%RL%NP
     D_PHI2(I) = D_PHI2(I) + REAL(RWORK(I),KIND=q)
  ENDDO
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! z-component:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  DO I=1,D_GRIDC%RC%NP
    N1= MOD((I-1),D_GRIDC%RC%NROW) +1
    NC= (I-1)/D_GRIDC%RC%NROW+1
@@ -1245,9 +1261,9 @@ SUBROUTINE LAPLN(D_PHI,D_GRIDC,D_LATT_CUR,D_PHI2)
    CR(I)=D_PHI(I) * (GZ*CITPI)**2.0
  ENDDO
 
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
 ! grad_z to real space:
-!-------------------------------------------------------------------------
+!---------------------------------------------------------------------
  CALL SETUNB(CR,D_GRIDC)
  CALL FFT3D(CR,D_GRIDC,1)
 
@@ -1269,7 +1285,6 @@ END SUBROUTINE LAPLN
 !!returns n+N/G^2
 !!
 !!===============================================================
-
 SUBROUTINE SimplePoisson(GC_GRIDC,GC_LATT_CUR,GC_IN,GC_OUT,GFLAG)
 
  IMPLICIT NONE
@@ -1286,45 +1301,46 @@ SUBROUTINE SimplePoisson(GC_GRIDC,GC_LATT_CUR,GC_IN,GC_OUT,GFLAG)
 
  col: DO NC=1,GC_GRIDC%RC%NCOL
 
-        N2= GC_GRIDC%RC%I2(NC)
-        N3= GC_GRIDC%RC%I3(NC)
+    N2= GC_GRIDC%RC%I2(NC)
+    N3= GC_GRIDC%RC%I3(NC)
 
-        row: DO N1=1,GC_GRIDC%RC%NROW
-               I=I+1
+    row: DO N1=1,GC_GRIDC%RC%NROW
+       I=I+1
 
-               GX = (GC_GRIDC%LPCTX(N1)*GC_LATT_CUR%B(1,1)+&
-                    &GC_GRIDC%LPCTY(N2)*GC_LATT_CUR%B(1,2)+&
-                    &GC_GRIDC%LPCTZ(N3)*GC_LATT_CUR%B(1,3))
-               GY = (GC_GRIDC%LPCTX(N1)*GC_LATT_CUR%B(2,1)+&
-                     &GC_GRIDC%LPCTY(N2)*GC_LATT_CUR%B(2,2)+&
-                     &GC_GRIDC%LPCTZ(N3)*GC_LATT_CUR%B(2,3))
-               GZ = (GC_GRIDC%LPCTX(N1)*GC_LATT_CUR%B(3,1)+&
-                     &GC_GRIDC%LPCTY(N2)*GC_LATT_CUR%B(3,2)+&
-                     &GC_GRIDC%LPCTZ(N3)*GC_LATT_CUR%B(3,3))
+       GX = (GC_GRIDC%LPCTX(N1)*GC_LATT_CUR%B(1,1)+&
+            &GC_GRIDC%LPCTY(N2)*GC_LATT_CUR%B(1,2)+&
+            &GC_GRIDC%LPCTZ(N3)*GC_LATT_CUR%B(1,3))
+       GY = (GC_GRIDC%LPCTX(N1)*GC_LATT_CUR%B(2,1)+&
+            &GC_GRIDC%LPCTY(N2)*GC_LATT_CUR%B(2,2)+&
+            &GC_GRIDC%LPCTZ(N3)*GC_LATT_CUR%B(2,3))
+       GZ = (GC_GRIDC%LPCTX(N1)*GC_LATT_CUR%B(3,1)+&
+            &GC_GRIDC%LPCTY(N2)*GC_LATT_CUR%B(3,2)+&
+            &GC_GRIDC%LPCTZ(N3)*GC_LATT_CUR%B(3,3))
+       
+       GSQU=GX**2+GY**2+GZ**2
+       
+       IF (GFLAG == 1) THEN
 
-               GSQU=GX**2+GY**2+GZ**2
+          IF ((GC_GRIDC%LPCTX(N1)==0).AND.&
+               &(GC_GRIDC%LPCTY(N2)==0).AND.&
+               &(GC_GRIDC%LPCTZ(N3)==0)) THEN
+             
+             GC_OUT(I)=(0.0_q,0.0_q)
+          ELSE
+             GC_OUT(I)=(GC_IN(I))/GSQU*SCALE
+          ENDIF
 
-                IF (GFLAG == 1) THEN
+       ELSEIF (GFLAG == 0) THEN
+          GC_OUT(I)=(GC_IN(I))*GSQU/SCALE         
+       ENDIF
 
-                  IF ((GC_GRIDC%LPCTX(N1)==0).AND.&
-                       &(GC_GRIDC%LPCTY(N2)==0).AND.&
-                       &(GC_GRIDC%LPCTZ(N3)==0)) THEN
-
-                    GC_OUT(I)=(0.0_q,0.0_q)
-                  ELSE
-                    GC_OUT(I)=(GC_IN(I))/GSQU*SCALE
-                  ENDIF
-
-                ELSEIF (GFLAG == 0) THEN
-                  GC_OUT(I)=(GC_IN(I))*GSQU/SCALE         
-                ENDIF
-
-         ENDDO row
+    ENDDO row
  ENDDO col
 
  RETURN
 
 END SUBROUTINE SimplePoisson
+
 
 !>==========================SUBROUTINE MY_D_PROD=================
 !!
@@ -1332,7 +1348,6 @@ END SUBROUTINE SimplePoisson
 !! also used in pot_k.F
 !!
 !!==============================================================
-
 SUBROUTINE MY_D_PROD(D_P_val,ARRAY1,ARRAY2,GRIDC)
 
  IMPLICIT NONE
@@ -1348,26 +1363,26 @@ SUBROUTINE MY_D_PROD(D_P_val,ARRAY1,ARRAY2,GRIDC)
  D_P_val = 0._q
  I = 1
  col: DO NC=1,GRIDC%RC%NCOL
-        N2= GRIDC%RC%I2(NC)
-        N3= GRIDC%RC%I3(NC)
-      row: DO N1=1,GRIDC%RC%NROW
-        SETFACT1
-        SETFACT
-        D_P_val = D_P_val + MULFACT (ARRAY1(I)) * CONJG(ARRAY2(I))
-        I=I+1
-      ENDDO row
-      ENDDO col
+    N2= GRIDC%RC%I2(NC)
+    N3= GRIDC%RC%I3(NC)
+    row: DO N1=1,GRIDC%RC%NROW
+       SETFACT1
+       SETFACT
+       D_P_val = D_P_val + MULFACT (ARRAY1(I)) * CONJG(ARRAY2(I))
+       I=I+1
+    ENDDO row
+ ENDDO col
 
  RETURN
 
 END SUBROUTINE MY_D_PROD
+
 
 !>==========================SUBROUTINE PACK_R2C=================
 !!
 !!  helper routine to pack real array(RA) to a complex array(CB)
 !!
 !!==============================================================
-
 SUBROUTINE PACK_R2C(RA,CB,GRIDC)
 
  IMPLICIT NONE
@@ -1394,13 +1409,13 @@ SUBROUTINE PACK_R2C(RA,CB,GRIDC)
 
 END SUBROUTINE PACK_R2C
 
+
 !>==========================SUBROUTINE UNPACK_C2R=================
 !!
 !!  helper routine to unpack and maybe scale
 !!  complex array(A & B) to real array(C)
 !!
 !!==============================================================
-
 SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 
  IMPLICIT NONE
@@ -1416,11 +1431,11 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
  J = 1
  DO I=1,NP
 #ifdef realmode
-       C(J) = REAL(A(I),KIND=q)* SCALE1 + REAL(B(I),KIND=q)* SCALE2
-       C(J+1) = AIMAG(A(I))* SCALE1 + AIMAG(B(I))* SCALE2 
-       J = J + 2
+    C(J) = REAL(A(I),KIND=q)* SCALE1 + REAL(B(I),KIND=q)* SCALE2
+    C(J+1) = AIMAG(A(I))* SCALE1 + AIMAG(B(I))* SCALE2 
+    J = J + 2
 #else
-      C(I) = A(I) * SCALE1 + B(I) * SCALE2
+    C(I) = A(I) * SCALE1 + B(I) * SCALE2
 #endif
  ENDDO
 
@@ -1428,13 +1443,13 @@ SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 
 END SUBROUTINE UNPACK_C2R
 
-!>==========================SUBROUTINE WRITE_TO_FILE============================
+
+!>==========================SUBROUTINE WRITE_TO_FILE==================
 !!
 !! write real space quantities to file
 !! writes poscar first and then CVTOT(could be any quantity defined on RL grid)
 !!
-!!=============================================================================
-
+!!====================================================================
 SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
  USE prec
@@ -1454,7 +1469,7 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  REAL(q),ALLOCATABLE ::  WORK(:)
  INTEGER :: ISTAT, NODE_ME, IONODE, IU
  INTEGER :: NALLOC, NZ, NWRITE, NWRITTEN, N
- REAL(q),ALLOCATABLE ::  AVG_XY(:)
+ !REAL(q),ALLOCATABLE ::  AVG_XY(:)
 
  NODE_ME = 0
  IONODE = 0
@@ -1470,19 +1485,20 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 #endif
 
  ALLOCATE(WORK(NALLOC), STAT=ISTAT)
- ALLOCATE(AVG_XY(GRIDC%NGZ))
+ !ALLOCATE(AVG_XY(GRIDC%NGZ))
 
  io_begin
      OPEN(IU, FILE = FNAME, STATUS = 'UNKNOWN')
      REWIND IU
-     CALL OUTPOS(IU, .FALSE., SZNAM, T_INFO, LATT_CUR%SCALE, LATT_CUR%A, .FALSE., T_INFO%POSION)
+     CALL OUTPOS(IU, .FALSE., SZNAM, T_INFO, LATT_CUR%SCALE, &
+          & LATT_CUR%A, .FALSE., T_INFO%POSION)
  io_end
 
  IF (ISTAT>0) RETURN ! can not write the potential immediate exit
 
  IF (GRIDC%NPLWV/= GRIDC%NGX*GRIDC%NGY*GRIDC%NGZ) THEN
     WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatible', &
-     &   ' with  GRIDC%NGX,GRIDC%NGY,NGZC'
+         &   ' with  GRIDC%NGX,GRIDC%NGY,NGZC'
     WRITE(*,*)'   ',GRIDC%NPLWV,GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
     STOP
  ENDIF
@@ -1490,19 +1506,19 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  do_io WRITE(IU,'(3I5)') GRIDC%NGX, GRIDC%NGY, GRIDC%NGZ
 
  NWRITTEN = 0
- AVG_XY = 0
+ !AVG_XY = 0
 
  DO NZ = 1, GRIDC%NGZ
     CALL MRG_GRID_RL_PLANE(GRIDC, WORK, CVTOT, NZ)
     io_begin
     DO N = 1, NALLOC
-       AVG_XY(NZ) = AVG_XY(NZ) + WORK(N)/NALLOC
+       !AVG_XY(NZ) = AVG_XY(NZ) + WORK(N)/NALLOC
        NWRITTEN=NWRITTEN+1
        IF ( MOD(NWRITTEN,NWRITE)==0 ) THEN
           IF (ABS(WORK(N)) < 1E-10 ) THEN
-              WRITE(IU, FORM) 0._q
+             WRITE(IU, FORM) 0._q
           ELSE
-              WRITE(IU, FORM) WORK(N)
+             WRITE(IU, FORM) WORK(N)
           ENDIF
        ELSE
           IF (ABS(WORK(N)) < 1E-10 ) THEN
@@ -1517,10 +1533,10 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
  IF ( MOD(NWRITTEN,NWRITE)/=0 ) WRITE(IU,*)' '
 
- IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'MAX AVG_XY = ', MAXVAL(AVG_XY)
- IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'AVG_XY averaged along vacuum z = ', SUM(AVG_XY(GRIDC%NGZ-9:GRIDC%NGZ)) / 10.
+ !IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'MAX AVG_XY = ', MAXVAL(AVG_XY)
+ !IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'AVG_XY averaged along vacuum z = ', SUM(AVG_XY(GRIDC%NGZ-9:GRIDC%NGZ)) / 10.
 
- DEALLOCATE(AVG_XY)
+ !DEALLOCATE(AVG_XY)
 
  DEALLOCATE(WORK)
 
@@ -1528,14 +1544,14 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
 END SUBROUTINE WRITE_TO_FILE
 
-!>========================== SUBROUTINE GET_VAC_LEVEL ============================
+
+!>========================== SUBROUTINE GET_VAC_LEVEL ================
 !!
 !! Get the vacuum level
 !! uses the AVERAG subroutine from dipol.F
 !! both CHTOT and CVTOT must in real space
 !!
-!!=============================================================================
-
+!!====================================================================
 SUBROUTINE GET_VAC_LEVEL(GRIDC, CHTOT, CVTOT, VACPOT)
 
  USE prec
@@ -1567,7 +1583,8 @@ SUBROUTINE GET_VAC_LEVEL(GRIDC, CHTOT, CVTOT, VACPOT)
  !average chargedensity along direction, DIRECTION
  CALL AVERAG(GRIDC, DIRECTION, CHTOT, DENLIN, .TRUE.)
 
- !set vacuum to be the point in space where the electronic charge density is the minimum 
+ !set vacuum to be the point in space where the electronic charge 
+ !density is the minimum 
  !get the index corresponding to the minimum charge density
  DO IND = 1, NOUT
     !use a sliding average to smoothen in charge density
@@ -1588,7 +1605,7 @@ SUBROUTINE GET_VAC_LEVEL(GRIDC, CHTOT, CVTOT, VACPOT)
 
  VACPOT = DENLIN(MOD(INDMINDEN + NOUT, NOUT))
  !VACPOT=DENLIN(MOD(INDMIN+INT(WIDTH)+NOUT,NOUT))
- !DIP%VACUUM(2)=VACPOT
+
 #ifdef debugsol
  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'DENMIN = ', DENMIN
  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'INDMINDEN = ', INDMINDEN, MOD(INDMINDEN + NOUT, NOUT)
@@ -1600,7 +1617,5 @@ SUBROUTINE GET_VAC_LEVEL(GRIDC, CHTOT, CVTOT, VACPOT)
 
 END SUBROUTINE GET_VAC_LEVEL
 
+
 END MODULE POT_LPCM_K
-!***********************************************************************************
-!****************************END OF MODULE POT_LPCM_K ******************************
-!***********************************************************************************
