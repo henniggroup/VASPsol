@@ -310,7 +310,7 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
       & CE_GRIDC%NPLWV, CE_GRIDC%MPLWV, CE_GRIDC%RL%NP, CE_GRIDC%RC%NP
 #endif
 
- ALLOCATE(CE_gn2(NPC)) !complex
+ ALLOCATE(CE_gn2(NPC))
  ALLOCATE(CE_S(RLNP))
  ALLOCATE(CE_gn2_tmp(NPR), CE_gn(3, RLNP) )
  ALLOCATE(CE_ggn2(NPR), CE_ggn(3, RLNP) )
@@ -713,13 +713,6 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 !-------------------------------------------------------------
 !! MN_phi = MN_phi !!* EDEPS / MN_LATT_CUR%OMEGA
 
-!test
-!MN_phi(1) = 0._q
-#ifdef debugsol
- IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) MN_phi(1)
-#endif
-!test
-
 !-------------------------------------------------------------
 !deallocate all the work arrays
 !-------------------------------------------------------------
@@ -943,9 +936,9 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, &
 !---------------------------------------------------------------------
   CALL SHAPE_GRADN(EPP_GRIDC, EPP_T_INFO, EPP_P, EPP_LATT_CUR, &
        & EPP_PS_TOTN, eprime)
-!!!soltest
-!CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'EPRIME', eprime)
-!!!soltest
+  !soltest
+  !CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'EPRIME', eprime)
+  !soltest
   kprime = eprime * kappa2b_k
   eprime = eprime * (eb_k - 1._q)
 
@@ -964,7 +957,7 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, &
  CALL UNPACK_C2R(EPP_phi, 1.0_q, EPP_phi, 0.0_q, RWORK_1, EPP_GRIDC)
 
 #ifdef debugsolwf
- IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PBZ'
+ IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PBZ'
  CALL WRITE_TO_FILE(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, 'PHI_PBZ', &
       & RWORK_1)
 #endif
