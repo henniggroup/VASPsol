@@ -1406,14 +1406,14 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 END SUBROUTINE WRITE_TO_FILE
 
 
-!>========================== SUBROUTINE GET_VAC_LEVEL ====================
+!>========================== SUBROUTINE GET_VAC_LEVEL ================
 !!
 !! Get the vacuum level
 !! uses the AVERAG subroutine from dipol.F
 !! input: chtot and pot in rec space
 !! output: vacpot
 !!
-!!========================================================================
+!!====================================================================
 SUBROUTINE GET_VAC_LEVEL(GRIDC, LATT_CUR, T_INFO, REC_CHTOT, REC_CVTOT, &
      & VACPOT, FNAME)
 

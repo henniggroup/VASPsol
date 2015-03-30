@@ -260,7 +260,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 \ No newline at end of file
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
-+++ VASPsol/pot.F	2015-03-26 15:38:16.907683620 -0400
++++ VASPsol/pot.F	2015-03-30 08:42:54.614996552 -0400
 @@ -2,6 +2,8 @@
        MODULE pot
        USE prec
@@ -274,11 +274,11 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        COMPLEX(q), ALLOCATABLE::  CWORK1(:),CWORK(:,:)
        REAL(q) ELECTROSTATIC
        LOGICAL, EXTERNAL :: L_NO_LSDA_GLOBAL
-+!start solv
++      !sol
 +      COMPLEX(q), ALLOCATABLE :: Vcorr(:), CWORK_PSP(:), CWORK_HAR(:)
 +      REAL(q) :: Ecorr, VACPOT, VACPOT_PSP
 +      INTEGER :: ierror
-+!end solv
++      !sol
 +
  
  #ifdef libbeef
@@ -299,16 +299,16 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  !-----------------------------------------------------------------------
 +! add the dielectric corrections to CVTOT and the energy
 +!-----------------------------------------------------------------------
-+IF (LSOL) THEN
-+      CALL Vcorrection(GRIDC,P, LATT_CUR,T_INFO,WDES,CHTOT,Vcorr,Ecorr) 
++      IF (LSOL) THEN
++         CALL Vcorrection(GRIDC,P, LATT_CUR,T_INFO,WDES,CHTOT,Vcorr,Ecorr) 
 +         DO I=1,GRIDC%RC%NP
 +            CVTOT(I,1) = CVTOT(I,1) + Vcorr(I)
 +            CWORK_HAR(I) = CWORK(I,1)
 +         ENDDO
 +         E%ediel = Ecorr
-+ELSE
++      ELSE
 +         E%ediel = 0._q
-+ENDIF
++      ENDIF
 +!-----------------------------------------------------------------------
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
@@ -323,7 +323,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 +         DO I=1,GRIDC%RC%NP
 +            CWORK_PSP(I) = CWORK_HAR(I) + CWORK(I,1)
 +         ENDDO
-+    ! vacuum level
++         ! vacuum level
 +#ifdef debugsol_km
 +         CALL GET_VAC_LEVEL(GRIDC, LATT_CUR, T_INFO, CHTOT, &
 +              & CWORK_PSP, VACPOT_PSP, 'POT_PSP')
