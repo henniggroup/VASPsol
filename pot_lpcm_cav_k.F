@@ -612,7 +612,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 !-------------------------------------------------------------
  IF (PK_counter ==1) THEN
     DO I=1,MN_GRIDC%RC%NP
-       MN_phi(I) = REAL(MN_GSQU(I)) * (MN_TOTN(I) * EDEPS / MN_LATT_CUR%OMEGA)
+       MN_phi(I) = REAL(MN_GSQU(I)) * (MN_TOTN(I)) !* EDEPS / MN_LATT_CUR%OMEGA)
     ENDDO
  ELSE
     MN_phi = Sol_phi !phi from previous vasp iteration, unscaled
@@ -634,7 +634,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 !r = A*phi + (CHTOT + N)
 !-------------------------------------------------------------
  DO I = 1, MN_GRIDC%RC%NP
-   MN_RESID(I) = MN_Lp(I) + MN_TOTN(I) * EDEPS / MN_LATT_CUR%OMEGA
+   MN_RESID(I) = MN_Lp(I) + MN_TOTN(I) !* EDEPS / MN_LATT_CUR%OMEGA
  ENDDO
 
 !-------------------------------------------------------------
@@ -674,7 +674,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
          & MN_kappa2, gradphi_x_in, gradphi_y_in, gradphi_z_in, &
          & phi_work, MN_Lp)
 
-    !   MN_alpha = DOT_PRODUCT(MN_d,MN_Lp)
+    ! MN_alpha = DOT_PRODUCT(MN_d,MN_Lp)
     CALL MY_D_PROD(MN_alpha, MN_d, MN_Lp, MN_GRIDC)
 
     CALLMPI( M_sum_d(MN_GRIDC%COMM, MN_alpha, 1))
@@ -708,7 +708,7 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
     CALLMPI( M_sum_d(MN_GRIDC%COMM, r2, 1))
 
 #ifdef debugsol
-    IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) SQRT(rinvLr), SQRT(r2)
+    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) SQRT(rinvLr), SQRT(r2)
 #endif
     count = count+1
 
@@ -728,10 +728,9 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
  Sol_phi = MN_phi 
 
 !-------------------------------------------------------------
-!multiply by e/epsilon_0 and divide by volume for CHTOT: not neeeded
-! already taken care of in totn above
+!multiply by e/epsilon_0 and divide by volume for CHTOT
 !-------------------------------------------------------------
-!! MN_phi = MN_phi !!* EDEPS / MN_LATT_CUR%OMEGA
+ MN_phi = MN_phi * EDEPS / MN_LATT_CUR%OMEGA
 
 !-------------------------------------------------------------
 !deallocate all the work arrays
