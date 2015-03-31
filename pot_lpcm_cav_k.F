@@ -35,6 +35,7 @@ MODULE POT_LPCM_K
  PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
  PRIVATE :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
  PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
+ PRIVATE :: COMPUTE_RHOB, COMPUTE_RHOION
 
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
  REAL(q), PRIVATE, SAVE :: CHGMIN = 1E-10_q
@@ -42,6 +43,7 @@ MODULE POT_LPCM_K
  REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:)
  REAL(q), PRIVATE, SAVE :: sigma_nc_k,sigma_k,nc_k,eb_k, &
       & kappa2b_k,CORE_C, tau,EDIFFSOL
+ LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE.
  TYPE (in_struct), PUBLIC, SAVE :: SP_IO
  REAL(q), PUBLIC, SAVE :: VACPOT_POIS = 0._q
 
@@ -56,11 +58,10 @@ MODULE POT_LPCM_K
 !!+ cavitation 
 !!
 !!====================================================================
-
 SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
      & SP_T_INFO,SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, &
      & sigma_nc_k1, sigma_k1,nc_k1, eb_k1, kappa2b_k1, CORE_C1, &
-     & sigma_rc_k1, tau1, ediffs )
+     & sigma_rc_k1, tau1, ediffs, LRHOB1, LRHOION1 )
 
  IMPLICIT NONE
 
@@ -69,6 +70,7 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  TYPE (latt),INTENT(IN) :: SP_LATT_CUR
  TYPE(grid_3d),INTENT(IN) :: SP_GRIDC
  !TYPE (in_struct),INTENT(IN) :: IO
+ LOGICAL :: LRHOB1, LRHOION1
 
  COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
  COMPLEX(q),ALLOCATABLE :: phi_tilda(:),phi(:),Vcav(:)
@@ -82,20 +84,23 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1
  REAL(q) :: CORE_C1,tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
-!!!vacuum level
+ !vacuum level
  RGRID,ALLOCATABLE :: RWORK_PHI(:), RWORK_CHG(:)
  COMPLEX(q),ALLOCATABLE :: CWORK_K(:)
-!!!vacuum level
+ !vacuum level
+ REAL(q),ALLOCATABLE :: RHOB(:), RHOION(:)
 
  ALLOCATE(SP_d_eps(DIMREAL(SP_GRIDC%MPLWV)) )
  ALLOCATE(SP_kappa2(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV), phi(SP_GRIDC%MPLWV))
  ALLOCATE(Vcav(SP_GRIDC%MPLWV), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
-!!!vacuum level
+ !vacuum level
  ALLOCATE(RWORK_PHI(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(RWORK_CHG(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(CWORK_K(SP_GRIDC%MPLWV))
-!!!vacuum level
+ !vacuum level
+ ALLOCATE(RHOB(DIMREAL(SP_GRIDC%MPLWV)) )
+ ALLOCATE(RHOION(DIMREAL(SP_GRIDC%MPLWV)) )
       
  IF (PK_COUNTER == 1)  THEN
    ALLOCATE(Sol_phi(SP_GRIDC%MPLWV))
@@ -114,6 +119,8 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  sigma_rc_k =  sigma_rc_k1
  tau = tau1
  EDIFFSOL = ediffs
+ LRHOB =  LRHOB1
+ LRHOION = LRHOION1
 
 !---------------------------------------------------------------
 ! initialize
@@ -228,8 +235,19 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
    WRITE(SP_IO%IU0,333)  PK_COUNTER, Ael, Acav, Atot, NCGSOL
  ENDIF
 
- PK_COUNTER = PK_COUNTER + 1
-!!!vacuum level
+ !rhob = div((epsilon-1)grad phi)
+ !phi in rec space
+ IF (LRHOB) CALL COMPUTE_RHOB(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, & 
+      & SP_D_EPS, PHI_TILDA, RHOB)
+
+ !rhion = -kappa^2 * phi, in real space
+ !phi in rec space
+ !mind: after this the phi will be in real space
+ IF (LRHOION) CALL COMPUTE_RHOION(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, &
+      & SP_KAPPA2, PHI_TILDA, RHOION)
+ 
+ !vacuum level
+ !phi to real space
  CALL FFT3D(phi, SP_GRIDC, 1) 
  CALL UNPACK_C2R(phi, 1.0_q, phi, 0.0_q, RWORK_PHI, SP_GRIDC)
 #ifdef debugsolwf
@@ -237,27 +255,30 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  CALL WRITE_TO_FILE(SP_GRIDC, SP_LATT_CUR, SP_T_INFO, 'PHI_POIS', &
       & RWORK_PHI)
 #endif
- !copy CHTOT to CWORK_K
+ !chtot to real space
  CALL RC_ADD(SP_CHTOT, 1.0, SP_CHTOT, 0.0, CWORK_K, SP_GRIDC)
- !to real space
  CALL FFT3D(CWORK_K, SP_GRIDC, 1) 
  CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, SP_GRIDC)
  CALL GET_VAC_LEVEL(SP_GRIDC, RWORK_CHG, RWORK_PHI, VACPOT_POIS)
 #ifdef debugsol
  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'VACPOT_POIS = ', VACPOT_POIS
 #endif
-!!!vacuum level
+ !vacuum level
+
+ PK_COUNTER = PK_COUNTER + 1
       
  DEALLOCATE(SP_d_eps, SP_kappa2, phi_tilda, phi, Vcav, RWORK)
-!!!vacuum level
+ !vacuum level
  DEALLOCATE(RWORK_PHI)
  DEALLOCATE(RWORK_CHG)
  DEALLOCATE(CWORK_K)
-!!!vacuum level
+ !vacuum level
+ DEALLOCATE(RHOB, RHOION)
 
  RETURN
 
 END SUBROUTINE Vcorrection_lpcm
+
 
 !>=======================SUBROUTINE CREATECAVITY======================
 !!
@@ -266,7 +287,6 @@ END SUBROUTINE Vcorrection_lpcm
 !!Acav and Vcav
 !!
 !!====================================================================
-
 SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
      & CE_PS_TOTN,CE_d_eps,CE_kappa2,Vcav,Acav)  
 
@@ -364,7 +384,7 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
 !unpack complex array to a real array
 !in complex mode, just copies CE_PS_TOTN to RWORK
 !-------------------------------------------------------------
- CALL UNPACK_C2R(CE_PS_TOTN, 1.0_q, CE_PS_TOTN, 0.0_q, RWORK, CE_GRIDC)
+ CALL UNPACK_C2R(CE_PS_TOTN, 1.0_q, CE_PS_TOTN, 0.0_q, RWORK,CE_GRIDC)
 
 !-------------------------------------------------------------
 !charge density must be in real space(unscaled), 
@@ -486,13 +506,13 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
 
 END SUBROUTINE CREATECAVITY
 
+
 !>=====================SUBROUTINE MINIMIZE============================
 !!
 !!routine for solving poissons eqn using conjugate gradient or 
 !!steepest descent
 !!
 !!====================================================================
-
 SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
      & MN_kappa2, MN_TOTN, MN_phi, NCGSOL)
 
@@ -724,13 +744,14 @@ SUBROUTINE MINIMIZE(MN_GRIDC, MN_LATT_CUR, MN_P, MN_T_INFO, MN_d_eps,&
 
 END SUBROUTINE MINIMIZE
 
+
 !>======================SUBROUTINE Leps===============================
 !!
-!!subroutine that evaluates the fourier transform of div(epsilon*grad phi)
+!!subroutine that evaluates the fourier transform of 
+!!div(epsilon*grad phi)
 !!Ax in Ax=b
 !!
 !!====================================================================
-
 SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, &
      & LPS_d_eps, LPS_kappa2, gradphi_x_in, gradphi_y_in, &
      & gradphi_z_in, phi_work, LPS_Lp)
@@ -899,7 +920,6 @@ SUBROUTINE Leps(LPS_GRIDC, LPS_LATT_CUR, LPS_T_INFO, LPS_phi, &
 !! Both terms are computed in real space first and then FFT to k space
 !!
 !!====================================================================
-
 SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, &
      & EPP_PS_TOTN, EPP_phi, EPP_deps, EPP_kappa2, EPP_CWORK)
 
@@ -923,7 +943,8 @@ SUBROUTINE  EPS_POT(EPP_GRIDC, EPP_LATT_CUR, EPP_T_INFO, EPP_P, &
  INTEGER(q)             :: I,J,K  
 
  ALLOCATE(eprime(EPP_GRIDC%RL%NP), kprime(EPP_GRIDC%RL%NP) )
- ALLOCATE(phisq(DIMREAL(EPP_GRIDC%MPLWV)), RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
+ ALLOCATE(phisq(DIMREAL(EPP_GRIDC%MPLWV)))
+ ALLOCATE(RWORK(DIMREAL(EPP_GRIDC%MPLWV)))
  ALLOCATE(RWORK_1(DIMREAL(EPP_GRIDC%MPLWV)))
 
 !---------------------------------------------------------------------
@@ -1009,7 +1030,8 @@ END SUBROUTINE EPS_POT
 
 !>======================SUBROUTINE SHAPE_GRADN========================
 !!
-!!calculates first derivative of the shape function  wrt CHTOT in realspace
+!!calculates first derivative of the shape function  wrt CHTOT 
+!!in realspace
 !!
 !!====================================================================
 SUBROUTINE SHAPE_GRADN(EPR_GRIDC, EPR_T_INFO, EPR_P, EPR_LATT_CUR, &
@@ -1017,16 +1039,16 @@ SUBROUTINE SHAPE_GRADN(EPR_GRIDC, EPR_T_INFO, EPR_P, EPR_LATT_CUR, &
 
  IMPLICIT NONE
 
-!dummy variables
+ !dummy variables
  TYPE(grid_3d),INTENT(IN)   :: EPR_GRIDC
  TYPE(type_info),INTENT(IN) :: EPR_T_INFO
  TYPE(potcar),INTENT(IN)    :: EPR_P(EPR_T_INFO%NTYP)
  TYPE(latt),INTENT(IN)      :: EPR_LATT_CUR
-! COMPLEX(q),INTENT(IN) ::  EPR_PS_TOTN(EPR_GRIDC%MPLWV)
+ ! COMPLEX(q),INTENT(IN) ::  EPR_PS_TOTN(EPR_GRIDC%MPLWV)
  RGRID,INTENT(IN)           ::  EPR_PS_TOTN(DIMREAL(EPR_GRIDC%MPLWV))
  REAL(q),INTENT(OUT) ::  eprime(EPR_GRIDC%RL%NP)
 
-!local variables
+ !local variables
  REAL(q) ::EPR_C,eprime_temp,EPR_Z
  INTEGER I 
 
@@ -1335,12 +1357,12 @@ SUBROUTINE SimplePoisson(GC_GRIDC,GC_LATT_CUR,GC_IN,GC_OUT,GFLAG)
 END SUBROUTINE SimplePoisson
 
 
-!>==========================SUBROUTINE MY_D_PROD=================
+!>==========================SUBROUTINE MY_D_PROD====================
 !!
 !! helper routine for dot product
 !! also used in pot_k.F
 !!
-!!==============================================================
+!!==================================================================
 SUBROUTINE MY_D_PROD(D_P_val,ARRAY1,ARRAY2,GRIDC)
 
  IMPLICIT NONE
@@ -1371,11 +1393,11 @@ SUBROUTINE MY_D_PROD(D_P_val,ARRAY1,ARRAY2,GRIDC)
 END SUBROUTINE MY_D_PROD
 
 
-!>==========================SUBROUTINE PACK_R2C=================
+!>==========================SUBROUTINE PACK_R2C======================
 !!
 !!  helper routine to pack real array(RA) to a complex array(CB)
 !!
-!!==============================================================
+!!===================================================================
 SUBROUTINE PACK_R2C(RA,CB,GRIDC)
 
  IMPLICIT NONE
@@ -1403,12 +1425,12 @@ SUBROUTINE PACK_R2C(RA,CB,GRIDC)
 END SUBROUTINE PACK_R2C
 
 
-!>==========================SUBROUTINE UNPACK_C2R=================
+!>==========================SUBROUTINE UNPACK_C2R====================
 !!
 !!  helper routine to unpack and maybe scale
 !!  complex array(A & B) to real array(C)
 !!
-!!==============================================================
+!!===================================================================
 SUBROUTINE UNPACK_C2R(A,SCALE1,B,SCALE2,C,GRID)
 
  IMPLICIT NONE
@@ -1440,7 +1462,8 @@ END SUBROUTINE UNPACK_C2R
 !>==========================SUBROUTINE WRITE_TO_FILE==================
 !!
 !! write real space quantities to file
-!! writes poscar first and then CVTOT(could be any quantity defined on RL grid)
+!! writes poscar first and then CVTOT
+!! could be any quantity defined on RL grid
 !!
 !!====================================================================
 SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
@@ -1490,7 +1513,7 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
  IF (ISTAT>0) RETURN ! can not write the potential immediate exit
 
  IF (GRIDC%NPLWV/= GRIDC%NGX*GRIDC%NGY*GRIDC%NGZ) THEN
-    WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatible', &
+    WRITE(*,*)'internal ERROR: OUTPOT GRIDC%NPLWV is not compatible',&
          &   ' with  GRIDC%NGX,GRIDC%NGY,NGZC'
     WRITE(*,*)'   ',GRIDC%NPLWV,GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ
     STOP
@@ -1601,7 +1624,8 @@ SUBROUTINE GET_VAC_LEVEL(GRIDC, CHTOT, CVTOT, VACPOT)
 
 #ifdef debugsol
  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'DENMIN = ', DENMIN
- IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'INDMINDEN = ', INDMINDEN, MOD(INDMINDEN + NOUT, NOUT)
+ IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'INDMINDEN = ', &
+      & INDMINDEN, MOD(INDMINDEN + NOUT, NOUT)
 #endif
 
  DEALLOCATE(DENLIN)
@@ -1609,6 +1633,106 @@ SUBROUTINE GET_VAC_LEVEL(GRIDC, CHTOT, CVTOT, VACPOT)
  RETURN
 
 END SUBROUTINE GET_VAC_LEVEL
+
+
+!>========================== SUBROUTINE COMPUTE_RHOB ================
+!!
+!! bound charge in real space
+!! phi in rec space
+!!
+!!====================================================================
+SUBROUTINE COMPUTE_RHOB(GRIDC, LATT_CUR, T_INFO, EPSILON, PHI, RHOB)
+
+  IMPLICIT NONE
+
+  TYPE(grid_3d),INTENT(IN) :: GRIDC
+  TYPE (latt),INTENT(IN) :: LATT_CUR
+  TYPE(type_info),INTENT(IN) :: T_INFO
+
+  COMPLEX(q) :: PHI(GRIDC%MPLWV)
+  REAL(q) :: EPSILON(DIMREAL(GRIDC%MPLWV)), RHOB(DIMREAL(GRIDC%MPLWV))
+
+  COMPLEX(q),ALLOCATABLE :: gradphi_x_in(:)
+  COMPLEX(q),ALLOCATABLE :: gradphi_y_in(:)
+  COMPLEX(q),ALLOCATABLE :: gradphi_z_in(:)
+  COMPLEX(q),ALLOCATABLE :: phi_work(:), C_RHOB(:)
+
+  REAL(q),ALLOCATABLE :: DUMMY_KAPPA2(:)
+
+  ALLOCATE(C_RHOB(GRIDC%MPLWV))
+  ALLOCATE(DUMMY_KAPPA2(DIMREAL(GRIDC%MPLWV)))
+  ALLOCATE(gradphi_x_in(GRIDC%MPLWV),gradphi_y_in(GRIDC%MPLWV))
+  ALLOCATE(gradphi_z_in(GRIDC%MPLWV), PHI_WORK(GRIDC%MPLWV))
+
+  DUMMY_KAPPA2 = 0._q
+  !epsilon -1 
+  EPSILON = EPSILON - 1._q
+  
+  !div(epsilon grap phi)
+  CALL Leps(GRIDC, LATT_CUR, T_INFO, PHI, EPSILON, & 
+      & DUMMY_KAPPA2, gradphi_x_in, gradphi_y_in, gradphi_z_in, &
+      & phi_work, C_RHOB)
+
+  !rhob in real space
+  CALL FFT3D(C_RHOB, GRIDC, 1) 
+  CALL UNPACK_C2R(C_RHOB, 1.0_q, C_RHOB, 0.0_q, RHOB, GRIDC)
+
+  !write to file
+  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing RHOB'
+  CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'RHOB', RHOB)
+
+  DEALLOCATE(C_RHOB, DUMMY_KAPPA2)
+  DEALLOCATE(gradphi_x_in, gradphi_y_in)
+  DEALLOCATE(gradphi_z_in, PHI_WORK)
+
+  RETURN
+
+END SUBROUTINE COMPUTE_RHOB
+
+
+!>========================== SUBROUTINE COMPUTE_RHOION ===============
+!!
+!! ionic charge in real space
+!! phi in rec space
+!!
+!!====================================================================
+SUBROUTINE COMPUTE_RHOION(GRIDC, LATT_CUR, T_INFO, KAPPA2, PHI,RHOION)
+
+  IMPLICIT NONE
+
+  TYPE(grid_3d),INTENT(IN) :: GRIDC
+  TYPE (latt),INTENT(IN) :: LATT_CUR
+  TYPE(type_info),INTENT(IN) :: T_INFO
+
+  COMPLEX(q) :: PHI(GRIDC%MPLWV)
+  REAL(q) :: KAPPA2(DIMREAL(GRIDC%MPLWV))
+  REAL(q) :: RHOION(DIMREAL(GRIDC%MPLWV))
+
+  REAL(q),ALLOCATABLE :: R_PHI(:)
+
+  INTEGER(q) :: I
+
+  ALLOCATE(R_PHI(DIMREAL(GRIDC%MPLWV)))
+
+  !phi to real space
+  CALL FFT3D(PHI, GRIDC, 1) 
+  CALL UNPACK_C2R(PHI, 1.0_q, PHI, 0.0_q, R_PHI, GRIDC)
+  
+  ! rhoion = - kappa^2 * phi
+  ! in real space
+  DO I = 1, GRIDC%RL%NP
+     RHOION(I) = -KAPPA2(I) * R_PHI(I)
+  ENDDO
+
+  !write to file
+  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing RHOION'
+  CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'RHOION', RHOION)
+
+  DEALLOCATE(R_PHI)
+
+  RETURN 
+
+END SUBROUTINE COMPUTE_RHOION
 
 
 END MODULE POT_LPCM_K

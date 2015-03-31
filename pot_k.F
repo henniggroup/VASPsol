@@ -57,6 +57,7 @@ MODULE POT_K
       & lambda_d_k, kappa2b_k,CORE_C,tau,EDIFFSOL
  !TYPE (in_struct), PRIVATE, SAVE :: SP_IO
  LOGICAL, PUBLIC, SAVE :: LSOL = .FALSE.
+ LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE.
  LOGICAL, SAVE :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE :: LJDFTX = .FALSE.
 
@@ -176,7 +177,7 @@ MODULE POT_K
       CALL Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, SP_T_INFO,&
            & SP_CHTOT, TOTN, PS_TOTN, Vcorr, Vdiel, Atot, sigma_nc_k,&
            & sigma_k, nc_k, eb_k, kappa2b_k, CORE_C, sigma_rc_k,&
-           & tau, EDIFFSOL)
+           & tau, EDIFFSOL, LRHOB, LRHOION)
 
 #ifdef debugsol
       sol_io 'Return from vcorr_lpcm minimization'
@@ -900,6 +901,44 @@ END SUBROUTINE SET_SOL_IO
 
   IF ((IERR/=0).AND.(IERR/=3)) THEN
      sol_io 'Error reading ''EDIFFSOL''from INCAR.'
+     sol_io ' Error code = ', IERR
+     STOP
+  ENDIF
+
+  !---------------------------------------------------------------
+  !LRHOB
+  !---------------------------------------------------------------
+  CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LRHOB','=','#',';','L',IDUM, &
+       &  RDUM,CDUM, LRHOB, CHARAC,N,1,IERR)
+#ifdef debugsol
+  IF (IERR == 3 ) THEN
+     sol_io '''LRHOB'', write the bound charge density or not'
+     sol_io 'LRHOB = ', LRHOB                  
+  ELSE IF (IERR == 0 ) THEN
+     sol_io 'Found : LRHOB = ', LRHOB
+  ENDIF
+#endif
+  IF ((IERR/=0).AND.(IERR/=3)) THEN
+     sol_io 'Error reading ''LRHOB''from INCAR.'
+     sol_io ' Error code = ', IERR
+     STOP
+  ENDIF
+
+  !---------------------------------------------------------------
+  !LRHOION
+  !---------------------------------------------------------------
+  CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LRHOION','=','#',';','L',IDUM, &
+       &  RDUM,CDUM, LRHOION, CHARAC,N,1,IERR)
+#ifdef debugsol
+  IF (IERR == 3 ) THEN
+     sol_io '''LRHOION'', write the ionic charge density or not'
+     sol_io 'LRHOION = ', LRHOION                 
+  ELSE IF (IERR == 0 ) THEN
+     sol_io 'Found : LRHOION = ', LRHOION
+  ENDIF
+#endif
+  IF ((IERR/=0).AND.(IERR/=3)) THEN
+     sol_io 'Error reading ''LRHOION''from INCAR.'
      sol_io ' Error code = ', IERR
      STOP
   ENDIF
