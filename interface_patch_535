@@ -1,4 +1,4 @@
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/base.F VASPsol/base.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/base.F VASPsol/base.F
 --- vasp.5.3.5/base.F	2014-06-12 15:16:16.000000000 -0400
 +++ VASPsol/base.F	2015-02-25 16:30:15.266355797 -0500
 @@ -43,6 +43,7 @@
@@ -17,7 +17,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
          REAL(q)    XCENC             ! -V(xc)+E(xc) (d.c.)
          REAL(q)    EXCG              ! E(xc) (LDA+GGA)
          REAL(q)    EXCM              ! E(xc) (metaGGA)
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_all.F VASPsol/electron_all.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/electron_all.F VASPsol/electron_all.F
 --- vasp.5.3.5/electron_all.F	2014-06-12 15:16:19.000000000 -0400
 +++ VASPsol/electron_all.F	2015-02-25 16:30:15.266355797 -0500
 @@ -389,7 +389,7 @@
@@ -38,7 +38,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  !-MM- Added to accomodate constrained moment calculations
        IF (M_CONSTRAINED()) TOTEN2=TOTEN2+E_CONSTRAINT()
        io_begin
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron.F VASPsol/electron.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/electron.F VASPsol/electron.F
 --- vasp.5.3.5/electron.F	2014-06-12 15:16:20.000000000 -0400
 +++ VASPsol/electron.F	2015-02-25 16:30:15.266355797 -0500
 @@ -439,7 +439,7 @@
@@ -80,7 +80,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       &        '  ---------------------------------------------------'/ &
       &        '  free energy    TOTEN  = ',F18.8,' eV'// &
       &        '  energy without entropy =',F18.8, &
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_lhf.F VASPsol/electron_lhf.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/electron_lhf.F VASPsol/electron_lhf.F
 --- vasp.5.3.5/electron_lhf.F	2014-06-12 15:16:16.000000000 -0400
 +++ VASPsol/electron_lhf.F	2015-02-25 16:30:15.266355797 -0500
 @@ -526,7 +526,7 @@
@@ -92,7 +92,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
       IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
       io_begin
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/electron_OEP.F VASPsol/electron_OEP.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/electron_OEP.F VASPsol/electron_OEP.F
 --- vasp.5.3.5/electron_OEP.F	2014-06-12 15:16:19.000000000 -0400
 +++ VASPsol/electron_OEP.F	2015-02-25 16:30:15.266355797 -0500
 @@ -584,7 +584,7 @@
@@ -104,7 +104,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       IF (M_CONSTRAINED()) TOTEN=TOTEN+E_CONSTRAINT()
  
       DESUM(N)=TOTEN-TOTENL
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/elinear_response.F VASPsol/elinear_response.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/elinear_response.F VASPsol/elinear_response.F
 --- vasp.5.3.5/elinear_response.F	2014-06-12 15:16:16.000000000 -0400
 +++ VASPsol/elinear_response.F	2015-02-25 16:30:15.266355797 -0500
 @@ -433,7 +433,7 @@
@@ -116,7 +116,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         DE= (TOTEN-TOTENL)
  
         IF (IO%IU0>=0) THEN
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/force.F VASPsol/force.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/force.F VASPsol/force.F
 --- vasp.5.3.5/force.F	2014-06-12 15:16:18.000000000 -0400
 +++ VASPsol/force.F	2015-02-25 16:30:15.266355797 -0500
 @@ -1075,6 +1075,9 @@
@@ -162,7 +162,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
                IF (IO%IU6>=0) THEN
                   NORDER=0 ; IF (KPOINTS%ISMEAR>=0) NORDER=KPOINTS%ISMEAR
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/ilinear_response.F VASPsol/ilinear_response.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/ilinear_response.F VASPsol/ilinear_response.F
 --- vasp.5.3.5/ilinear_response.F	2014-06-12 15:16:20.000000000 -0400
 +++ VASPsol/ilinear_response.F	2015-02-25 16:30:15.266355797 -0500
 @@ -624,7 +624,7 @@
@@ -174,7 +174,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         DE= (TOTEN-TOTENL)
         
         IF (IO%IU0>=0) THEN
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/linear_response.F VASPsol/linear_response.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/linear_response.F VASPsol/linear_response.F
 --- vasp.5.3.5/linear_response.F	2014-06-12 15:16:22.000000000 -0400
 +++ VASPsol/linear_response.F	2015-02-25 16:30:15.266355797 -0500
 @@ -341,7 +341,7 @@
@@ -186,7 +186,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
         IF (IO%IU0>=0) THEN
            WRITE(IO%IU0,1000) I, TOTEN_, TOTEN_-TOTEN, DESUM, ICOUEV, RMS
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/main.F VASPsol/main.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/main.F VASPsol/main.F
 --- vasp.5.3.5/main.F	2014-06-12 15:16:17.000000000 -0400
 +++ VASPsol/main.F	2015-02-25 16:30:15.266355797 -0500
 @@ -139,6 +139,7 @@
@@ -250,9 +250,9 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
        CALL STOP_TIMING("G",IO%IU6,'EDDIAG')
  
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/pot.F VASPsol/pot.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
-+++ VASPsol/pot.F	2015-03-30 09:14:27.685565826 -0400
++++ VASPsol/pot.F	2015-04-08 10:24:56.590761402 -0400
 @@ -2,6 +2,8 @@
        MODULE pot
        USE prec
@@ -341,7 +341,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        RETURN
      END SUBROUTINE POTLOK
  
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/reader.F VASPsol/reader.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/reader.F VASPsol/reader.F
 --- vasp.5.3.5/reader.F	2014-06-12 15:16:18.000000000 -0400
 +++ VASPsol/reader.F	2015-02-25 16:30:15.270355762 -0500
 @@ -16,7 +16,7 @@
@@ -389,7 +389,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  ! set LASPH if LMETAGGA is chosen (metagga only calculated aspherically)
        IF (LMETAGGA) LASPH=.TRUE.
  
-diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' vasp.5.3.5/subrot_scf.F VASPsol/subrot_scf.F
+diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings vasp.5.3.5/subrot_scf.F VASPsol/subrot_scf.F
 --- vasp.5.3.5/subrot_scf.F	2014-06-12 15:16:17.000000000 -0400
 +++ VASPsol/subrot_scf.F	2015-02-25 16:30:15.270355762 -0500
 @@ -320,7 +320,7 @@
