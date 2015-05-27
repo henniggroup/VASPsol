@@ -199,7 +199,7 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1,&
 
  LOGICAL :: LBCHG_1
  REAL(q) :: sigma_nc_k1, sigma_k1, nc_k1
- REAL(q) :: eb_k1, CORE_C1, sigma_rc_k1(T_INFO%NTYP), tau1, ediffsol1
+ REAL(q) :: eb_k1, CORE_C1(T_INFO%NTYP), sigma_rc_k1(T_INFO%NTYP), tau1, ediffsol1
  REAL(q) :: p0_k1, einfty_k1, Nsol_k1, T_k1, kappa2b_k1
  INTEGER :: NION_COUNT_K1
  REAL(q) :: NION_K1(NION_COUNT_K1), ZION_K1(NION_COUNT_K1)

@@ -41,9 +41,9 @@ MODULE POT_K
 
  LOGICAL, SAVE :: LSOL = .FALSE.
  REAL(q), ALLOCATABLE, SAVE :: EIFOR_SOL(:,:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:)
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:)
  REAL(q), PRIVATE, SAVE :: sigma_nc_k,sigma_k,nc_k,eb_k
- REAL(q), PRIVATE, SAVE :: CORE_C,tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE :: tau,EDIFFSOL
  REAL(q), PRIVATE, SAVE :: kappa2b_k, lambda_d_k
 
  LOGICAL, SAVE :: LNLSOL = .FALSE.
@@ -421,7 +421,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
              !flag=3, pseudo core cHarge density to repel fluid from core
              !--------------------------------------------------------
           ELSE IF ( flag == 3 ) THEN
-             SP_N(SP_NG) = SP_N(SP_NG)+CORE_C*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2))
+             SP_N(SP_NG) = SP_N(SP_NG)+CORE_C(SP_NT)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2))
 
           ENDIF
           !----------------------------------------------------------
@@ -432,7 +432,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
              
              SP_CEXPF=EXP(CITPI*(SP_G3+SP_G2+SP_G1))*SP_T_INFO%VCA(SP_NT)
              SP_FOR_gion = (Vcorr(SP_NG))*imag_i*((SP_P(SP_NT)%ZVALF)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2)))
-             SP_FOR_cb = -(Vdiel(SP_NG))*imag_i*(CORE_C*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
+             SP_FOR_cb = -(Vdiel(SP_NG))*imag_i*(CORE_C(SP_NT)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
 
              SP_FOR1_gion = SP_FOR1_gion + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_gion
              SP_FOR2_gion = SP_FOR2_gion + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_gion
@@ -518,7 +518,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
    
    REAL(q) :: sigma_gauss,RCS(T_INFO%NTYP)
    
-   INTEGER :: IDUM, N, IERR, K, I
+   INTEGER :: IDUM, N, IERR, K, I, II, ATOMIC_NUM
    REAL(q) :: RDUM,delta_grd,sigma_rc_k0
    COMPLEX(q) CDUM
    LOGICAL :: LOPEN,LDUM,LIONODE_FLAG,LFLUEX
@@ -537,6 +537,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
 
    IF (PK_COUNTER == 1) THEN
       ALLOCATE(sigma_rc_k(T_INFO%NTYP))
+      ALLOCATE(CORE_C(T_INFO%NTYP))
 #ifdef debugsol
       IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the paramters.Unless explicity specified in the INCAR file these values will be used as the defaults'
 #endif
@@ -557,12 +558,31 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
       ! sigma_rc_k = MINVAL(RCS)*2.0/4.0_q   
 
       sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
-
 #ifdef debugsol
       IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'RCOREs = ', RCS      
 #endif
 
-      CORE_C = 1.0_q
+      DO II = 1, T_INFO%NTYP
+         ATOMIC_NUM = INT(P(II)%ZVALF_ORIG+P(II)%ZCORE)
+         IF (ATOMIC_NUM <= 10) THEN
+#ifdef debugsol
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'ATOMIC NUMBER, SYMBOL, VALENCE, CORE :',ATOMIC_NUM, P(II)%ELEMENT, P(II)%ZVALF_ORIG, P(II)%ZCORE
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting CORE_C(the magnitude of the pseudo core charge) to zero.'     
+#endif
+            CORE_C(II) = 0._q
+            IF (ATOMIC_NUM <= 4 .AND. P(II)%ZVALF_ORIG /= ATOMIC_NUM) THEN
+               IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'!------------------------------------------------------------------------'
+               IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'WARNING: '
+               IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Use all-electron pseudopotential or set CORE_C explicitly '
+               IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'for atomic-species with atomic number less than or equal to 4.'
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Problem species ATOMIC NUMBER, SYMBOL & VALENCE :',ATOMIC_NUM, P(II)%ELEMENT, P(II)%ZVALF_ORIG
+               IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'I HOPE YOU KNOW WHAT YOU ARE DOING !'
+               IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'!------------------------------------------------------------------------'
+            ENDIF
+         ELSE
+            CORE_C(II) = 1._q
+         ENDIF
+      ENDDO
 
       LOPEN = .FALSE.
    
@@ -578,20 +598,23 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
       !---------------------------------------------------------------
       !sigma_rc_k
       !---------------------------------------------------------------
+      CALL READ_FROM_INCAR(LOPEN, 'SIGMA_RC_K', 'F', T_INFO%NTYP, IDUM, &
+          & RDUM, CDUM, LDUM, 'the width of pseudo-core gaussians (Angstrom)', &
+          & sigma_rc_k)
       !   CALL READ_FROM_INCAR(LOPEN, 'SIGMA_RC_K', 'F', 1, IDUM, &
       ! & SIGMA_RC_K0, CDUM, LDUM, 'the width of pseudo-core gaussians (Angstrom)')
       !   DO I = 1, T_INFO%NTYP
       !      sigma_rc_k(I) = sigma_rc_k0
       !   ENDDO
-#ifdef debugsol      
-      IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'SIGMA_RC_K = ', SIGMA_RC_K
-#endif
 
       !---------------------------------------------------------------
       !CORE_C
       !---------------------------------------------------------------
-      CALL READ_FROM_INCAR(LOPEN, 'CORE_C', 'F', 1, IDUM, &
-           & CORE_C, CDUM, LDUM, 'magnitude of pseudo-core charge (dimensionless)')
+      CALL READ_FROM_INCAR(LOPEN, 'CORE_C', 'F', T_INFO%NTYP, IDUM, &
+          & RDUM, CDUM, LDUM, 'magnitude of pseudo-core charge (dimensionless)', &
+          & CORE_C)
+      !CALL READ_FROM_INCAR(LOPEN, 'CORE_C', 'F', 1, IDUM, &
+      !     & CORE_C, CDUM, LDUM, 'magnitude of pseudo-core charge (dimensionless)')
 
       !---------------------------------------------------------------
       !LJDFTX
@@ -953,7 +976,7 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
        G=SQRT(GX**2+GY**2+GZ**2)*TPI
 
        GWORK (N) = -(P(NT)%ZVALF)*EXP(-0.5_q*(G**2)*(sigma_nc_k**2))
-       PCWORK (N) = (CORE_C)*EXP(-0.5_q*(G**2)*(sigma_rc_k(NT)**2))
+       PCWORK (N) = (CORE_C(NT))*EXP(-0.5_q*(G**2)*(sigma_rc_k(NT)**2))
 
     ENDDO
 
@@ -1158,7 +1181,7 @@ SUBROUTINE READ_FROM_INCAR(LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM,&
   CHARACTER (*) VAR_NAME
   CHARACTER (*) MSG
 
-  IF (VAR_SIZE == 1) THEN
+  IF ((VAR_SIZE == 1) .AND. (.NOT. PRESENT(RDUM_ARRAY))) THEN
      CALL RDATAB(LOPEN, 'INCAR', SP_IO%IU5, VAR_NAME, '=', '#', ';', VAR_TYPE, &
           & IDUM, RDUM, CDUM, LDUM, CHARAC, N, VAR_SIZE, IERR)
   ELSE
@@ -1177,7 +1200,7 @@ SUBROUTINE READ_FROM_INCAR(LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM,&
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
         ELSEIF (VAR_TYPE == 'L') THEN
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
-        ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE > 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
+        ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE >= 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
         ELSEIF (VAR_TYPE == 'F') THEN
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM
@@ -1192,7 +1215,7 @@ SUBROUTINE READ_FROM_INCAR(LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM,&
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
         ELSEIF (VAR_TYPE == 'L') THEN
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
-        ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE > 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
+        ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE >= 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
         ELSEIF (VAR_TYPE == 'F') THEN
            WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM

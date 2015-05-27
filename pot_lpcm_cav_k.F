@@ -40,9 +40,9 @@ MODULE POT_LPCM_K
  REAL(q), PUBLIC, SAVE :: CHGMIN = 1E-10_q, VACPOT_POIS
  COMPLEX(q), PUBLIC, ALLOCATABLE, SAVE :: Sol_phi(:)
  COMPLEX(q), PRIVATE, ALLOCATABLE :: C_PS_TOTN(:)
- REAL(q), PUBLIC, ALLOCATABLE, SAVE :: sigma_rc_k(:)
+ REAL(q), PUBLIC, ALLOCATABLE, SAVE :: sigma_rc_k(:), CORE_C(:)
  REAL(q), PUBLIC, SAVE :: sigma_nc_k,sigma_k,nc_k,eb_k
- REAL(q), PUBLIC, SAVE :: CORE_C, tau,EDIFFSOL
+ REAL(q), PUBLIC, SAVE :: tau,EDIFFSOL
  REAL(q), PRIVATE, SAVE :: kappa2b_k
  TYPE (in_struct), PUBLIC, SAVE :: SP_IO
 
@@ -218,9 +218,9 @@ SUBROUTINE SET_PARAMS_LPCM(sigma_nc_k1, sigma_k1, nc_k1, eb_k1, &
  IMPLICIT NONE
 
  INTEGER :: NTYP
- REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,CORE_C1,tau1,ediffs
+ REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,tau1,ediffs
  REAL(q) :: kappa2b_k1
- REAL(q), INTENT(IN) :: sigma_rc_k1(NTYP)
+ REAL(q), INTENT(IN) :: sigma_rc_k1(NTYP), CORE_C1(NTYP)
 
  sigma_nc_k = sigma_nc_k1 
  sigma_k =  sigma_k1
