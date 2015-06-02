@@ -40,9 +40,9 @@ MODULE POT_LPCM_K
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
  REAL(q), PRIVATE, SAVE :: CHGMIN = 1E-10_q
  COMPLEX(q), PRIVATE, ALLOCATABLE, SAVE :: Sol_phi(:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:)
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:)
  REAL(q), PRIVATE, SAVE :: sigma_nc_k,sigma_k,nc_k,eb_k, &
-      & kappa2b_k,CORE_C, tau,EDIFFSOL
+      & kappa2b_k,tau,EDIFFSOL
  LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE.
  TYPE (in_struct), PUBLIC, SAVE :: SP_IO
  REAL(q), PUBLIC, SAVE :: VACPOT_POIS = 0._q
@@ -82,8 +82,8 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  INTEGER :: I,J, NCGSOL
  REAL(q)  :: Atot, Ael, Acav, Ecorr1, Ecorr2, Ecorr_cav
  REAL(q) :: sigma_nc_k1,sigma_k1,nc_k1,eb_k1,kappa2b_k1
- REAL(q) :: CORE_C1,tau1,ediffs
- REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP)
+ REAL(q) :: tau1,ediffs
+ REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP), CORE_C1(SP_T_INFO%NTYP)
  !vacuum level
  RGRID,ALLOCATABLE :: RWORK_PHI(:), RWORK_CHG(:)
  COMPLEX(q),ALLOCATABLE :: CWORK_K(:)

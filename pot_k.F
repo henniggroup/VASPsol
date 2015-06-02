@@ -52,9 +52,9 @@ MODULE POT_K
 
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
  REAL(q), ALLOCATABLE, PUBLIC, SAVE :: EIFOR_SOL(:,:)
- REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:)
+ REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:)
  REAL(q), PRIVATE, SAVE :: sigma_nc_k, sigma_k, nc_k, eb_k, &
-      & lambda_d_k, kappa2b_k,CORE_C,tau,EDIFFSOL
+      & lambda_d_k, kappa2b_k,tau,EDIFFSOL
  !TYPE (in_struct), PRIVATE, SAVE :: SP_IO
  LOGICAL, PUBLIC, SAVE :: LSOL = .FALSE.
  LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE.
@@ -383,7 +383,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
              !-------------------------------------------------------
           ELSE IF ( flag == 3 ) THEN
              
-             SP_N(SP_NG) = SP_N(SP_NG) + CORE_C * SP_CEXPF * &
+             SP_N(SP_NG) = SP_N(SP_NG) + CORE_C(SP_NT) * SP_CEXPF * &
                   & EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2))
 
           ENDIF
@@ -398,7 +398,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
              SP_FOR_gion = (Vcorr(SP_NG)) * imag_i * ((SP_P(SP_NT)%ZVALF) * &
                   & SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2)))
 
-             SP_FOR_cb = -(Vdiel(SP_NG)) * imag_i * (CORE_C * SP_CEXPF * &
+             SP_FOR_cb = -(Vdiel(SP_NG)) * imag_i * (CORE_C(SP_NT) * SP_CEXPF * &
                   & EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
 
              SP_FOR1_gion = SP_FOR1_gion + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_gion
@@ -485,8 +485,8 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
    
    REAL(q) :: sigma_gauss,RCS(T_INFO%NTYP)
    
-   INTEGER :: IDUM, N, IERR, K, I
-   REAL(q) :: RDUM,delta_grd,sigma_rc_k0
+   INTEGER :: IDUM, N, IERR, K, I, II, ATOMIC_NUM
+   REAL(q) :: RDUM,delta_grd,sigma_rc_k0(T_INFO%NTYP)
    COMPLEX(q) CDUM
    LOGICAL :: LOPEN,LDUM,LIONODE_FLAG,LFLUEX
    CHARACTER (1) CHARAC
@@ -504,6 +504,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
 
  IF (PK_COUNTER == 1) THEN
    ALLOCATE(sigma_rc_k(T_INFO%NTYP))
+   ALLOCATE(CORE_C(T_INFO%NTYP))
 #ifdef debugsol
    sol_io 'Setting up the paramters.'
    sol_io 'Unless  explicity specified in the INCAR file these values will be used as the defaults'
@@ -533,8 +534,27 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
    sol_io 'RCOREs = ', RCS      
 #endif
    sigma_rc_k = RCS/2.5_q   ! sigma for the pseudo core
-
-   CORE_C = 1.0_q
+   DO II = 1, T_INFO%NTYP
+      ATOMIC_NUM = INT(P(II)%ZVALF_ORIG+P(II)%ZCORE)
+      IF (ATOMIC_NUM <= 10) THEN
+#ifdef debugsol
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'ATOMIC NUMBER, SYMBOL, VALENCE, CORE :',ATOMIC_NUM, P(II)%ELEMENT, P(II)%ZVALF_ORIG, P(II)%ZCORE
+         IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting CORE_C(the magnitude of the pseudo core charge) to zero.'
+#endif
+         CORE_C(II) = 0._q
+         IF (ATOMIC_NUM <= 4 .AND. P(II)%ZVALF_ORIG /= ATOMIC_NUM) THEN
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'!------------------------------------------------------------------------'
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'WARNING: '
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Use all-electron pseudopotential or set CORE_C explicitly '
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'for atomic-species with atomic number less than or equal to 4.'
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Problem species ATOMIC NUMBER, SYMBOL & VALENCE :',ATOMIC_NUM, P(II)%ELEMENT, P(II)%ZVALF_ORIG
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'I HOPE YOU KNOW WHAT YOU ARE DOING !'
+            IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'!------------------------------------------------------------------------'
+         ENDIF
+      ELSE
+         CORE_C(II) = 1._q
+      ENDIF
+   ENDDO
 
 !--------------------------------------------------------------------
 !the afore-mentioned three paramters are essential for all pcm models
@@ -569,7 +589,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
 !---------------------------------------------------------------
 !sigma_rc_k
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_RC_K','=','#',';','F',IDUM,sigma_rc_k0,CDUM,LDUM,CHARAC,N,1,IERR)
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_RC_K','=','#',';','F',IDUM,sigma_rc_k0,CDUM,LDUM,CHARAC,N,T_INFO%NTYP,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
@@ -580,7 +600,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
       
          sol_io 'Found : sigma_rc_k(width of pseudo-core gaussians) = ',sigma_rc_k0
          DO I=1,T_INFO%NTYP
-            sigma_rc_k(I) = sigma_rc_k0
+            sigma_rc_k(I) = sigma_rc_k0(I)
          ENDDO
          
       ENDIF
@@ -595,7 +615,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
 !---------------------------------------------------------------
 !CORE_C
 !---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'CORE_C','=','#',';','F',IDUM,CORE_C,CDUM,LDUM,CHARAC,N,1,IERR)
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'CORE_C','=','#',';','F',IDUM,CORE_C,CDUM,LDUM,CHARAC,N,T_INFO%NTYP,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
       
@@ -1027,7 +1047,7 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
         G=SQRT(GX**2+GY**2+GZ**2)*TPI
 
         GWORK (N) = -(P(NT)%ZVALF)*EXP(-0.5_q*(G**2)*(sigma_nc_k**2))
-        PCWORK (N) = (CORE_C)*EXP(-0.5_q*(G**2)*(sigma_rc_k(NT)**2))
+        PCWORK (N) = (CORE_C(NT))*EXP(-0.5_q*(G**2)*(sigma_rc_k(NT)**2))
 
      ENDDO
 
