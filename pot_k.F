@@ -26,13 +26,13 @@ MODULE POT_K
  USE constant
  USE base
  USE mpimy 
- USE pot_nln_k, ONLY : SET_PARAMS_LPCM, Vcorrection_lpcm, MY_D_PROD
- USE pot_nln_k, ONLY : CONSTRUCTOR_NLN, Vcorrection_nln_pcm, DESTRUCTOR_NLN
+ USE pot_nln_k, ONLY : SET_PARAMS_LPCM, VCORRECTION_LPCM, MY_D_PROD
+ USE pot_nln_k, ONLY : CONSTRUCTOR_NLN, VCORRECTION_NLN_PCM, DESTRUCTOR_NLN
  USE pot_nln_k, ONLY : GET_VAC_LEVEL, VACPOT_POIS
 
  EXTERNAL initjdftx, getionsigma, minimizefluid
 
- PUBLIC :: Vcorrection, SET_SOL_IO, SOL_INIT, SOL_WRITER
+ PUBLIC :: VCORRECTION SET_SOL_IO, SOL_INIT, SOL_WRITER
  PUBLIC :: LSOL, EIFOR_SOL
  PRIVATE :: SOL_READER, IONIC_CHARGE, GETRCORE
  PRIVATE :: Fcorrection, READ_FROM_INCAR
@@ -60,14 +60,14 @@ MODULE POT_K
 
  CONTAINS
  
-!>==========================SUBROUTINE Vcorrection====================
+!>==========================SUBROUTINE VCORRECTION====================
 !!
 !! passes n_cav(n_val+pseudo_core) and rho(n_val+N_gauss) to jdftx 
 !! which returns the derivative of free energy wrt to n_cav and rho,
 !! returns Vcorr and Ecorr
 !!
 !!====================================================================
- SUBROUTINE Vcorrection(SP_GRIDC,SP_P,SP_LATT_CUR,SP_T_INFO,WDES, &
+ SUBROUTINE VCORRECTION(SP_GRIDC,SP_P,SP_LATT_CUR,SP_T_INFO,WDES, &
       & SP_CHTOT,Vcorr,Ecorr)
 
   USE constant 
@@ -163,7 +163,7 @@ MODULE POT_K
 #endif
        CALL SET_PARAMS_LPCM(sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, &
             & sigma_rc_k, tau, ediffsol, SP_T_INFO%NTYP, kappa2b_k)
-       CALL Vcorrection_lpcm(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, &
+       CALL VCORRECTION_LPCM(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, &
             & SP_T_INFO, TOTN, PS_TOTN, Vcorr, Vdiel, Adiel)
 #ifdef debugsol
        IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Return from vcorr_lpcm minimization'
@@ -327,7 +327,7 @@ MODULE POT_K
 #endif
  RETURN
  
-END SUBROUTINE Vcorrection
+END SUBROUTINE VCORRECTION
 
 
 !>=====================SUBROUTINE IONIC_CHARGE========================
