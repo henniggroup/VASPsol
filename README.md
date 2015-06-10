@@ -24,6 +24,6 @@ INSTALL
     patch -p1 < <path to the interface patch file>
 ```
 - After applying the patch, copy the *_k.F files to the VASP src directory:
-- In the original VASP Makefile, put pot_lpcm_cav_k.o pot_nln_k.o  pot_k.o object file names before pot.o in that order.
+- In the original VASP Makefile, put pot_lpcm_k.o pot_nln_k.o  pot_k.o object file names before pot.o in that order.
 - ``` make clean ```
 - ``` make ```
