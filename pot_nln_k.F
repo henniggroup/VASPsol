@@ -181,11 +181,11 @@ SUBROUTINE VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VCORR, VEL, ATOT )
 END SUBROUTINE VCORRECTION_NLN_PCM
 
 
-!>========================== SUBROUTINE CONSTRUCTOR_NLN ================
+!>========================== SUBROUTINE CONSTRUCTOR_NLN ===============
 !!
 !! The constructor
 !!
-!!======================================================================
+!!=====================================================================
 SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1,&
      & sigma_k1, nc_k1, eb_k1, CORE_C1, sigma_rc_k1, tau1, ediffsol1, &
      & p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, ZION_K1, RION_K1, &
@@ -201,7 +201,8 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1,&
 
  LOGICAL :: LBCHG_1
  REAL(q) :: sigma_nc_k1, sigma_k1, nc_k1
- REAL(q) :: eb_k1, CORE_C1(T_INFO%NTYP), sigma_rc_k1(T_INFO%NTYP), tau1, ediffsol1
+ REAL(q) :: eb_k1, CORE_C1(T_INFO%NTYP), sigma_rc_k1(T_INFO%NTYP)
+ REAL(q) :: tau1, ediffsol1
  REAL(q) :: p0_k1, einfty_k1, Nsol_k1, T_k1, kappa2b_k1
  INTEGER :: NION_COUNT_K1
  REAL(q) :: NION_K1(NION_COUNT_K1), ZION_K1(NION_COUNT_K1)
@@ -215,6 +216,8 @@ SUBROUTINE CONSTRUCTOR_NLN(IO, GRIDC, LATT_CUR, P, T_INFO, sigma_nc_k1,&
  LATT_CUR_NLN = LATT_CUR
  GRIDC_NLN = GRIDC
 
+ !convergence criterion for the inner loop and the outer loop
+ ! both not used
  EDIFFSOL_INNER = 1E-6
  EDIFFSOL_OUTER = EDIFFSOL_INNER * 10
 
@@ -297,7 +300,7 @@ END SUBROUTINE DESTRUCTOR_NLN
 
 !>========================== SUBROUTINE SET_PARAMS_NLN ================
 !!
-!! Sets the params specifi to the nonlinear model
+!! Sets the params specific to the nonlinear model
 !!
 !!=====================================================================
 SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, &
@@ -316,7 +319,7 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, &
  NION_COUNT_K = NION_COUNT_K1
 
 !-----------------------------------------------------------------
-!dimensionless quatity
+!dimensionless quantity
 !einfty_k = (refractive index)**2
 !-----------------------------------------------------------------
  einfty_k = einfty_k1
@@ -335,11 +338,6 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, &
 !in atomic units, hartree_to_ev = 2 * rydberg_to_ev
 !-----------------------------------------------------------------
  KT = kb_k * T_k/(2 * RYTOEV)
-
-!Note:
-!for the above example, N*k*T = 0.005 * 8.6173857E-5 * 300/ 2 / 13.61 
-! = 4.75e-06 hartree/a0^3, where a0 = bohr radius 
-! ~= 0.9 meV/Angstrom^3
 
 !-----------------------------------------------------------------
 !1 Debye = 0.393430 e*a0
@@ -368,6 +366,10 @@ SUBROUTINE  SET_PARAMS_NLN(p0_k1, einfty_k1, Nsol_k1, T_k1, NION_K1, &
 !for the above example the value is approximately 0.005 in atomic units
 !-----------------------------------------------------------------
  Nsol_k   = Nsol_k1 * 6.022 * 1E-4_q * (AUTOA**3)
+!Note:
+!for the above example, N*k*T = 0.005 * 8.6173857E-5 * 300/ 2 / 13.61 
+! = 4.75e-06 hartree/a0^3, where a0 = bohr radius 
+! ~= 0.9 meV/Angstrom^3
 
 !-----------------------------------------------------------------
 !the alpha parameter from the paper
@@ -466,11 +468,11 @@ FUNCTION SHAPE_FUNC(I)
 END FUNCTION SHAPE_FUNC
 
 
-!>========================== FUNCTION SHAPE_FUNC_DER ==================
+!>========================== FUNCTION SHAPE_FUNC_DER =================
 !!
 !! shape function derivative in real space
 !!
-!!=====================================================================
+!!====================================================================
 FUNCTION SHAPE_FUNC_DER(I)
 
  IMPLICIT NONE
@@ -517,7 +519,7 @@ FUNCTION LANG_NLN(NDIM_E)
 END FUNCTION LANG_NLN
 
 
-!>========================== FUNCTION LANG_X_NLN =======================
+!>========================== FUNCTION LANG_X_NLN ======================
 !!
 !! Compute f(e) = ( coth(e) - 1/e) /e, in real space
 !! e = effective field s.t e(1-alpha*f(e)) = x
@@ -583,9 +585,9 @@ FUNCTION F_E(NDIM_E)
     !introduced is pretty significant. 
     !But, with L/x ~= 1/x - 1/x^2, the error is negligible for x >= 70
  ELSE IF (EXP(NDIM_E) > 1E30_q) THEN
-        F_E = 1._q/NDIM_E - 1._q/(NDIM_E**2)
+    F_E = 1._q/NDIM_E - 1._q/(NDIM_E**2)
  ELSE
-     F_E = LANG_NLN(NDIM_E) / NDIM_E
+    F_E = LANG_NLN(NDIM_E) / NDIM_E
  ENDIF
 
  !better safe than sorry
@@ -602,7 +604,7 @@ END FUNCTION F_E
 
 !>========================== FUNCTION CHI_NLN =========================
 !!
-!! Compute the electric susceptibiltiy in real space
+!! Compute the dielectric susceptibiltiy in real space
 !! \chi(e) = \epsilon(e) - 1 (dimensionless)
 !! where e is the efeective field
 !! mind: the value returned is not modulated by the shape function
@@ -634,7 +636,7 @@ END FUNCTION CHI_NLN
 !! using Sol_phi from pot_lpcm_cav.F
 !! mind: Sol_phi doesnt have edeps/omega scaling 
 !! R_PHI and EFIELD in real space and in a.u
-!! also sets the lookup table and spline table for the effective field  
+!! also sets the lookup table and spline table for the effective field 
 !! as well as the packing fraction
 !!
 !!=====================================================================
@@ -693,7 +695,8 @@ SUBROUTINE INIT_FIELDS()
 
     CALL SPLCPY(E_X, E_EFF_TAB, E_EFF_SPL, N_EF, N_EF, 10E30_q) 
 
-    !setup table only if the ionic radii and conc of ions non zero
+    !setup table only if the conc of ions are non zero
+    ! and the ionic radii less than 1000(some ridiculosly large number)
     IF (NTOT_K > 1E-10_q .AND. SUM(RION_K)<1000._q) THEN
 #ifdef debugsol
        IF (IO_NLN%IU0>=0) WRITE(IO_NLN%IU0,*) "Setting up the packing & 
@@ -742,7 +745,7 @@ END SUBROUTINE INIT_FIELDS
 !!
 !! updates EFIELD = |E| = |\grad \phi| and phi in real space
 !! EFIELD and R_PHI in real space and in a.u
-!! also updates the corresponding effective field, the  packing fraction
+!! also updates the corresponding effective field, the packing fraction
 !! and \eta_i
 !!
 !!=====================================================================
@@ -883,12 +886,12 @@ FUNCTION G_E(E)
 END FUNCTION G_E
 
 
-!>==========================SUBROUTINE COMPUTE_EPSILON_KAPPA2 ==========
+!>==========================SUBROUTINE COMPUTE_EPSILON_KAPPA2 =========
 !!
 !!  \espilon = 1 + \chi * s(n(r)), in real space
 !! kappa^2 in real space too
 !!
-!!======================================================================
+!!=====================================================================
 SUBROUTINE COMPUTE_EPSILON_KAPPA2(EPSILON_NLN, KAPPA2_NLN)
 
  IMPLICIT NONE
