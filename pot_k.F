@@ -1,5 +1,5 @@
 !**********************************************************************
-! Copyright 2013
+! Copyright 2013-2015
 ! Kiran Mathew and Richard Hennig
 !
 ! This file is part of VASPsol.
@@ -19,7 +19,7 @@
 !**********************************************************************
 
 #include "symbol.inc"
-#define sol_io    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)
+#define sol_io  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)
 
 !>==========================MODULE POT_K===============================
 !!
@@ -53,8 +53,8 @@ MODULE POT_K
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
  REAL(q), ALLOCATABLE, PUBLIC, SAVE :: EIFOR_SOL(:,:)
  REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:)
- REAL(q), PRIVATE, SAVE :: sigma_nc_k, sigma_k, nc_k, eb_k, &
-      & lambda_d_k, kappa2b_k,tau,EDIFFSOL
+ REAL(q), PRIVATE, SAVE :: sigma_nc_k, sigma_k, nc_k, eb_k
+ REAL(q), PRIVATE, SAVE :: lambda_d_k, kappa2b_k,tau,EDIFFSOL
  !TYPE (in_struct), PRIVATE, SAVE :: SP_IO
  LOGICAL, PUBLIC, SAVE :: LSOL = .FALSE.
  LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE., LRHOION = .FALSE.
@@ -66,10 +66,11 @@ MODULE POT_K
 !>==========================SUBROUTINE Vcorrection=====================
 !!
 !! Creates PS_TOTN(n_val+pseudo_core) and TOTN(n_val+N_gauss)
-!! Passes them on to vcorrection_lpcm in pot_lpcm_cav_k.F or to the jdftx_interface
-!! Uses the so obtained Vcorr, Vdiel and Atot to compute the net correction
-!! to the local potential, Vcorr(not the same as above) and the net correction 
-!! to the total energy, Ecorr
+!! Passes them on to vcorrection_lpcm in pot_lpcm_cav_k.F or to 
+!! the jdftx_interface
+!! Uses the so obtained Vcorr, Vdiel and Atot to compute the net 
+!! correction to the local potential, Vcorr(not the same as above) 
+!! and the net correction to the total energy, Ecorr
 !!
 !! called from pot.F
 !!
@@ -93,13 +94,11 @@ MODULE POT_K
   TYPE (wavedes) ::    WDES
 
   REAL(q) :: Atot
-
   COMPLEX(q), INTENT(OUT) ::  Vcorr(SP_GRIDC%MPLWV)
   COMPLEX(q) :: SP_CHTOT(SP_GRIDC%MPLWV, WDES%NCDIJ)
   COMPLEX(q),ALLOCATABLE :: SP_N(:),TOTN(:),SP_N_ION(:)
   COMPLEX(q),ALLOCATABLE :: Vdiel(:)
   COMPLEX(q),ALLOCATABLE :: PS_TOTN(:)
-
   ! electrost. pot. diff * n   and Vdiel * n respectively
   REAL(q) :: Ecorr3, Ecorr4 
   REAL(q),INTENT(OUT) :: Ecorr ! Atot - Ecorr3 - Ecorr4
@@ -213,7 +212,6 @@ MODULE POT_K
 !test
 !   sol_io 'Vcorr(1), electrostatic corr. = ', Vcorr(1)
 !test
-
    CALL MY_D_PROD(Ecorr3, SP_CHTOT(1,1), Vcorr, SP_GRIDC)
 !   CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr3,1))
    CALLMPI( M_sum_s(SP_GRIDC%COMM,1,Ecorr3,0,0,0))
@@ -225,7 +223,6 @@ MODULE POT_K
 !test
 !    sol_io 'Vdiel(1), the rest = ', Vdiel(1)
 !test
-
    CALL MY_D_PROD(Ecorr4, SP_CHTOT(1,1), Vdiel, SP_GRIDC)
 !   CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr4,1))
    CALLMPI( M_sum_s(SP_GRIDC%COMM,1,Ecorr4,0,0,0))
@@ -234,7 +231,6 @@ MODULE POT_K
 !calculate force correction,flag=5(not used)
 !-------------------------------------------------------------
    CALL Fcorrection(SP_GRIDC,SP_P,SP_T_INFO,SP_LATT_CUR,Vcorr,Vdiel)
-!   CALL IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,5,Vcorr,Vdiel)
 
 !-------------------------------------------------------------
 !net correction potential
@@ -292,8 +288,7 @@ MODULE POT_K
 !!=====================================================================
 SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
      & flag,Vcorr,Vdiel)
-! USE mpimy
-! USE prec
+
  USE constant
  USE mgrid, ONLY : grid_3d
  USE lattice, ONLY : latt,DIRKAR
@@ -516,11 +511,11 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
    sol_io 'delta_grd = ', delta_grd      
 #endif
 
-!---------------------------------------------------------------
-!Defaults values of sigma_nc_k(sigma for the gaussian nuclei), 
-!sigma_rc_k(sigma for the pseudo core)
-!and CORE_C
-!---------------------------------------------------------------
+   !---------------------------------------------------------------
+   !Defaults values of sigma_nc_k(sigma for the gaussian nuclei), 
+   !sigma_rc_k(sigma for the pseudo core)
+   !and CORE_C
+   !---------------------------------------------------------------
    sigma_nc_k = 1.6_q * delta_grd !sigma for point charges
 
    CALL GETRCORE(T_INFO%NTYP,RCS)
@@ -528,7 +523,6 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
    !PSDMAX, maximal r for nonlocal contribution 
    !(in fact rmax=PSRMAX/NPSNL*(NPSNL-1))
    ! RCS = (/(P(K)%PSRMAX,K=1,T_INFO%NTYP)/) 
-
    ! sigma_rc_k = MINVAL(RCS)*2.0/4.0_q 
 #ifdef debugsol
    sol_io 'RCOREs = ', RCS      
@@ -556,18 +550,18 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
       ENDIF
    ENDDO
 
-!--------------------------------------------------------------------
-!the afore-mentioned three paramters are essential for all pcm models
-! Try to read those from the INCAR file
-!--------------------------------------------------------------------
+   !------------------------------------------------------------------
+   !the afore-mentioned three paramters are essential for all pcm models
+   ! Try to read those from the INCAR file
+   !-------------------------------------------------------------------
    LOPEN = .FALSE.
    
    OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
 
-!---------------------------------------------------------------
-!sigma_nc_k
-!---------------------------------------------------------------
-      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_NC_K','=','#',';','F',IDUM,sigma_nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
+   !---------------------------------------------------------------
+   !sigma_nc_k
+   !---------------------------------------------------------------
+   CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_NC_K','=','#',';','F',IDUM,sigma_nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol      
       IF (IERR == 3 ) THEN
       
@@ -586,9 +580,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
          STOP
       ENDIF
 
-!---------------------------------------------------------------
-!sigma_rc_k
-!---------------------------------------------------------------
+      !---------------------------------------------------------------
+      !sigma_rc_k
+      !---------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_RC_K','=','#',';','F',IDUM,sigma_rc_k0,CDUM,LDUM,CHARAC,N,T_INFO%NTYP,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -612,9 +606,9 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
          STOP
       ENDIF
 
-!---------------------------------------------------------------
-!CORE_C
-!---------------------------------------------------------------
+      !---------------------------------------------------------------
+      !CORE_C
+      !---------------------------------------------------------------
       CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'CORE_C','=','#',';','F',IDUM,CORE_C,CDUM,LDUM,CHARAC,N,T_INFO%NTYP,IERR)
 #ifdef debugsol
       IF (IERR == 3 ) THEN
@@ -636,61 +630,61 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
          STOP
       ENDIF
 
-!---------------------------------------------------------------
-!LJDFTX
-!---------------------------------------------------------------
+      !---------------------------------------------------------------
+      !LJDFTX
+      !---------------------------------------------------------------
 #ifdef jdftx   
-   CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LJDFTX','=','#',';','L',IDUM,RDUM,CDUM,LJDFTX,CHARAC,N,1,IERR)
+      CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LJDFTX','=','#',';','L',IDUM,RDUM,CDUM,LJDFTX,CHARAC,N,1,IERR)
 #endif
 !error opening INCAR      
-   IF ( IERR == 1 .OR. IERR == 2) THEN
-     IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Error reading INCAR'
-     STOP
-   ENDIF
+      IF ( IERR == 1 .OR. IERR == 2) THEN
+         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Error reading INCAR'
+         STOP
+      ENDIF
 #ifdef jdftx
-!check for flucar
+      !check for flucar
 #ifdef debugsol
-   IF (LIONODE_FLAG .AND. LJDFTX) WRITE(*,*)'Checking for FLUCAR file'       
+      IF (LIONODE_FLAG .AND. LJDFTX) WRITE(*,*)'Checking for FLUCAR file'       
 #endif
-   INQUIRE(FILE='FLUCAR',EXIST=LFLUEX)
+      INQUIRE(FILE='FLUCAR',EXIST=LFLUEX)
 
 !if LJDFTX is true and flucar exists initialize jdftx
-   IF (LJDFTX .AND. LFLUEX) THEN
-
-      IF (LIONODE_FLAG) THEN
+      IF (LJDFTX .AND. LFLUEX) THEN
+         
+         IF (LIONODE_FLAG) THEN
 #ifdef debugsol
-           PRINT *, "Initializing jdftx"
+            PRINT *, "Initializing jdftx"
 #endif
-           CALL initjdftx(LATT_CUR%A(1,1),LATT_CUR%A(1,2),LATT_CUR%A(1,3),GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ)
+            CALL initjdftx(LATT_CUR%A(1,1),LATT_CUR%A(1,2),LATT_CUR%A(1,3),GRIDC%NGX,GRIDC%NGY,GRIDC%NGZ)
 #ifdef debugsol
-           PRINT *,"Setting ionic gaussian width, sigma_nc_k"
+            PRINT *,"Setting ionic gaussian width, sigma_nc_k"
 #endif
-           CALL getionsigma(sigma_gauss)
-      ENDIF
-      CALLMPI( M_bcast_d(GRIDC%COMM, sigma_gauss, 1)) 
-      sigma_nc_k = sigma_gauss
+            CALL getionsigma(sigma_gauss)
+         ENDIF
+         CALLMPI( M_bcast_d(GRIDC%COMM, sigma_gauss, 1)) 
+         sigma_nc_k = sigma_gauss
 #ifdef debugsol
-      IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'sigma_nc_k set to ',sigma_nc_k
+         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'sigma_nc_k set to ',sigma_nc_k
 #endif
 !otherwise use the default pcm
-   ELSE
+      ELSE
 #ifdef debugsol
-        IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Either LJDFTX = .FALSE. or FLUCAR file not present'
-        IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'using the default linear pcm in vasp'
+         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Either LJDFTX = .FALSE. or FLUCAR file not present'
+         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'using the default linear pcm in vasp'
 #endif
 #endif
-        LDEFAULTPCM = .TRUE.
+         LDEFAULTPCM = .TRUE.
 #ifdef debugsol
-        IF (LIONODE_FLAG) WRITE(SP_IO%IU0,'(/A/)') 'All solvation model paramters are set'
+         IF (LIONODE_FLAG) WRITE(SP_IO%IU0,'(/A/)') 'All solvation model paramters are set'
 #endif
 #ifdef jdftx        
-   ENDIF
+      ENDIF
 #endif
 #ifdef debugsol
-   IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Solvation model intialization DONE'
+      IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Solvation model intialization DONE'
 #endif
 
- ENDIF
+   ENDIF
 
  END SUBROUTINE SOL_INIT
 
@@ -712,30 +706,30 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   SP_IO = IO
   LSOL = .TRUE.
 
-!---------------------------------------------------------------
-! defaults value for CG error tolerance
-!--------------------------------------------------------------- 
+  !---------------------------------------------------------------
+  ! defaults value for CG error tolerance
+  !--------------------------------------------------------------- 
   EDIFFSOL = EDIFF/100._q
 
-!---------------------------------------------------------------
-!default values
-!---------------------------------------------------------------
+  !---------------------------------------------------------------
+  !default values
+  !---------------------------------------------------------------
   sigma_k = 0.6_q
-!   nc_k = 0.00473_q
+  !   nc_k = 0.00473_q
   nc_k = 0.0025_q
-  eb_k = 80.0_q
+  eb_k = 78.4_q
   tau = 5.25E-4_q
 
-!---------------------------------------------------------------
-!kappa2b_k =  (1/debye screeing lenth in ang)**2
-! to convert to au, mulitply by 0.5292**2
-!debye screening length = 3 Ang ==> (1./3^2) * (0.5292)^2 = 0.03
-!
-! default value for kappa2b_k = 0. 
-! To override set lambda_d_k in the INCAR file
-! The value for kappa2b_k is set in SOL_READER, if lambda_d_k 
-! is successfully read in
-!---------------------------------------------------------------
+  !---------------------------------------------------------------
+  !kappa2b_k =  (1/debye screeing lenth in ang)**2
+  ! to convert to au, mulitply by 0.5292**2
+  !debye screening length = 3 Ang ==> (1./3^2) * (0.5292)^2 = 0.03
+  !
+  ! default value for kappa2b_k = 0. 
+  ! To override set lambda_d_k in the INCAR file
+  ! The value for kappa2b_k is set in SOL_READER, if lambda_d_k 
+  ! is successfully read in
+  !---------------------------------------------------------------
   kappa2b_k = 0._q !(1._q/9._q)
 
 #ifdef debugsol
@@ -743,9 +737,9 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   sol_io 'If not present, default values will be used'
 #endif
 
-!---------------------------------------------------------------
-! read params from INCAR
-!---------------------------------------------------------------
+  !---------------------------------------------------------------
+  ! read params from INCAR
+  !---------------------------------------------------------------
   CALL SOL_READER()
 
   RETURN
@@ -761,7 +755,7 @@ END SUBROUTINE SET_SOL_IO
 !!called from SET_SOL_IO subroutine
 !!
 !!=====================================================================
- SUBROUTINE SOL_READER()
+SUBROUTINE SOL_READER()
 
   USE setexm
   USE vaspxml
@@ -783,15 +777,12 @@ END SUBROUTINE SET_SOL_IO
   !---------------------------------------------------------------
   CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'SIGMA_K','=','#',';','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
-  IF (IERR == 3 ) THEN
-     
+  IF (IERR == 3 ) THEN   
      sol_io '''SIGMA_K'',the width of dielectric cavity, not specified, using the default(fit parameter for solvent = water)'
-     sol_io 'sigma_k = ',sigma_k          
-         
+     sol_io 'sigma_k = ',sigma_k
   ELSE IF (IERR == 0 ) THEN
-      
      sol_io 'Found : sigma_k(width of dielectric cavity) = ',sigma_k 
-         
+
   ENDIF
 #endif
 
@@ -857,20 +848,23 @@ END SUBROUTINE SET_SOL_IO
   CALL RDATAB(LOPEN,'INCAR',SP_IO%IU5,'LAMBDA_D_K','=','#',';','F',IDUM,lambda_d_k,CDUM,LDUM,CHARAC,N,1,IERR)
 
   IF (IERR == 3 ) THEN
-      
+#ifdef debugsol      
      sol_io '''LAMBDA_D_K'', debye screening length not specified'
 
      sol_io 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k         
-         
+#endif         
   ELSE IF (IERR == 0 ) THEN
+#ifdef debugsol
      sol_io 'Found : lambda_d_k (debye screening length) = ', lambda_d_k
      
      sol_io 'lambda_d_k  = (debye screening length) = ', lambda_d_k
+#endif
 
      kappa2b_k = 1._q / (lambda_d_k ** 2)
 
+#ifdef debugsol
      sol_io 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
-         
+#endif         
   ENDIF
 
   IF ((IERR/=0).AND.(IERR/=3)) THEN
@@ -977,6 +971,8 @@ SUBROUTINE SOL_WRITER()
 
  IMPLICIT NONE
  
+#ifdef debugsol_pbz
+
  IF (SP_IO%IU6>=0) THEN
    WRITE(SP_IO%IU6, 100) eb_k, kappa2b_k, sigma_k, nc_k, tau
  ENDIF
@@ -989,6 +985,22 @@ SUBROUTINE SOL_WRITER()
              '   NC_K    =',F10.6,  '     cutoff charge density' /&
              '   TAU     =',F10.6,  '     cavity surface tension' /&
              )
+
+#else
+
+ IF (SP_IO%IU6>=0) THEN
+   WRITE(SP_IO%IU6, 100) eb_k, sigma_k, nc_k, tau
+ ENDIF
+
+100   FORMAT( &
+             ' Solvation parameters'/ &
+             '   EB_K    =',F10.6,  'relative permittivity of the bulk solvent' /&
+             '   SIGMA_K =', F10.6, '     width of the dielectric cavity' /&
+             '   NC_K    =',F10.6,  '     cutoff charge density' /&
+             '   TAU     =',F10.6,  '     cavity surface tension' /&
+             )
+
+#endif
 
 END SUBROUTINE SOL_WRITER 
 
