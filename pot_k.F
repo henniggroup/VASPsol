@@ -698,6 +698,8 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
 !!=====================================================================
 SUBROUTINE SET_SOL_IO(IO,EDIFF)
 
+  USE mdipol
+
   IMPLICIT NONE
 
   TYPE (in_struct),INTENT(IN) :: IO
@@ -741,6 +743,25 @@ SUBROUTINE SET_SOL_IO(IO,EDIFF)
   ! read params from INCAR
   !---------------------------------------------------------------
   CALL SOL_READER()
+
+  ! dipol
+  !setting the value of epsilon used in computing the dipole and 
+  !monopole corrections to EB_K
+  IF ( ( (DIP%IDIPCO>0) .OR. (DIP%LMONO) ) ) THEN
+#ifdef debugsol
+     sol_io 'monopole or dipole/quadrapole energy corrections set in INCAR'
+     sol_io 'Setting DIP%EPSILON = EB_K, the bulk dielectric constant of the solvent,'
+     sol_io  'since solvent is included in the vacuum region'
+     sol_io 'Current value of DIP%EPSILON = ', DIP%EPSILON
+#endif
+     
+     DIP%EPSILON = EB_K
+
+#ifdef debugsol
+     sol_io 'New value of DIP%EPSILON = ', DIP%EPSILON
+#endif
+  ENDIF
+  ! dipol
 
   RETURN
 
