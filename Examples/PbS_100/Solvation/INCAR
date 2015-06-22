@@ -1,0 +1,10 @@
+System = fcc PbS
+ENCUT  = 600
+PREC = Accurate
+ISMEAR = 1
+SIGMA  = 0.1
+NPAR = 4
+EDIFF = 1E-6
+
+LSOL = .TRUE.
+EB_K = 80

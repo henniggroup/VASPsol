@@ -1,0 +1,9 @@
+SYSTEM = molecule
+PREC = Accurate
+ENCUT = 800
+ISMEAR = 0
+SIGMA = 0.01
+EDIFF = 1E-6
+
+LSOL = .TRUE.
+EB_K = 80
