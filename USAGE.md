@@ -43,12 +43,12 @@ INCAR PARAMETERS: Example
 - RION_K = 1.52 2.26, ionic radii in Angstroms
 ```
 		if lnsol is set to true, always set the ionic radii else the akappa2 contribution
-		to the energy will blow up because of the large value of phi(reminder nc is pretty large for the nonlinear sol)
+		to the energy will blow up because of the large value of phi(reminder: nc is pretty large for the nonlinear sol)
 		default is some meaningless impossibly large number , around 500 Angstrom
 ```
 
 - LRHOB = .TRUE.
 ```
-	write out the bound charge density to the file BCHG
+	write out the bound charge density to the file RHOB
 	only for nonlinear
 ```
