@@ -53,7 +53,7 @@ MODULE POT_K
  REAL(q), ALLOCATABLE, PRIVATE, SAVE ::NION_K(:), ZION_K(:), RION_K(:)
 
  TYPE (in_struct), PUBLIC, SAVE :: SP_IO
- LOGICAL, SAVE :: LBCHG = .FALSE.
+ LOGICAL, SAVE :: LRHOB = .FALSE.
 
  LOGICAL, SAVE :: LDEFAULTPCM = .FALSE.
  LOGICAL, SAVE :: LJDFTX = .FALSE.
@@ -180,7 +180,7 @@ MODULE POT_K
        CALL CONSTRUCTOR_NLN(SP_IO, SP_GRIDC, SP_LATT_CUR, SP_P, &
             & SP_T_INFO, sigma_nc_k, sigma_k, nc_k, eb_k, CORE_C, &
             & sigma_rc_k, tau, ediffsol, p0_k, einfty_k, Nsol_k, T_k,&
-            & NION_K, ZION_K, RION_K, NION_COUNT_K, LBCHG, kappa2b_k)
+            & NION_K, ZION_K, RION_K, NION_COUNT_K, LRHOB, kappa2b_k)
 
        !VCORR= delta phi, VDIEL= the rest
        CALL VCORRECTION_NLN_PCM(TOTN, PS_TOTN, VDIEL, VCORR, ADIEL )
@@ -866,10 +866,10 @@ SUBROUTINE SOL_READER()
        & EDIFFSOL, CDUM, LDUM, 'solvation convergence tolerance')
 
   !---------------------------------------------------------------
-  !LBCHG
+  !LRHOB
   !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'LBCHG', 'L', 1, IDUM, &
-       & RDUM, CDUM, LBCHG, 'write the bound charge file')
+  CALL READ_FROM_INCAR(LOPEN, 'LRHOB', 'L', 1, IDUM, &
+       & RDUM, CDUM, LRHOB, 'write the bound charge file')
 
   !---------------------------------------------------------------
   !LAMBDA_D_K
