@@ -23,4 +23,7 @@
   increase the cutoff energy to converge the caviation energy because the grid must be fine enough 
   to resolve the cavity surface. 
 
+- Set LRHOB = .TRUE. if you would like to write out the bound charge density in the CHGCAR format.
+  The file is named RHOB.
+
 - For examples, please see the Examples folder
