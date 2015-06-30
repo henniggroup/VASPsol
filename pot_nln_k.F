@@ -1,5 +1,5 @@
 !***********************************************************************
-! Copyright 2014
+! Copyright 2014-2015
 ! Kiran Mathew and Richard Hennig
 !
 ! This file is part of VASPsol.
