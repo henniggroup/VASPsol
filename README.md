@@ -13,7 +13,7 @@ http://vaspsol.mse.ufl.edu/
 If you use the VASPsol package in your research, please cite the following paper:
 Implicit solvation model for density-functional study of nanocrystal surfaces and reaction pathways.
 K. Mathew, R. Sundararaman, K. Letchworth-Weaver, T. A. Arias, and R. G. Hennig. J. Chem. Phys. 140, 084106 (2014).
-doi:10.1063/1.4865107
+[doi:10.1063/1.4865107] (http://dx.doi.org/10.1063/1.4865107)
 
 PREREQUISITES
 =============
