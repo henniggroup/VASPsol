@@ -1748,7 +1748,7 @@ END SUBROUTINE COMPUTE_RHOION
 END MODULE POT_LPCM_K
 
 
-#define sol_io  IF (IO%IU0>=0) WRITE(IO%IU0,*)
+#define sol_io  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)
 
 !>==========================MODULE POT_K===============================
 !!
@@ -2907,27 +2907,27 @@ CONTAINS
 
   IF (IERR == 3 ) THEN
 #ifdef debugsol      
-     sol_io '''LAMBDA_D_K'', debye screening length not specified'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LAMBDA_D_K'', debye screening length not specified'
 
-     sol_io 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k         
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k         
 #endif         
   ELSE IF (IERR == 0 ) THEN
 #ifdef debugsol
-     sol_io 'Found : lambda_d_k (debye screening length) = ', lambda_d_k
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : lambda_d_k (debye screening length) = ', lambda_d_k
      
-     sol_io 'lambda_d_k  = (debye screening length) = ', lambda_d_k
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'lambda_d_k  = (debye screening length) = ', lambda_d_k
 #endif
 
      kappa2b_k = 1._q / (lambda_d_k ** 2)
 
 #ifdef debugsol
-     sol_io 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
 #endif         
   ENDIF
 
   IF ((IERR/=0).AND.(IERR/=3)) THEN
-     sol_io 'Error reading ''LAMBDA_D_K''from INCAR.'
-     sol_io ' Error code = ', IERR
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LAMBDA_D_K''from INCAR.'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
      STOP
   ENDIF
 
@@ -2938,19 +2938,19 @@ CONTAINS
 #ifdef debugsol
   IF (IERR == 3 ) THEN
       
-     sol_io '''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
-     sol_io 'EDIFFSOL = ', EDIFFSOL          
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'EDIFFSOL = ', EDIFFSOL          
          
   ELSE IF (IERR == 0 ) THEN
       
-     sol_io 'Found : EDIFFSOL = ', EDIFFSOL 
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : EDIFFSOL = ', EDIFFSOL 
          
   ENDIF
 #endif
 
   IF ((IERR/=0).AND.(IERR/=3)) THEN
-     sol_io 'Error reading ''EDIFFSOL''from INCAR.'
-     sol_io ' Error code = ', IERR
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''EDIFFSOL''from INCAR.'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
      STOP
   ENDIF
 
@@ -2961,15 +2961,15 @@ CONTAINS
        &  RDUM,CDUM, LRHOB, CHARAC,N,1,IERR)
 #ifdef debugsol
   IF (IERR == 3 ) THEN
-     sol_io '''LRHOB'', write the bound charge density or not'
-     sol_io 'LRHOB = ', LRHOB                  
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LRHOB'', write the bound charge density or not'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'LRHOB = ', LRHOB                  
   ELSE IF (IERR == 0 ) THEN
-     sol_io 'Found : LRHOB = ', LRHOB
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : LRHOB = ', LRHOB
   ENDIF
 #endif
   IF ((IERR/=0).AND.(IERR/=3)) THEN
-     sol_io 'Error reading ''LRHOB''from INCAR.'
-     sol_io ' Error code = ', IERR
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LRHOB''from INCAR.'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
      STOP
   ENDIF
 
@@ -2980,15 +2980,15 @@ CONTAINS
        &  RDUM,CDUM, LRHOION, CHARAC,N,1,IERR)
 #ifdef debugsol
   IF (IERR == 3 ) THEN
-     sol_io '''LRHOION'', write the ionic charge density or not'
-     sol_io 'LRHOION = ', LRHOION                 
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LRHOION'', write the ionic charge density or not'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'LRHOION = ', LRHOION                 
   ELSE IF (IERR == 0 ) THEN
-     sol_io 'Found : LRHOION = ', LRHOION
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : LRHOION = ', LRHOION
   ENDIF
 #endif
   IF ((IERR/=0).AND.(IERR/=3)) THEN
-     sol_io 'Error reading ''LRHOION''from INCAR.'
-     sol_io ' Error code = ', IERR
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LRHOION''from INCAR.'
+     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
      STOP
   ENDIF
       
