@@ -25,21 +25,21 @@ Compiler and library requirements are the same as that of VASP ([vasp wiki] (htt
 INSTALL
 ========
 
-**For vasp versions >= 5.4.1:**
+**For VASP versions >= 5.4.1:**
 
-These versions of vasp come with hooks for running solvation calculations.
-The only thing required is to copy the solvation.F file to the src/ folder in the original vasp folder and 
-follow the install instructions for the original vasp
+These versions of VASP come with hooks for running solvation calculations.
+The only thing required is to copy the solvation.F file to the src/ folder in the original VASP folder and 
+follow the install instructions for the original VASP.
 
-**For vasp versions = 5.2.12 or 5.3.3 or 5.3.5:**
+**For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:**
 
 - Apply the appropriate interface patch to the original VASP source code. There are 3 interface_patch files 
-available, one for each supported versions of vasp.
+available, one for each supported versions of VASP.
 ```   
     cd <VASP src directory>
     patch -p1 < <path to the interface patch file>
 ```
-- After applying the patch, copy the solvation.F file to the VASP src directory:
-- In the original VASP Makefile, put solvation.o object file name before pot.o.
+- After applying the patch, copy pot_lpcm_k.F and pot_k.F files to the VASP source directory:
+- In the original VASP Makefile, put pot_lpcm_k.o pot_k.o object file names before pot.o in that order.
 - ``` make clean ```
 - ``` make ```
