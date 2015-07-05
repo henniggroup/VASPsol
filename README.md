@@ -33,7 +33,8 @@ follow the install instructions for the original vasp
 
 **For vasp versions = 5.2.12 or 5.3.3 or 5.3.5:**
 
-- Apply the interface patch to the original VASP source code.
+- Apply the appropriate interface patch to the original VASP source code. There are 3 interface_patch files 
+available, one for each supported versions of vasp.
 ```   
     cd <VASP src directory>
     patch -p1 < <path to the interface patch file>
