@@ -27,9 +27,10 @@ INSTALL
 
 **For VASP versions >= 5.4.1:**
 
-These versions of VASP come with hooks for running solvation calculations.
-The only thing required is to copy the solvation.F file to the src/ folder in the original VASP folder and 
-follow the install instructions for the original VASP.
+These versions of VASP support solvation calculations out of the box.
+The only thing that the user needs to do is to update the solvation routines by copying 
+the **solvation.F** file to the src/ folder in the original VASP folder and 
+follow the install instructions for the compilation of the original VASP.
 
 **For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:**
 
