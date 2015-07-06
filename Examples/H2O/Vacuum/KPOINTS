@@ -1,0 +1,4 @@
+Gamma-point only
+1              ! one k-point 
+rec            ! in units of reciprocal lattice vector(b1,b2,b3)
+0 0 0 1        ! 3 coordinates and weight

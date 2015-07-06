@@ -1,0 +1,10 @@
+SYSTEM = CO
+ENCUT = 800
+PREC = Accurate
+ISMEAR = 0
+SIGMA = 0.01
+EDIFF = 1E-6
+NPAR = 4
+
+LSOL = .TRUE.
+EB_K = 80
