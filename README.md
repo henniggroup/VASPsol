@@ -1,6 +1,15 @@
 Implicit solvation model for VASP
 ==================================
 
+We have implemented an implicit solvation model that describes the effect of 
+electrostatics, cavitation, and dispersion on the interaction between a solute 
+and solvent into the plane-wave DFT code VASP. Our implementation provides a 
+computationally efficient means to calculate the effects of solvation on molecules 
+and crystal surfaces as well as reaction barriers. The strength of our solvation model 
+implementation is its capability to handle large periodic systems such as metal and 
+semiconductor surfaces and its interoperability with standard ultrasoft pseudopotential and 
+projector-augmented wave potential libraries.
+
 **Authors:** Kiran Mathew and Richard Hennig
 
 http://vaspsol.mse.ufl.edu/
