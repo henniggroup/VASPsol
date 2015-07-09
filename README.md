@@ -59,4 +59,6 @@ Contributing
 
 Authors
 ========
-Kiran Mathew and Dr. Richard Hennig
+Kiran Mathew
+
+Dr. Richard Hennig
