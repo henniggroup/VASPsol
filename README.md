@@ -17,7 +17,6 @@ Compiler and library requirements are the same as that of VASP ([vasp wiki] (htt
 
 Installation
 =============
-
 **For VASP versions >= 5.4.1:**
 
 These versions of VASP support solvation calculations out of the box.
@@ -51,11 +50,11 @@ Implicit solvation model for density-functional study of nanocrystal surfaces an
 
 For discussions and feedback
 =============================
-* Join our mailing list: https://groups.google.com/forum/#!forum/vaspsol
+Join our mailing list: https://groups.google.com/forum/#!forum/vaspsol
 
 Contributing
 =============
-* Please contact Dr. Richard Hennig (rhennig[at]mse.ufl.edu)
+Please contact Dr. Richard Hennig (rhennig[at]mse.ufl.edu)
 
 Authors
 ========
