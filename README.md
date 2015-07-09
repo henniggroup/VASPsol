@@ -1,6 +1,4 @@
-[![vaspsol](logo.jpeg)]
-Implicit solvation model for VASP
-==================================
+[![vaspsol](logo.jpeg)](http://vaspsol.mse.ufl.edu/)
 
 We have implemented an implicit solvation model that describes the effect of 
 electrostatics, cavitation, and dispersion on the interaction between a solute 
