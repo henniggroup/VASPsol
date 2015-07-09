@@ -9,14 +9,14 @@ implementation is its capability to handle large periodic systems such as metal 
 semiconductor surfaces and its interoperability with standard ultrasoft pseudopotential and 
 projector-augmented wave potential libraries.
 
-PREREQUISITES
-=============
+Prerequisites
+===============
 [VASP](http://www.vasp.at/) versions 5.2.12 or 5.3.3 or 5.3.5 or 5.4.1.
 
 Compiler and library requirements are the same as that of VASP ([vasp wiki] (http://cms.mpi.univie.ac.at/wiki/index.php/Installing_VASP))
 
-INSTALL
-========
+Installation
+=============
 
 **For VASP versions >= 5.4.1:**
 
@@ -38,7 +38,7 @@ available, one for each supported versions of VASP.
 - ``` make clean ```
 - ``` make ```
 
-USAGE
+Usage
 ======
 Please see USAGE.md and the Examples.
 
