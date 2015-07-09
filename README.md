@@ -1,3 +1,4 @@
+[![vaspsol](logo.jpeg)]
 Implicit solvation model for VASP
 ==================================
 
