@@ -9,21 +9,6 @@ implementation is its capability to handle large periodic systems such as metal 
 semiconductor surfaces and its interoperability with standard ultrasoft pseudopotential and 
 projector-augmented wave potential libraries.
 
-**Authors:** Kiran Mathew and Richard Hennig
-
-http://vaspsol.mse.ufl.edu/
-
-**For discussions and feedback:**
-
- https://groups.google.com/forum/#!forum/vaspsol
-
-**References:**
-
-If you use the VASPsol package in your research, please cite the following paper:
-
-Implicit solvation model for density-functional study of nanocrystal surfaces and reaction pathways.
- K. Mathew, R. Sundararaman, K. Letchworth-Weaver, T. A. Arias, and R. G. Hennig. J. Chem. Phys. 140, 084106 (2014), [doi:10.1063/1.4865107] (http://dx.doi.org/10.1063/1.4865107).
-
 PREREQUISITES
 =============
 [VASP](http://www.vasp.at/) versions 5.2.12 or 5.3.3 or 5.3.5 or 5.4.1.
@@ -52,3 +37,26 @@ available, one for each supported versions of VASP.
 - In the original VASP Makefile, put solvation.o object file name before pot.o in that order.
 - ``` make clean ```
 - ``` make ```
+
+USAGE
+======
+Please see USAGE.md and the Examples.
+
+References
+===========
+If you use the VASPsol package in your research, please cite the following paper:
+
+Implicit solvation model for density-functional study of nanocrystal surfaces and reaction pathways.
+ K. Mathew, R. Sundararaman, K. Letchworth-Weaver, T. A. Arias, and R. G. Hennig. J. Chem. Phys. 140, 084106 (2014), [doi:10.1063/1.4865107] (http://dx.doi.org/10.1063/1.4865107).
+
+For discussions and feedback
+=============================
+* Join our mailing list: https://groups.google.com/forum/#!forum/vaspsol
+
+Contributing
+=============
+* Please contact Dr. Richard Hennig (rhennig[at]mse.ufl.edu)
+
+Authors
+========
+Kiran Mathew and Dr. Richard Hennig
