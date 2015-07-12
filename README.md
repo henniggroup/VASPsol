@@ -21,25 +21,25 @@ Installation
 
 These versions of VASP support solvation calculations out of the box.
 The only thing that the user needs to do is to update the solvation routines by copying 
-the **solvation.F** file to the src/ folder in the original VASP folder and 
+the **src/solvation.F** file to the src/ folder in the original VASP folder and 
 follow the install instructions for the compilation of the original VASP.
 
 **For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:**
 
 - Apply the appropriate interface patch to the original VASP source code. There are 3 interface_patch files 
-available, one for each supported versions of VASP.
+available in the **patches** folder, one for each supported versions of VASP.
 ```   
     cd <VASP src directory>
     patch -p1 < <path to the interface patch file>
 ```
-- After applying the patch, copy solvation.F file to the VASP source directory:
+- After applying the patch, copy **src/solvation.F** file to the VASP source directory:
 - In the original VASP Makefile, put solvation.o object file name before pot.o in that order.
 - ``` make clean ```
 - ``` make ```
 
 Usage
 ======
-Please see USAGE.md and the Examples.
+Please see the file USAGE.md in the docs folder for instructions and the examples folder for some sample calculations.
 
 References
 ===========
