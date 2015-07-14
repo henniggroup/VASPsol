@@ -32,31 +32,35 @@ MODULE POT_K
 
  EXTERNAL initjdftx, getionsigma, minimizefluid
 
- PUBLIC :: VCORRECTION, SET_SOL_IO, SOL_INIT, SOL_WRITER
- PUBLIC :: LSOL, EIFOR_SOL
+ PUBLIC :: READ_FROM_INCAR, SOL_INIT, VCORRECTION
+  ! vaclevel
+#ifdef debugsol_pbz
+ PUBLIC :: GET_FERMISHIFT
+#endif
+  ! vaclevel
+
  PRIVATE :: SOL_READER, IONIC_CHARGE, GETRCORE
- PRIVATE :: Fcorrection, READ_FROM_INCAR
+ PRIVATE :: Fcorrection
 
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
 
- LOGICAL, SAVE :: LSOL = .FALSE.
- REAL(q), ALLOCATABLE, SAVE :: EIFOR_SOL(:,:)
+ LOGICAL, PRIVATE, SAVE :: LSOL = .FALSE.
  REAL(q), ALLOCATABLE, PRIVATE, SAVE :: sigma_rc_k(:), CORE_C(:)
  REAL(q), PRIVATE, SAVE :: sigma_nc_k,sigma_k,nc_k,eb_k
  REAL(q), PRIVATE, SAVE :: tau,EDIFFSOL
  REAL(q), PRIVATE, SAVE :: kappa2b_k, lambda_d_k
-
- LOGICAL, SAVE :: LNLSOL = .FALSE.
+ ! nonlinear
+ LOGICAL, PRIVATE, SAVE :: LNLSOL = .FALSE.
  REAL(q), PRIVATE, SAVE :: p0_k, einfty_k, Nsol_k, T_k
-
  INTEGER, PRIVATE, SAVE :: NION_COUNT_K
  REAL(q), ALLOCATABLE, PRIVATE, SAVE ::NION_K(:), ZION_K(:), RION_K(:)
+ ! io
+ LOGICAL, PRIVATE, SAVE :: LRHOB = .FALSE.
+ LOGICAL, PRIVATE, SAVE :: LRHOION = .FALSE.
+ TYPE (in_struct), PRIVATE, SAVE :: SP_IO
 
- TYPE (in_struct), PUBLIC, SAVE :: SP_IO
- LOGICAL, SAVE :: LRHOB = .FALSE.
-
- LOGICAL, SAVE :: LDEFAULTPCM = .FALSE.
- LOGICAL, SAVE :: LJDFTX = .FALSE.
+ LOGICAL, PRIVATE, SAVE :: LDEFAULTPCM = .FALSE.
+ LOGICAL, PRIVATE, SAVE :: LJDFTX = .FALSE.
 
  CONTAINS
  
@@ -67,8 +71,8 @@ MODULE POT_K
 !! returns Vcorr and Ecorr
 !!
 !!====================================================================
- SUBROUTINE VCORRECTION(SP_GRIDC,SP_P,SP_LATT_CUR,SP_T_INFO,WDES, &
-      & SP_CHTOT,Vcorr,Ecorr)
+ SUBROUTINE VCORRECTION(SP_GRIDC, SP_P, SP_LATT_CUR, SP_T_INFO, WDES, &
+      & SP_CHTOT, Vcorr, Ecorr, EIFOR_SOL)
 
   USE constant 
   USE poscar, ONLY : type_info 
@@ -97,6 +101,7 @@ MODULE POT_K
   COMPLEX(q),ALLOCATABLE :: Vdiel(:)
   COMPLEX(q),ALLOCATABLE :: PS_TOTN(:)
   REAL(q),INTENT(OUT) :: Ecorr
+  REAL(q) :: EIFOR_SOL(3, SP_T_INFO%NIONS)
   REAL(q) :: Ecorr3,Ecorr4,Ecorr5,eps_corr,Ecorr6,Ehart
   INTEGER :: I,J,K
   REAL(q)  :: dx,dy,dz,dv
@@ -108,12 +113,12 @@ MODULE POT_K
     ALLOCATE(PS_TOTN(SP_GRIDC%MPLWV))
     ALLOCATE(SP_N_ION(SP_GRIDC%MPLWV))
   
-    IF (PK_COUNTER == 1) ALLOCATE(EIFOR_SOL(3,SP_T_INFO%NIONS))
-
     Vdiel = 0._q
     Ecorr3 = 0._q
     Ecorr4 = 0._q
     Adiel = 0._q
+    EIFOR_SOL = 0._q
+
 #ifdef debugsol
     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Begin Solvation calculations'
     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'Setting up the charge densities'
@@ -284,7 +289,8 @@ MODULE POT_K
     CALLMPI( M_sum_s(SP_GRIDC%COMM,1,Ecorr4,0,0,0))
 
     !calculate force correction,flag=5(not used)
-    CALL Fcorrection(SP_GRIDC,SP_P,SP_T_INFO,SP_LATT_CUR,Vcorr,Vdiel)
+    CALL Fcorrection(SP_GRIDC, SP_P, SP_T_INFO, SP_LATT_CUR, &
+         & Vcorr, Vdiel, EIFOR_SOL)
     !CALL IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N,5,Vcorr,Vdiel)
 
     !-------------------------------------------------------------
@@ -334,7 +340,6 @@ END SUBROUTINE VCORRECTION
 !!
 !! evaluates the gaussian ionic charge(flag=1) and pseudo-core charge
 !!(flag=3)in k space
-!!also calculates force corrections(flag=5) in real space
 !!
 !!====================================================================
 SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
@@ -424,50 +429,8 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
              SP_N(SP_NG) = SP_N(SP_NG)+CORE_C(SP_NT)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2))
 
           ENDIF
-          !----------------------------------------------------------
-          !flag=5(not used), force correction due the gaussian ions 
-          !and chrge ball
-          !----------------------------------------------------------
-          IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
-             
-             SP_CEXPF=EXP(CITPI*(SP_G3+SP_G2+SP_G1))*SP_T_INFO%VCA(SP_NT)
-             SP_FOR_gion = (Vcorr(SP_NG))*imag_i*((SP_P(SP_NT)%ZVALF)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_nc_k**2)))
-             SP_FOR_cb = -(Vdiel(SP_NG))*imag_i*(CORE_C(SP_NT)*SP_CEXPF*EXP(-0.5_q*SP_GSQU*(sigma_rc_k(SP_NT)**2)))
-
-             SP_FOR1_gion = SP_FOR1_gion + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_gion
-             SP_FOR2_gion = SP_FOR2_gion + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_gion
-             SP_FOR3_gion = SP_FOR3_gion + SP_GRIDC%LPCTZ_(SP_N3)*SP_FOR_gion
-
-             SP_FOR1_cb = SP_FOR1_cb + SP_GRIDC%LPCTX_(SP_N1)*SP_FOR_cb
-             SP_FOR2_cb = SP_FOR2_cb + SP_GRIDC%LPCTY_(SP_N2)*SP_FOR_cb
-             SP_FOR3_cb = SP_FOR3_cb + SP_GRIDC%LPCTZ_(SP_N3)*SP_FOR_cb
-             
-          ENDIF
 
        ENDDO !end of loop over reciproc vectors
-
-       IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
-          CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR1_gion,1))
-          CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR2_gion,1))
-          CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR3_gion,1))
-          
-          CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR1_cb,1))
-          CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR2_cb,1))
-          CALLMPI( M_sum_d(SP_GRIDC%COMM, SP_FOR3_cb,1))
-
-          SP_FOR1_gion =  SP_FOR1_gion * TPI
-          SP_FOR2_gion =  SP_FOR2_gion * TPI
-          SP_FOR3_gion =  SP_FOR3_gion * TPI
-
-          SP_FOR1_cb =  SP_FOR1_cb * TPI
-          SP_FOR2_cb =  SP_FOR2_cb * TPI
-          SP_FOR3_cb =  SP_FOR3_cb * TPI
-
-          EIFOR_SOL(1,SP_NI) =  SP_FOR1_gion +  SP_FOR1_cb
-          EIFOR_SOL(2,SP_NI) =  SP_FOR2_gion +  SP_FOR2_cb
-          EIFOR_SOL(3,SP_NI) =  SP_FOR3_gion +  SP_FOR3_cb
-
-       ENDIF
 
     ENDDO ions
 
@@ -475,34 +438,24 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
 
  END DO type
 
- !-------------------------------------------------------------------
- !force corrections to real space
- !--------------------------------------------------------------------
- IF (PRESENT(Vcorr) .AND. PRESENT(Vdiel) ) THEN
-    !CALLMPI(M_sum_d(SP_GRIDC%COMM, EIFOR_SOL(1,1),SP_T_INFO%NIONS*3))
-    CALL  DIRKAR(SP_T_INFO%NIONS,EIFOR_SOL,SP_LATT_CUR%B)
-#ifdef debugsol
-    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)'FORCE CORRECTIONS'
-    IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(1X,3F12.8)')((EIFOR_SOL(I,J),I=1,3),J=1,SP_T_INFO%NIONS)
-#endif
-    !STOP
- ENDIF
-
  RETURN
 
  END SUBROUTINE IONIC_CHARGE
 
-
 !>==========================SUBROUTINE SOL_INIT======================
 !!
-!! set the numerical parameters(sigma_nc_k,sigma_rc_k,core_c)
+!! Initialize the module parameters
+!! the numerical parameters(sigma_nc_k, sigma_rc_k, core_c) are read 
+!! from INCAR if specified(for testing prpose)
 !! and initiaize the grid for jdftx(if LJDFTX flag is set in INCAR)
-!! called in potlok
 !! 
-!!===================================================================
- SUBROUTINE SOL_INIT(INFO,LATT_CUR,GRIDC,T_INFO,P)
+!!======================================================================
+ SUBROUTINE SOL_INIT(IO, EDIFF, INFO, LATT_CUR, GRIDC, T_INFO, P, &
+      & sigma_k_1, nc_k_1, eb_k_1, tau_1, lambda_d_k_1, kappa2b_k_1, &
+      & LNLSOL_1, p0_k_1, einfty_k_1, Nsol_k_1, T_k_1, &
+      & NION_COUNT_K_1, NION_K_1, ZION_K_1, RION_K_1, &
+      & EDIFFSOL_1, LRHOB_1, LRHOION_1)
 
-   USE constant
    USE poscar, ONLY : type_info 
    USE lattice, ONLY : latt, DIRKAR 
    USE mgrid, ONLY : grid_3d
@@ -515,22 +468,58 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
    TYPE (info_struct) :: INFO
    TYPE (latt),INTENT(IN) :: LATT_CUR
    TYPE(grid_3d),INTENT(IN) :: GRIDC
-   
-   REAL(q) :: sigma_gauss,RCS(T_INFO%NTYP)
-   
+   TYPE (in_struct),INTENT(IN) :: IO
+
+   REAL(q) :: EDIFF, EDIFFSOL_1
+   REAL(q) :: sigma_gauss, RCS(T_INFO%NTYP)
+   REAL(q) :: sigma_k_1, nc_k_1, eb_k_1, tau_1
+   REAL(q) :: lambda_d_k_1, kappa2b_k_1
+   ! nonlinear
+   LOGICAL :: LNLSOL_1
+   REAL(q) :: p0_k_1, einfty_k_1, Nsol_k_1, T_k_1
+   INTEGER :: NION_COUNT_K_1
+   REAL(q) :: NION_K_1(NION_COUNT_K_1), ZION_K_1(NION_COUNT_K_1)
+   REAL(q) :: RION_K_1(NION_COUNT_K_1) 
+   ! io
+   LOGICAL :: LRHOB_1, LRHOION_1
+
    INTEGER :: IDUM, N, IERR, K, I, II, ATOMIC_NUM
-   REAL(q) :: RDUM,delta_grd,sigma_rc_k0
+   REAL(q) :: RDUM,delta_grd,sigma_rc_k0(T_INFO%NTYP)
    COMPLEX(q) CDUM
    LOGICAL :: LOPEN,LDUM,LIONODE_FLAG,LFLUEX
    CHARACTER (1) CHARAC
    
    LIONODE_FLAG = .FALSE.
+ 
+   SP_IO = IO
+   LSOL = .TRUE. 
+
+   ! set the module params
+   sigma_k = sigma_k_1
+   nc_k = nc_k_1
+   eb_k = eb_k_1
+   tau = tau_1
+   lambda_d_k = lambda_d_k_1
+   kappa2b_k = kappa2b_k_1
+   ! nonlinear
+   LNLSOL = LNLSOL_1
+   p0_k = p0_k_1
+   einfty_k = einfty_k_1
+   Nsol_k = Nsol_k_1
+   T_k = T_k_1
+   NION_COUNT_K = NION_COUNT_K_1
+   NION_K = NION_K_1 
+   ZION_K = ZION_K_1
+   RION_K = RION_K_1
+   ! io
+   LRHOB = LRHOB_1
+   LRHOION = LRHOION_1
+   EDIFFSOL = EDIFFSOL_1
    
 #ifdef MPI
    IF (GRIDC%COMM%NODE_ME==GRIDC%COMM%IONODE) THEN
 #endif
       LIONODE_FLAG = .TRUE.
-   
 #ifdef MPI
    ENDIF
 #endif   
@@ -592,13 +581,13 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
       !---------------------------------------------------------------
       !sigma_nc_k
       !---------------------------------------------------------------
-      CALL READ_FROM_INCAR(LOPEN, 'SIGMA_NC_K', 'F', 1, IDUM, &
+      CALL READ_FROM_INCAR(SP_IO, LOPEN, 'SIGMA_NC_K', 'F', 1, IDUM, &
            & SIGMA_NC_K, CDUM, LDUM, 'the width of ionic gaussians (Angstrom)')
 
       !---------------------------------------------------------------
       !sigma_rc_k
       !---------------------------------------------------------------
-      CALL READ_FROM_INCAR(LOPEN, 'SIGMA_RC_K', 'F', T_INFO%NTYP, IDUM, &
+      CALL READ_FROM_INCAR(SP_IO, LOPEN, 'SIGMA_RC_K', 'F', T_INFO%NTYP, IDUM, &
           & RDUM, CDUM, LDUM, 'the width of pseudo-core gaussians (Angstrom)', &
           & sigma_rc_k)
       !   CALL READ_FROM_INCAR(LOPEN, 'SIGMA_RC_K', 'F', 1, IDUM, &
@@ -610,7 +599,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
       !---------------------------------------------------------------
       !CORE_C
       !---------------------------------------------------------------
-      CALL READ_FROM_INCAR(LOPEN, 'CORE_C', 'F', T_INFO%NTYP, IDUM, &
+      CALL READ_FROM_INCAR(SP_IO, LOPEN, 'CORE_C', 'F', T_INFO%NTYP, IDUM, &
           & RDUM, CDUM, LDUM, 'magnitude of pseudo-core charge (dimensionless)', &
           & CORE_C)
       !CALL READ_FROM_INCAR(LOPEN, 'CORE_C', 'F', 1, IDUM, &
@@ -620,7 +609,7 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
       !LJDFTX
       !---------------------------------------------------------------
 #ifdef jdftx   
-      CALL READ_FROM_INCAR(LOPEN, 'LJDFTX', 'L', 1, IDUM, &
+      CALL READ_FROM_INCAR(SP_IO, LOPEN, 'LJDFTX', 'L', 1, IDUM, &
            & RDUM, CDUM, LJDFTX, 'Use jdftx library')
       !check for flucar
 #ifdef debugsol
@@ -670,265 +659,12 @@ SUBROUTINE IONIC_CHARGE (SP_GRIDC,SP_LATT_CUR,SP_P,SP_T_INFO,SP_N, &
  END SUBROUTINE SOL_INIT
 
 
-!>==========================SUBROUTINE SET_SOL_IO====================
-!!
-!!gets the IO object and ediff from main, sets LSOL to .TRUE. 
-!!and initializes the solvent parameters(eb_k,nc_k,sigma_k,tau, by callingsol_reader)
-!!called from main.F(called only if INFO%LSOL is true)
-!!
-!!===================================================================
-SUBROUTINE SET_SOL_IO(IO,EDIFF)
-
-  IMPLICIT NONE
-
-  TYPE (in_struct),INTENT(IN) :: IO
-  REAL(q) :: EDIFF
-
-  SP_IO = IO
-  LSOL = .TRUE. 
-  EDIFFSOL = EDIFF/100._q
-
-  !default values
-  ! shape function parameters for linear solvation
-  ! linearpcm params, 
-  !if LNLSOL = .TRUE. then nc_k and tau will be reset
-  sigma_k = 0.6_q !!!determines the width of the interface
-  nc_k    = 0.0025_q !!!cut-off charge density,old value: 0.00473_q
-  tau     = 5.25E-4_q
-
-  !default values for the paramters that describe the solvent environment
-  ! water @ 25C
-  eb_k     = 78.4_q !80.0_q
-  p0_k     = 0.94/0.393430_q ! in Debye, 1 D = 0.393430 ea0
-  einfty_k = 1.78_q !1.33 * 1.33 ! square of water refractive index 
-  Nsol_k   = 55.35_q !@ 25C, 997.075/18.015 = 55.35!!!55.5 !mol/L, for water
-  T_k      = 298.15_q !!!25C, temperature in kelvin
-  !debye length, set to infinity
-  lambda_d_k = 1E100_q
-
-  !default ionic species parameters
-  ! default electrolyte: 1M NaF
-  !number of ionic species, used to 
-  !allocate space for the other ionic params
-  NION_COUNT_K = 2 
-
-  !ionic concentrations in mol/L
-  !default is no electrolyte
-  ALLOCATE(NION_K(NION_COUNT_K))
-  NION_K = 0._q
-
-  !charges on ionic species (dimensionless)
-  ALLOCATE(ZION_K(NION_COUNT_K))
-  ZION_K(1) = 0._q
-  ZION_K(2) = 0._q
-
-  !ionic radii (Angstrom)
-  !default set to some impossible value
-  ALLOCATE(RION_K(NION_COUNT_K))
-  RION_K(1) = 1000._q * AUTOA
-  RION_K(2) = 1000._q * AUTOA
-
-#ifdef debugsol
-  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,'(/A/)')'Reading in solvation model parameters from INCAR.&
-       & If not present, default values will be used'
-#endif
-
-  !read in the solvation parameters
-  CALL SOL_READER()
-
-  RETURN
-
-END SUBROUTINE SET_SOL_IO
-
-
-!>==========================SUBROUTINE SOL_READER=====================
-!!
-!!Reads in the linear pcm model parameters
-!!(eb_k,nc_k,sigma_k,tau,ediffsol))
-!!for the solvent from INCAR
-!!
-!!===================================================================
-SUBROUTINE SOL_READER()
-
-  USE constant
-  USE setexm
-  USE vaspxml
-  
-  IMPLICIT NONE
-  
-  INTEGER :: IDUM, N, IERR
-  REAL(q) :: RDUM
-  COMPLEX(q) CDUM
-  LOGICAL LOPEN,LDUM
-  CHARACTER (1) CHARAC
-  
-  LOPEN = .FALSE.
-      
-  OPEN(UNIT=SP_IO%IU5,FILE='INCAR',STATUS='OLD')      
-
-  !---------------------------------------------------------------
-  !LNLSOL
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'LNLSOL', 'L', 1, IDUM, &
-       & RDUM, CDUM, LNLSOL, 'switch for nonlinear solvation')
-
-  ! read the nonlinear solvation parameters
-  IF (LNLSOL) THEN
-     !reset the default solvation params, nc_k and tau
-     nc_k    = 0.00675_q 
-     tau     = 9.23E-4_q ! for water
-     !---------------------------------------------------------------
-     !P0_K
-     !---------------------------------------------------------------
-     CALL READ_FROM_INCAR(LOPEN, 'P0_K', 'F', 1, IDUM, &
-          & P0_K, CDUM, LDUM, 'dipole moment of the molecule (Debye)')
-
-     !---------------------------------------------------------------
-     !EINFTY_K
-     !---------------------------------------------------------------
-     CALL READ_FROM_INCAR(LOPEN, 'EINFTY_K', 'F', 1, IDUM, &
-          & EINFTY_K, CDUM, LDUM, '\epsilon_{\infty} (dimensionless)')
-
-     !---------------------------------------------------------------
-     !NSOL_K
-     !---------------------------------------------------------------
-     CALL READ_FROM_INCAR(LOPEN, 'NSOL_K', 'F', 1, IDUM, &
-          & NSOL_K, CDUM, LDUM, 'Solvent concentration (mol/L)')
-
-     !---------------------------------------------------------------
-     !T_K
-     !---------------------------------------------------------------
-     CALL READ_FROM_INCAR(LOPEN, 'T_K', 'F', 1, IDUM, &
-          & T_K, CDUM, LDUM, 'Temperature (in K)')
-
-     !---------------------------------------------------------------
-     !NION_COUNT_K
-     !---------------------------------------------------------------
-     CALL READ_FROM_INCAR(LOPEN, 'NION_COUNT_K', 'I', 1, NION_COUNT_K, &
-          & RDUM, CDUM, LDUM, 'Number of types of ionic species in the solvent')
-     IF (NION_COUNT_K > 2) THEN
-        IF (ALLOCATED(NION_K)) DEALLOCATE(NION_K)
-        IF (ALLOCATED(ZION_K)) DEALLOCATE(ZION_K)
-        IF (ALLOCATED(RION_K)) DEALLOCATE(RION_K)
-     ENDIF
-
-     !---------------------------------------------------------------
-     !NION_K
-     !---------------------------------------------------------------
-     IF (.NOT. ALLOCATED(NION_K)) ALLOCATE(NION_K(NION_COUNT_K))
-     CALL READ_FROM_INCAR(LOPEN, 'NION_K', 'F', NION_COUNT_K, IDUM, &
-          & RDUM, CDUM, LDUM, 'Ionic concentrations (mol/L)', NION_K)
-
-     !---------------------------------------------------------------
-     !ZION_K
-     !---------------------------------------------------------------
-     IF (.NOT. ALLOCATED(ZION_K)) ALLOCATE(ZION_K(NION_COUNT_K))
-     CALL READ_FROM_INCAR(LOPEN, 'ZION_K', 'F', NION_COUNT_K, IDUM, &
-          & RDUM, CDUM, LDUM, 'Charge on each ionic species (dimensionless)', ZION_K)
-
-     !---------------------------------------------------------------
-     !RION_K
-     !---------------------------------------------------------------
-     IF (.NOT. ALLOCATED(RION_K)) ALLOCATE(RION_K(NION_COUNT_K))
-     CALL READ_FROM_INCAR(LOPEN, 'RION_K', 'F', NION_COUNT_K, IDUM, &
-          & RDUM, CDUM, LDUM, 'Ionic radius of  each ionic species (Angstroms)', RION_K)
-  
-  ENDIF !!! end of if (lnlnsol)
-
-  !---------------------------------------------------------------
-  !sigma_k
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'SIGMA_K', 'F', 1, IDUM, &
-       & SIGMA_K, CDUM, LDUM, 'the width of dielectric cavity (dimensionless)')
-
-  !---------------------------------------------------------------
-  !nc_k
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'NC_K', 'F', 1, IDUM, &
-       & NC_K, CDUM, LDUM, 'cavity turn-on charge density (Angstrom^-3)')
-
-  !---------------------------------------------------------------
-  !eb_k
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'EB_K', 'F', 1, IDUM, &
-       & EB_K, CDUM, LDUM, 'relative permittivity of the bulk solvent (dimensionless)')
-
-  !---------------------------------------------------------------
-  !tau
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'TAU', 'F', 1, IDUM, &
-       & TAU, CDUM, LDUM, 'cavity surface tension (eV/Angstrom^2)')
-
-  !---------------------------------------------------------------
-  !EDIFFSOL
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'EDIFFSOL', 'F', 1, IDUM, &
-       & EDIFFSOL, CDUM, LDUM, 'solvation convergence tolerance')
-
-  !---------------------------------------------------------------
-  !LRHOB
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'LRHOB', 'L', 1, IDUM, &
-       & RDUM, CDUM, LRHOB, 'write the bound charge file')
-
-  !---------------------------------------------------------------
-  !LAMBDA_D_K
-  !---------------------------------------------------------------
-  CALL READ_FROM_INCAR(LOPEN, 'LAMBDA_D_K', 'F', 1, IDUM, &
-       & LAMBDA_D_K, CDUM, LDUM, 'Debye length (Angstroms)')
-
-  !kappa^2 from debye length
-  IF (LAMBDA_D_K > 1E30_q) THEN
-     KAPPA2B_K = 0._q
-  ELSE
-     KAPPA2B_K = 1._q / (LAMBDA_D_K ** 2) * AUTOA**2  ! in 1/a.u^2
-  ENDIF
-
-  ! override kappa^2 for nonlinear sol
-  ! in 1/a.u^2
-  IF (LNLSOL) KAPPA2B_K = 4._q * PI * SUM(NION_K * 6.022 * 1E-4_q * (AUTOA**3) * ZION_K * ZION_K) / (BOLKEV * T_k/(2 * RYTOEV))/ EB_K
-
-  RETURN
-
-END SUBROUTINE SOL_READER
-
-
-!>==========================SUBROUTINE SOL_WRITER=====================
-!!
-!!Writes the linear pcm model parameters(eb_k,nc_k,sigma_k,tau))
-!!for the solvent to outcar
-!!
-!!====================================================================
-SUBROUTINE SOL_WRITER()
-
- IMPLICIT NONE
- 
- IF (SP_IO%IU6>=0) THEN
-   WRITE(SP_IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, tau
- ENDIF
-
-100   FORMAT( &
-           ' Solvation parameters'/ &
-           '   LNLSOL   =',L10,  '    Nonlinear solvation (T or F)' /&
-           '   SIGMA_K  =',F10.6,  '  width of the dielectric cavity' /&
-           '   NC_K     =',F10.6,  '  cutoff charge density (Angstrom^-3)' /&
-           ' Parameters that describe the solvent environement'/ &
-           '   T_K      =',F10.6,  '  Temperature (K)' /&
-           '   Nsol_K   =',F10.6,  '  molarity (mol/L)' /&
-           '   EB_K     =',F10.6,  '  relative permittivity of the bulk solvent' /&
-           '   EINFTY_K =',F10.6,  '  relative permittivity(optical) of the bulk solvent' /&
-           '   P0_K     =',F10.6,  '  dipole moment of the independent dipole, computed from eb_k and einfty_k' /&
-           '   TAU      =',F10.6,  '  cavity surface tension (eV/Angstrom^2)' /)
-
-END SUBROUTINE SOL_WRITER 
-
-
 !>==========================SUBROUTINE Fcorrection====================
 !!
 !!Force Correction
 !!
 !!====================================================================
-SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
+SUBROUTINE Fcorrection(GRIDC, P, T_INFO, LATT_CUR, Vcorr, Vdiel, EIFOR_SOL)
 
  USE constant 
  USE poscar, ONLY : type_info 
@@ -947,6 +683,7 @@ SUBROUTINE Fcorrection(GRIDC,P,T_INFO,LATT_CUR,Vcorr,Vdiel)
  COMPLEX(q) Vdiel(GRIDC%RC%NP)
  INTEGER :: NIS,NT,NIADD,NI,N,N1,NC,N2,N3,NG,NGP,N1P,I,J
  REAL(q) ::G,GX,GY,GZ,G1,G2,G3,FOR1,FOR2,FOR3,FOR,FACTM
+ REAL(q) :: EIFOR_SOL(3,T_INFO%NIONS)
  COMPLEX(q) :: CE,CX,CEXPF
 
  ! work arrays
@@ -1132,7 +869,6 @@ SUBROUTINE GETRCORE(NTYP,RCS)
 
 END SUBROUTINE GETRCORE
 
-
 !>========================== SUBROUTINE READ_FROM_INCAR ===========
 !!
 !!
@@ -1162,13 +898,15 @@ END SUBROUTINE GETRCORE
 !                                                                     
 ! RDUM_ARRAY : reading in an array of real values, optional
 !!====================================================================
-SUBROUTINE READ_FROM_INCAR(LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM,&
+SUBROUTINE READ_FROM_INCAR(IO, LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM,&
      & RDUM, CDUM, LDUM, MSG, RDUM_ARRAY)
 
   USE prec
   USE mgrid
   
   IMPLICIT NONE
+
+  TYPE (in_struct) :: IO
 
   INTEGER :: IDUM, N, IERR, VAR_SIZE
   !INTEGER :: IDUM_ARRAY(VAR_SIZE)
@@ -1182,59 +920,123 @@ SUBROUTINE READ_FROM_INCAR(LOPEN, VAR_NAME, VAR_TYPE, VAR_SIZE, IDUM,&
   CHARACTER (*) MSG
 
   IF ((VAR_SIZE == 1) .AND. (.NOT. PRESENT(RDUM_ARRAY))) THEN
-     CALL RDATAB(LOPEN, 'INCAR', SP_IO%IU5, VAR_NAME, '=', '#', ';', VAR_TYPE, &
+     CALL RDATAB(LOPEN, 'INCAR', IO%IU5, VAR_NAME, '=', '#', ';', VAR_TYPE, &
           & IDUM, RDUM, CDUM, LDUM, CHARAC, N, VAR_SIZE, IERR)
   ELSE
-     CALL RDATAB(LOPEN, 'INCAR', SP_IO%IU5, VAR_NAME, '=', '#', ';', VAR_TYPE, &
+     CALL RDATAB(LOPEN, 'INCAR', IO%IU5, VAR_NAME, '=', '#', ';', VAR_TYPE, &
           & IDUM, RDUM_ARRAY, CDUM, LDUM, CHARAC, N, VAR_SIZE, IERR)
   ENDIF
 
 #ifdef debugsol      
   IF (IERR == 3 ) THEN      
-     IF (SP_IO%IU0>=0) THEN 
-        WRITE(SP_IO%IU0,*) VAR_NAME, ' not found in INCAR. Default value will be used'
-        WRITE(SP_IO%IU0,*) MSG
+     IF (IO%IU0>=0) THEN 
+        WRITE(IO%IU0,*) VAR_NAME, ' not found in INCAR. Default value will be used'
+        WRITE(IO%IU0,*) MSG
         IF (VAR_TYPE == 'I') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', IDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', IDUM
         ELSEIF (VAR_TYPE == 'C') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', CDUM
         ELSEIF (VAR_TYPE == 'L') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', LDUM
         ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE >= 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
         ELSEIF (VAR_TYPE == 'F') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', RDUM
         ENDIF
      ENDIF
   ELSE IF (IERR == 0 ) THEN
-     IF (SP_IO%IU0>=0) THEN
-        WRITE(SP_IO%IU0,*)'Found : ', VAR_NAME, ', ', MSG
+     IF (IO%IU0>=0) THEN
+        WRITE(IO%IU0,*)'Found : ', VAR_NAME, ', ', MSG
         IF (VAR_TYPE == 'I') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', IDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', IDUM
         ELSEIF (VAR_TYPE == 'C') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', CDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', CDUM
         ELSEIF (VAR_TYPE == 'L') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', LDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', LDUM
         ELSEIF ( (VAR_TYPE == 'F') .AND. (VAR_SIZE >= 1) .AND. PRESENT(RDUM_ARRAY) ) THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', RDUM_ARRAY
         ELSEIF (VAR_TYPE == 'F') THEN
-           WRITE(SP_IO%IU0,*) VAR_NAME, ' = ', RDUM
+           WRITE(IO%IU0,*) VAR_NAME, ' = ', RDUM
         ENDIF
      ENDIF
   ELSEIF ( IERR == 1 .OR. IERR == 2) THEN
-     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'Error reading INCAR'
+     IF (IO%IU0>=0) WRITE(IO%IU0,*) 'Error reading INCAR'
      STOP
   ENDIF
 #endif
 
   IF ((IERR/=0).AND.(IERR/=3)) THEN
-     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) 'Error reading ', VAR_NAME, 'from INCAR.'
-     IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*) ' Error code = ', IERR
+     IF (IO%IU0>=0) WRITE(IO%IU0,*) 'Error reading ', VAR_NAME, 'from INCAR.'
+     IF (IO%IU0>=0) WRITE(IO%IU0,*) ' Error code = ', IERR
      STOP
   ENDIF
 
 END SUBROUTINE READ_FROM_INCAR
 
+
+  SUBROUTINE GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
+
+   USE poscar, ONLY : type_info 
+   USE lattice, ONLY : latt, DIRKAR 
+   USE mgrid, ONLY : grid_3d
+   USE pseudo, ONLY : potcar
+   USE wave, ONLY : wavedes
+
+   IMPLICIT NONE
+
+   TYPE(type_info),INTENT(IN) :: T_INFO
+   TYPE (latt),INTENT(IN) :: LATT_CUR
+   TYPE (grid_3d) :: GRIDC
+   TYPE (wavedes) :: WDES
+   
+   INTEGER(q) :: MWORK1
+   COMPLEX(q) :: CWORK(GRIDC%MPLWV,WDES%NCDIJ)
+   COMPLEX(q) :: CHTOT(GRIDC%MPLWV, WDES%NCDIJ)
+
+   RGRID, ALLOCATABLE :: RWORK_CHG(:), RWORK_PSP(:)
+   COMPLEX(q), ALLOCATABLE::  CWORK_K(:)      
+   REAL(q) :: VACPOT_PSP, VACPOT
+
+   ALLOCATE(RWORK_CHG(DIMREAL(GRIDC%MPLWV)))
+   ALLOCATE(CWORK_K(GRIDC%MPLWV))
+   ALLOCATE(RWORK_PSP(DIMREAL(GRIDC%MPLWV)))
+
+   !CALL FFT3D(CWORK, GRIDC, 1)
+   !CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_PSP, GRIDC)
+   !!#ifdef debugsolwf                                              
+   !!IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PSP'       
+   !!CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP', RWORK_PSP)
+   !!#endif                                                         
+   !RWORK_PSP = RWORK_PSP !+ RWORK_HAR
+   !!copy CHTOT to CWORK_K                                          
+   !CALL RC_ADD(CHTOT, 1.0, CHTOT, 0.0, CWORK_K, GRIDC)
+   !to real space                                                  
+   !CALL FFT3D(CWORK_K, GRIDC, 1)
+   !CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, GRIDC)
+   ! CALL GET_VAC_LEVEL(GRIDC, RWORK_CHG, RWORK_PSP, VACPOT_PSP)
+   CALL GET_VAC_LEVEL(GRIDC, LATT_CUR, T_INFO, CWORK_K, CWORK,&
+        & VACPOT_PSP, 'POT_PSP')
+
+#ifdef debugsol
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
+#endif
+
+   VACPOT = VACPOT_POIS - VACPOT_PSP
+
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) ' FERMI_SHIFT = ', VACPOT
+
+#ifdef debugsolwf
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
+   CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RWORK_PSP)
+   !shift by vacpot                                                
+   RWORK_PSP = RWORK_PSP + VACPOT
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR (shifted by VACPOT)'
+   CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR_SHIFTED', RWORK_PSP)
+#endif
+
+   DEALLOCATE(RWORK_CHG, RWORK_PSP, CWORK_K)
+
+ END SUBROUTINE GET_FERMISHIFT
 
 END MODULE POT_K
 
