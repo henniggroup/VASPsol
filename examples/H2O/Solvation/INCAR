@@ -1,0 +1,10 @@
+SYSTEM = H2O
+PREC = Accurate
+ENCUT = 800
+ISMEAR = 0
+SIGMA = 0.01
+EDIFF = 1E-6
+NPAR = 4
+
+LSOL = .TRUE.
+EB_K = 80
