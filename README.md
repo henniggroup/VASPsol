@@ -37,6 +37,12 @@ available in the **VASPsol/patches** folder, one for each supported versions of 
 - ``` make clean ```
 - ``` make ```
 
+**Note:**
+
+The file **VASPsol/src/solvation.F** combines all the modules defined in the files in the folder 
+**VASPsol/src/modules** so as to conform with the new builtin interface for solvation in vasp(versions >= 5.4.1).
+The files in the **VASPsol/src/modules** folder do not play any role in the installation procedure.
+
 Usage
 ======
 Please see the file USAGE.md in the docs folder for instructions and the examples folder for some sample calculations.
