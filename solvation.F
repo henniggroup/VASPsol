@@ -302,7 +302,7 @@ ENDIF !!! end of lsol
     IF (.NOT.LSOL) RETURN
 
     IF (IO%IU6>=0) THEN
-       WRITE(IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, tau
+       WRITE(IO%IU6,100) LNLSOL, sigma_k, nc_k, T_k, Nsol_k, eb_k, einfty_k, p0_k, tau
     ENDIF
 
 100   FORMAT( &
