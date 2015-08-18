@@ -1,4 +1,4 @@
-!***********************************************************************
+!**********************************************************************
 ! Copyright 2013-2015
 ! Kiran Mathew and Richard Hennig
 !
@@ -16,9 +16,10 @@
 !
 ! You should have received a copy of the GNU General Public License
 ! along with VASPsol.  If not, see <http://www.gnu.org/licenses/>.
-!***********************************************************************
+!**********************************************************************
 
 #include "symbol.inc"
+
 
 MODULE POT_LPCM_K
 
@@ -1566,6 +1567,8 @@ SUBROUTINE WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, FNAME, CVTOT)
 
  DEALLOCATE(WORK)
 
+ do_io CLOSE(IU)
+
  RETURN
 
 END SUBROUTINE WRITE_TO_FILE
@@ -1746,8 +1749,6 @@ END SUBROUTINE COMPUTE_RHOION
 
 
 END MODULE POT_LPCM_K
-
-
 #define sol_io  IF (SP_IO%IU0>=0) WRITE(SP_IO%IU0,*)
 
 !>==========================MODULE POT_K===============================
@@ -1776,6 +1777,12 @@ MODULE POT_K
 #endif
 
  PUBLIC :: SOL_INIT, Vcorrection
+ ! vaclevel
+#ifdef debugsol_pbz
+  PUBLIC :: GET_FERMISHIFT
+#endif
+  ! vaclevel
+
  PRIVATE :: IONIC_CHARGE, GETRCORE, Fcorrection, JDFTX_INTERFACE
 
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
@@ -2042,6 +2049,10 @@ MODULE POT_K
 #endif
 
    ENDIF
+
+   CLOSE(SP_IO%IU5)
+
+   RETURN
 
  END SUBROUTINE SOL_INIT
 
@@ -2698,9 +2709,83 @@ SUBROUTINE JDFTX_INTERFACE(SP_GRIDC, SP_LATT_CUR, TOTN, PS_TOTN, &
 
 END SUBROUTINE JDFTX_INTERFACE
 
+! vaclevel
+#ifdef debugsol_pbz
+
+!  SUBROUTINE SET_RHAR(CWORK)
+!     RGRID, ALLOCATABLE :: RWORK_HAR(:)
+!    ALLOCATE(RWORK_HAR(DIMREAL(GRIDC%MPLWV)))
+!    CALL FFT3D(CWORK, GRIDC, 1)
+!    CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_HAR, GRIDC)
+!    DEALLOCATE(RWORK_HAR)
+!  END SUBROUTINE SET_RHAR
+
+  SUBROUTINE GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
+
+   USE poscar, ONLY : type_info 
+   USE lattice, ONLY : latt, DIRKAR 
+   USE mgrid, ONLY : grid_3d
+   USE pseudo, ONLY : potcar
+   USE wave, ONLY : wavedes
+
+   IMPLICIT NONE
+
+   TYPE(type_info),INTENT(IN) :: T_INFO
+   TYPE (latt),INTENT(IN) :: LATT_CUR
+   TYPE (grid_3d) :: GRIDC
+   TYPE (wavedes) :: WDES
+   
+   INTEGER(q) :: MWORK1
+   COMPLEX(q) :: CWORK(GRIDC%MPLWV,WDES%NCDIJ)
+   COMPLEX(q) :: CHTOT(GRIDC%MPLWV, WDES%NCDIJ)
+
+   RGRID, ALLOCATABLE :: RWORK_CHG(:), RWORK_PSP(:)
+   COMPLEX(q), ALLOCATABLE::  CWORK_K(:)      
+   REAL(q) :: VACPOT_PSP, VACPOT
+
+   ALLOCATE(RWORK_CHG(DIMREAL(GRIDC%MPLWV)))
+   ALLOCATE(CWORK_K(GRIDC%MPLWV))
+   ALLOCATE(RWORK_PSP(DIMREAL(GRIDC%MPLWV)))
+
+   CALL FFT3D(CWORK, GRIDC, 1)
+   CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_PSP, GRIDC)
+   !#ifdef debugsolwf                                              
+   !IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PSP'       
+   !CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP', RWORK_PSP)
+   !#endif                                                         
+   RWORK_PSP = RWORK_PSP !+ RWORK_HAR
+   !copy CHTOT to CWORK_K                                          
+   CALL RC_ADD(CHTOT, 1.0, CHTOT, 0.0, CWORK_K, GRIDC)
+
+   !to real space                                                  
+   CALL FFT3D(CWORK_K, GRIDC, 1)
+   CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, GRIDC)
+   CALL GET_VAC_LEVEL(GRIDC, RWORK_CHG, RWORK_PSP, VACPOT_PSP)
+
+#ifdef debugsol
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
+#endif
+
+   VACPOT = VACPOT_POIS - VACPOT_PSP
+
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) ' FERMI_SHIFT = ', VACPOT
+
+#ifdef debugsolwf
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
+   CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RWORK_PSP)
+   !shift by vacpot                                                
+   RWORK_PSP = RWORK_PSP + VACPOT
+   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR (shifted by VACPOT)'
+   CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR_SHIFTED', RWORK_PSP)
+#endif
+
+   DEALLOCATE(RWORK_CHG, RWORK_PSP, CWORK_K)
+
+ END SUBROUTINE GET_FERMISHIFT
+#endif
+! vaclevel
 
 END MODULE POT_K
-
 
 !******************** MODULE SOLVATION *********************************
 !
@@ -2713,13 +2798,18 @@ MODULE solvation
 
   USE prec
   USE base
-  USE POT_K
+  USE pot_k
 
   IMPLICIT NONE
 
   PRIVATE
 
   PUBLIC :: SOL_READER, SOL_WRITER, XML_WRITE_SOL, SOL_VCORRECTION
+  ! vaclevel
+#ifdef debugsol_pbz
+  PUBLIC :: GET_FERMISHIFT
+#endif
+  ! vaclevel
 
   LOGICAL, SAVE :: LSOL=.FALSE.
   LOGICAL, SAVE :: LRHOB=.FALSE.
@@ -2745,9 +2835,7 @@ MODULE solvation
   TYPE (in_struct), PRIVATE, SAVE :: IO_1
   REAL(q), PRIVATE, SAVE :: EDIFF_1
 
-
 CONTAINS
-
 
 !******************** SUBROUTINE SOL_READER ****************************
 !
@@ -2992,6 +3080,8 @@ CONTAINS
      STOP
   ENDIF
       
+  CLOSE(IO%IU5)
+
     RETURN
 
   END SUBROUTINE SOL_READER
@@ -3155,6 +3245,5 @@ CONTAINS
     RETURN
 
   END SUBROUTINE SOL_VCORRECTION
-  
 
 END MODULE solvation
