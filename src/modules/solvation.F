@@ -312,6 +312,8 @@ CONTAINS
      IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
      STOP
   ENDIF
+
+  CLOSE(IO%IU5)
       
     RETURN
 

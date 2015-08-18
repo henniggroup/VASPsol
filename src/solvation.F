@@ -1998,6 +1998,8 @@ MODULE POT_K
          IF (LIONODE_FLAG) WRITE(SP_IO%IU0,*)'Error reading INCAR'
          STOP
       ENDIF
+
+      CLOSE(SP_IO%IU5)
 #ifdef jdftx
       !check for flucar
 #ifdef debugsol
@@ -2991,6 +2993,8 @@ CONTAINS
      IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
      STOP
   ENDIF
+
+  CLOSE(IO%IU5)
       
     RETURN
 
