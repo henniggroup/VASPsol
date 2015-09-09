@@ -33,9 +33,9 @@ MODULE POT_LPCM_K
  USE pseudo, ONLY : potcar
 
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD, GET_VAC_LEVEL
- PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE
+ PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE, SimplePoisson
  PRIVATE :: CREATECAVITY, MINIMIZE, Leps, EPS_POT
- PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN, SimplePoisson
+ PRIVATE :: SHAPE_GRADN, NABLAN, LAPLN
  PRIVATE :: COMPUTE_RHOB, COMPUTE_RHOION
 
  INTEGER, PRIVATE, SAVE :: PK_counter = 1
@@ -263,7 +263,7 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
       & RWORK_PHI)
 #endif
  !chtot to real space
- CALL RC_ADD(SP_CHTOT, 1.0, SP_CHTOT, 0.0, CWORK_K, SP_GRIDC)
+ CALL RC_ADD(SP_CHTOT, 1.0_q, SP_CHTOT, 0.0_q, CWORK_K, SP_GRIDC)
  CALL FFT3D(CWORK_K, SP_GRIDC, 1) 
  CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, SP_GRIDC)
  CALL GET_VAC_LEVEL(SP_GRIDC, RWORK_CHG, RWORK_PHI, VACPOT_POIS)
@@ -1766,7 +1766,7 @@ MODULE POT_K
  USE prec
  USE base
  USE mpimy 
- USE pot_lpcm_k, ONLY : Vcorrection_lpcm, MY_D_PROD, SP_IO
+ USE pot_lpcm_k, ONLY : Vcorrection_lpcm, MY_D_PROD, SP_IO, SimplePoisson
  USE pot_lpcm_k, ONLY : GET_VAC_LEVEL, VACPOT_POIS, UNPACK_C2R
 #ifdef debugsolwf
  USE pot_lpcm_k, ONLY : WRITE_TO_FILE
@@ -2709,79 +2709,109 @@ SUBROUTINE JDFTX_INTERFACE(SP_GRIDC, SP_LATT_CUR, TOTN, PS_TOTN, &
 
 END SUBROUTINE JDFTX_INTERFACE
 
+
 ! vaclevel
 #ifdef debugsol_pbz
+!>==========================SUBROUTINE GET_FERMISHIFT=================
+!!
+!! compute the fermi shift
+!!
+!!=====================================================================
+SUBROUTINE GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CVPSP, CHTOT)
 
-!  SUBROUTINE SET_RHAR(CWORK)
-!     RGRID, ALLOCATABLE :: RWORK_HAR(:)
-!    ALLOCATE(RWORK_HAR(DIMREAL(GRIDC%MPLWV)))
-!    CALL FFT3D(CWORK, GRIDC, 1)
-!    CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_HAR, GRIDC)
-!    DEALLOCATE(RWORK_HAR)
-!  END SUBROUTINE SET_RHAR
+  USE poscar, ONLY : type_info 
+  USE lattice, ONLY : latt, DIRKAR 
+  USE mgrid, ONLY : grid_3d
+  USE pseudo, ONLY : potcar
+  USE wave, ONLY : wavedes
 
-  SUBROUTINE GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
+  IMPLICIT NONE
 
-   USE poscar, ONLY : type_info 
-   USE lattice, ONLY : latt, DIRKAR 
-   USE mgrid, ONLY : grid_3d
-   USE pseudo, ONLY : potcar
-   USE wave, ONLY : wavedes
-
-   IMPLICIT NONE
-
-   TYPE(type_info),INTENT(IN) :: T_INFO
-   TYPE (latt),INTENT(IN) :: LATT_CUR
-   TYPE (grid_3d) :: GRIDC
-   TYPE (wavedes) :: WDES
+  TYPE(type_info),INTENT(IN) :: T_INFO
+  TYPE (latt),INTENT(IN) :: LATT_CUR
+  TYPE (grid_3d) :: GRIDC
+  TYPE (wavedes) :: WDES
    
-   INTEGER(q) :: MWORK1
-   COMPLEX(q) :: CWORK(GRIDC%MPLWV,WDES%NCDIJ)
-   COMPLEX(q) :: CHTOT(GRIDC%MPLWV, WDES%NCDIJ)
+  INTEGER(q) :: I
+  COMPLEX(q) :: CVPSP(GRIDC%MPLWV,WDES%NCDIJ)
+  COMPLEX(q) :: CHTOT(GRIDC%MPLWV, WDES%NCDIJ)
 
-   RGRID, ALLOCATABLE :: RWORK_CHG(:), RWORK_PSP(:)
-   COMPLEX(q), ALLOCATABLE::  CWORK_K(:)      
-   REAL(q) :: VACPOT_PSP, VACPOT
+  RGRID, ALLOCATABLE :: RCHTOT(:), RV(:)
+  COMPLEX(q), ALLOCATABLE::  CWORK(:), CWORK_V(:), CVHAR(:), CV(:) 
+  REAL(q) :: VACPOT_PSP, VACPOT
 
-   ALLOCATE(RWORK_CHG(DIMREAL(GRIDC%MPLWV)))
-   ALLOCATE(CWORK_K(GRIDC%MPLWV))
-   ALLOCATE(RWORK_PSP(DIMREAL(GRIDC%MPLWV)))
+  INTEGER :: NODE_ME, IONODE
 
-   CALL FFT3D(CWORK, GRIDC, 1)
-   CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RWORK_PSP, GRIDC)
-   !#ifdef debugsolwf                                              
-   !IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'Writing PHI_PSP'       
-   !CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP', RWORK_PSP)
-   !#endif                                                         
-   RWORK_PSP = RWORK_PSP !+ RWORK_HAR
-   !copy CHTOT to CWORK_K                                          
-   CALL RC_ADD(CHTOT, 1.0, CHTOT, 0.0, CWORK_K, GRIDC)
+  ALLOCATE(CWORK(GRIDC%MPLWV), CWORK_V(GRIDC%MPLWV) )
+  ALLOCATE(CVHAR(GRIDC%MPLWV), CV(GRIDC%MPLWV))
+  ALLOCATE(RCHTOT(DIMREAL(GRIDC%MPLWV)), RV(DIMREAL(GRIDC%MPLWV)))
 
-   !to real space                                                  
-   CALL FFT3D(CWORK_K, GRIDC, 1)
-   CALL UNPACK_C2R(CWORK_K, 1.0_q, CWORK_K, 0.0_q, RWORK_CHG, GRIDC)
-   CALL GET_VAC_LEVEL(GRIDC, RWORK_CHG, RWORK_PSP, VACPOT_PSP)
+  CWORK = 0._q
+  CWORK_V = 0._q
+  CVHAR = 0._q
+  CV = 0._q
+  RV = 0._q
+  RCHTOT = 0._q
 
-#ifdef debugsol
-   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
-#endif
-
-   VACPOT = VACPOT_POIS - VACPOT_PSP
-
-   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) ' FERMI_SHIFT = ', VACPOT
-
+  !copy CHTOT to CWORK                                         
+  CALL RC_ADD(CHTOT, 1.0_q, CHTOT, 0.0_q, CWORK, GRIDC)
+  !hartree pot, CVHAR from CHTOT
+  CALL SimplePoisson(GRIDC, LATT_CUR, CWORK, CVHAR, 1)
+  !CVHAR --> real
+  CALL RC_ADD(CVHAR, 1.0_q, CVHAR, 0.0_q, CV, GRIDC)
+  CALL FFT3D(CV, GRIDC, 1)
+  CALL UNPACK_C2R(CV, 1.0_q, CV, 0.0_q, RV, GRIDC)
 #ifdef debugsolwf
-   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
-   CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RWORK_PSP)
-   !shift by vacpot                                                
-   RWORK_PSP = RWORK_PSP + VACPOT
-   IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR (shifted by VACPOT)'
-   CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR_SHIFTED', RWORK_PSP)
+  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_HAR'
+  CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_HAR', RV)
 #endif
 
-   DEALLOCATE(RWORK_CHG, RWORK_PSP, CWORK_K)
+  CV = 0._q
+  RV = 0._q
+  ! CVPSP --> real
+  CALL RC_ADD(CVPSP, 1.0_q, CVPSP, 0.0_q, CV, GRIDC)
+  CALL FFT3D(CV, GRIDC, 1)
+  CALL UNPACK_C2R(CV, 1.0_q, CV, 0.0_q, RV, GRIDC)
+#ifdef debugsolwf
+  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP'
+  CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP', RV)
+#endif
 
- END SUBROUTINE GET_FERMISHIFT
+  CV = 0._q
+  RV = 0._q
+  ! CVPSP + CVHAR --> real
+  CALL RC_ADD(CVPSP, 1.0_q, CVHAR, 1.0_q, CV, GRIDC)
+  CALL FFT3D(CV, GRIDC, 1)
+  CALL UNPACK_C2R(CV, 1.0_q, CV, 0.0_q, RV, GRIDC)
+#ifdef debugsolwf
+  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR'
+  CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR', RV)
+#endif
+
+  !charge density to real space, CWORK --> RCHTOT
+  CALL FFT3D(CWORK, GRIDC, 1)
+  CALL UNPACK_C2R(CWORK, 1.0_q, CWORK, 0.0_q, RCHTOT, GRIDC)
+
+  ! vacuum level
+  CALL GET_VAC_LEVEL(GRIDC, RCHTOT, RV, VACPOT_PSP)
+#ifdef debugsol
+  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'VACPOT_PSP = ', VACPOT_PSP
+#endif
+  VACPOT = VACPOT_POIS - VACPOT_PSP
+  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) ' FERMI_SHIFT = ', VACPOT
+!#ifdef debugsolwf
+!  !shift by vacpot                                                
+!  RV = RV + VACPOT
+!  IF (SP_IO%IU0>=0)  WRITE(SP_IO%IU0,*) 'Writing PHI_PSP_HAR (shifted by VACPOT)'
+!  CALL WRITE_TO_FILE(GRIDC, LATT_CUR, T_INFO, 'PHI_PSP_HAR_SHIFTED', RV)
+!#endif
+
+  DEALLOCATE(RCHTOT, RV)
+  DEALLOCATE(CWORK_V, CWORK, CVHAR, CV)
+
+  RETURN 
+
+END SUBROUTINE GET_FERMISHIFT
 #endif
 ! vaclevel
 
