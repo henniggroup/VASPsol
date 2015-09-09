@@ -304,7 +304,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
-+++ VASPsol/pot.F	2015-07-13 19:04:03.015322873 -0400
++++ VASPsol/pot.F	2015-09-09 14:14:28.973977015 -0400
 @@ -39,6 +39,9 @@
        USE meta
        USE Constrained_M_modular
@@ -315,23 +315,26 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
        IMPLICIT COMPLEX(q) (C)
        IMPLICIT REAL(q) (A-B,D-H,O-Z)
-@@ -309,6 +312,12 @@
+@@ -309,6 +312,14 @@
        DO I=1,GRIDC%RC%NP
           CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
        ENDDO
++
 +! solvation__
 +!-----------------------------------------------------------------------
 +! add the dielectric corrections to CVTOT and the energy
 +!-----------------------------------------------------------------------
 +      CALL SOL_Vcorrection(INFO,T_INFO,LATT_CUR,P,WDES,GRIDC,CHTOT,CVTOT)
 +! solvation__
++
  !-----------------------------------------------------------------------
  !  add local pseudopotential potential
  !-----------------------------------------------------------------------
-@@ -317,6 +326,13 @@
-       ELSE
-          CALL POTION_PARTICLE_MESH(GRIDC,P,LATT_CUR,T_INFO,CWORK,E%PSCENC,E%TEWEN)
-       ENDIF
+@@ -339,6 +350,15 @@
+          CVTOT(I,1)=CVTOT(I,1)+CWORK(I,1)
+       ENDDO
+       CALL POT_FLIP(CVTOT, GRIDC,WDES%NCDIJ )
++
 +! solvation__
 +! vaclevel
 +#ifdef debugsol_pbz
@@ -339,9 +342,10 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 +#endif
 +! vaclevel
 +! solvation__
- 
-       ELECTROSTATIC=0
-       NG=1
++
+ !=======================================================================
+ ! if overlap is used :
+ ! copy CVTOT to SV and set contribution of unbalanced lattice-vectors
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/subrot_scf.F VASPsol/subrot_scf.F
 --- vasp.5.3.5/subrot_scf.F	2014-06-12 15:16:17.000000000 -0400
 +++ VASPsol/subrot_scf.F	2015-07-13 15:22:59.129761407 -0400
