@@ -1,6 +1,6 @@
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/electron_all.F VASPsol/electron_all.F
 --- vasp.5.3.5/electron_all.F	2014-06-12 15:16:19.000000000 -0400
-+++ VASPsol/electron_all.F	2015-07-13 15:22:07.869817206 -0400
++++ VASPsol/electron_all.F	2015-09-09 15:01:12.284685730 -0400
 @@ -64,6 +64,9 @@
        USE hamil_high
        USE meta
@@ -31,7 +31,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
        io_begin
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/electron.F VASPsol/electron.F
 --- vasp.5.3.5/electron.F	2014-06-12 15:16:20.000000000 -0400
-+++ VASPsol/electron.F	2015-07-13 15:21:47.577839295 -0400
++++ VASPsol/electron.F	2015-09-09 15:01:12.284685730 -0400
 @@ -62,6 +62,9 @@
        USE pp_data
        USE gw_model
@@ -83,7 +83,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       &        '  energy without entropy =',F18.8, &
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/electron_lhf.F VASPsol/electron_lhf.F
 --- vasp.5.3.5/electron_lhf.F	2014-06-12 15:16:16.000000000 -0400
-+++ VASPsol/electron_lhf.F	2015-07-13 15:22:12.861811772 -0400
++++ VASPsol/electron_lhf.F	2015-09-09 15:01:12.284685730 -0400
 @@ -62,6 +62,9 @@
    USE hamil_high
    USE fock
@@ -105,7 +105,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       io_begin
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/electron_OEP.F VASPsol/electron_OEP.F
 --- vasp.5.3.5/electron_OEP.F	2014-06-12 15:16:19.000000000 -0400
-+++ VASPsol/electron_OEP.F	2015-07-13 15:22:01.449824194 -0400
++++ VASPsol/electron_OEP.F	2015-09-09 15:01:12.284685730 -0400
 @@ -69,6 +69,10 @@
    USE rmm_diis_lr
    USE gridq
@@ -128,7 +128,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
       DESUM(N)=TOTEN-TOTENL
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/elinear_response.F VASPsol/elinear_response.F
 --- vasp.5.3.5/elinear_response.F	2014-06-12 15:16:16.000000000 -0400
-+++ VASPsol/elinear_response.F	2015-07-13 15:22:17.305806934 -0400
++++ VASPsol/elinear_response.F	2015-09-09 15:01:12.284685730 -0400
 @@ -90,6 +90,10 @@
      USE hamil_high
      USE setexm
@@ -151,7 +151,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         IF (IO%IU0>=0) THEN
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/force.F VASPsol/force.F
 --- vasp.5.3.5/force.F	2014-06-12 15:16:18.000000000 -0400
-+++ VASPsol/force.F	2015-07-13 19:36:03.737232051 -0400
++++ VASPsol/force.F	2015-09-09 15:01:12.312685398 -0400
 @@ -1075,6 +1075,10 @@
      USE vdwforcefield
      USE fileio
@@ -206,7 +206,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
                   NORDER=0 ; IF (KPOINTS%ISMEAR>=0) NORDER=KPOINTS%ISMEAR
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/ilinear_response.F VASPsol/ilinear_response.F
 --- vasp.5.3.5/ilinear_response.F	2014-06-12 15:16:20.000000000 -0400
-+++ VASPsol/ilinear_response.F	2015-07-13 15:22:25.409798112 -0400
++++ VASPsol/ilinear_response.F	2015-09-09 15:01:12.324685256 -0400
 @@ -58,6 +58,10 @@
      USE kpoints_change
      USE hamil_high
@@ -229,7 +229,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
         IF (IO%IU0>=0) THEN
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/linear_response.F VASPsol/linear_response.F
 --- vasp.5.3.5/linear_response.F	2014-06-12 15:16:22.000000000 -0400
-+++ VASPsol/linear_response.F	2015-07-13 15:22:34.921787758 -0400
++++ VASPsol/linear_response.F	2015-09-09 15:01:12.328685208 -0400
 @@ -65,6 +65,10 @@
      USE meta
      USE mlwf, ONLY : WANNIER90
@@ -252,7 +252,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
            WRITE(IO%IU0,1000) I, TOTEN_, TOTEN_-TOTEN, DESUM, ICOUEV, RMS
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/main.F VASPsol/main.F
 --- vasp.5.3.5/main.F	2014-06-12 15:16:17.000000000 -0400
-+++ VASPsol/main.F	2015-07-13 19:35:55.181241365 -0400
++++ VASPsol/main.F	2015-09-09 15:01:12.336685113 -0400
 @@ -168,6 +168,9 @@
  
        USE lcao
@@ -304,7 +304,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/pot.F VASPsol/pot.F
 --- vasp.5.3.5/pot.F	2014-06-12 15:16:15.000000000 -0400
-+++ VASPsol/pot.F	2015-09-09 14:14:28.973977015 -0400
++++ VASPsol/pot.F	2015-09-13 20:48:50.216740414 -0400
 @@ -39,6 +39,9 @@
        USE meta
        USE Constrained_M_modular
@@ -338,7 +338,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
 +! solvation__
 +! vaclevel
 +#ifdef debugsol_pbz
-+      CALL GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
++      IF (LSOL) CALL GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
 +#endif
 +! vaclevel
 +! solvation__
@@ -348,7 +348,7 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  ! copy CVTOT to SV and set contribution of unbalanced lattice-vectors
 diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefile*' -x '.gi*' -x 'vasp_*' -x '*_k.F' -x .cproject -x .project -x .settings -x solvation.F vasp.5.3.5/subrot_scf.F VASPsol/subrot_scf.F
 --- vasp.5.3.5/subrot_scf.F	2014-06-12 15:16:17.000000000 -0400
-+++ VASPsol/subrot_scf.F	2015-07-13 15:22:59.129761407 -0400
++++ VASPsol/subrot_scf.F	2015-09-09 15:01:12.400684353 -0400
 @@ -63,6 +63,10 @@
        USE pawfock
        USE meta
@@ -369,3 +369,4 @@ diff -uN -x '*.f90' -x '*~' -x '*.o' -x '*.mod' -x '*.F.*' -x vasp -x '[mM]akefi
  
  !---- write total energy to OSZICAR file and stdout
        DESUM(N)=TOTEN-TOTENL
+Common subdirectories: vasp.5.3.5/SURF and VASPsol/SURF

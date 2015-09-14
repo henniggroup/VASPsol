@@ -2837,7 +2837,7 @@ MODULE solvation
   PUBLIC :: SOL_READER, SOL_WRITER, XML_WRITE_SOL, SOL_VCORRECTION
   ! vaclevel
 #ifdef debugsol_pbz
-  PUBLIC :: GET_FERMISHIFT
+  PUBLIC :: GET_FERMISHIFT, LSOL
 #endif
   ! vaclevel
 
@@ -2867,13 +2867,13 @@ MODULE solvation
 
 CONTAINS
 
-!******************** SUBROUTINE SOL_READER ****************************
+!******************** SUBROUTINE SOL_READER ***************************
 !
 !
 ! Reads in the solvation model parameters
 !
 !      
-!***********************************************************************
+!**********************************************************************
   SUBROUTINE SOL_READER(NIONS,EDIFF,IO)
 
     USE base
@@ -2904,9 +2904,9 @@ CONTAINS
    
     OPEN(UNIT=IO%IU5,FILE='INCAR',STATUS='OLD')      
 
-!-----------------------------------------------------------------
-! LSOL, solvation on/off
-!-----------------------------------------------------------------
+    !-----------------------------------------------------------------
+    ! LSOL, solvation on/off
+    !-----------------------------------------------------------------
     CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LSOL','=','#',';','L', &
          &            IDUM,RDUM,CDUM,LSOL,CHARAC,N,1,IERR)
     IF (((IERR/=0).AND.(IERR/=3)).OR. &
@@ -2919,9 +2919,9 @@ CONTAINS
 
     IF (LSOL) THEN
 
-!-----------------------------------------------------------------
-!sigma_k
-!-----------------------------------------------------------------
+       !---------------------------------------------------------------
+       !sigma_k
+       !--------------------------------------------------------------
        CALL RDATAB(LOPEN,'INCAR',IO%IU5,'SIGMA_K','=','#',';','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
        IF (IERR == 3 ) THEN
@@ -2942,9 +2942,9 @@ CONTAINS
        ENDIF
        CALL XML_INCAR('SIGMA_K','F',IDUM,sigma_k,CDUM,LDUM,CHARAC,N)
 
-!----------------------------------------------------------------------
-!nc_k
-!----------------------------------------------------------------------
+       !---------------------------------------------------------------
+       !nc_k
+       !---------------------------------------------------------------
        CALL RDATAB(LOPEN,'INCAR',IO%IU5,'NC_K','=','#',';','F',IDUM,nc_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
        IF (IERR == 3 ) THEN
@@ -2966,9 +2966,9 @@ CONTAINS
        ENDIF
        CALL XML_INCAR('NC_K','F',IDUM,nc_k,CDUM,LDUM,CHARAC,N)
 
-!-----------------------------------------------------------------------
-!eb_k
-!-----------------------------------------------------------------------
+       !---------------------------------------------------------------
+       !eb_k
+       !---------------------------------------------------------------
        CALL RDATAB(LOPEN,'INCAR',IO%IU5,'EB_K','=','#',';','F',IDUM,eb_k,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
        IF (IERR == 3 ) THEN
@@ -2990,9 +2990,9 @@ CONTAINS
        ENDIF
        CALL XML_INCAR('EB_K','F',IDUM,eb_k,CDUM,LDUM,CHARAC,N)
 
-!-----------------------------------------------------------------------
-!tau
-!-----------------------------------------------------------------------
+       !---------------------------------------------------------------
+       !tau
+       !---------------------------------------------------------------
        CALL RDATAB(LOPEN,'INCAR',IO%IU5,'TAU','=','#',';','F',IDUM,tau,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
        IF (IERR == 3 ) THEN
@@ -3014,108 +3014,108 @@ CONTAINS
        ENDIF
        CALL XML_INCAR('TAU','F',IDUM,tau,CDUM,LDUM,CHARAC,N)
 
-    ENDIF
+       !---------------------------------------------------------------
+       !lambda_d_k = debye screening length in angstrom : the user 
+       !input from INCAR.
+       !kappa2b_k = (1/debye screening length)^2 
+       ! if lambd_d_k not set in INCAR, kappa2b_k will be set to 
+       ! zero(default value)
+       !--------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LAMBDA_D_K','=','#',';','F',IDUM,lambda_d_k,CDUM,LDUM,CHARAC,N,1,IERR)
 
-  !-------------------------------------------------------------------
-  !lambda_d_k = debye screening length in angstrom : the user input from INCAR.
-  !kappa2b_k = (1/debye screening length)^2 
-  ! if lambd_d_k not set in INCAR, kappa2b_k will be set to zero(default value)
-  !--------------------------------------------------------------------
-  CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LAMBDA_D_K','=','#',';','F',IDUM,lambda_d_k,CDUM,LDUM,CHARAC,N,1,IERR)
-
-  IF (IERR == 3 ) THEN
+       IF (IERR == 3 ) THEN
 #ifdef debugsol      
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LAMBDA_D_K'', debye screening length not specified'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LAMBDA_D_K'', debye screening length not specified'
 
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k         
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k         
 #endif         
-  ELSE IF (IERR == 0 ) THEN
+       ELSE IF (IERR == 0 ) THEN
 #ifdef debugsol
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : lambda_d_k (debye screening length) = ', lambda_d_k
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : lambda_d_k (debye screening length) = ', lambda_d_k
      
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'lambda_d_k  = (debye screening length) = ', lambda_d_k
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'lambda_d_k  = (debye screening length) = ', lambda_d_k
 #endif
 
-     kappa2b_k = 1._q / (lambda_d_k ** 2)
+          kappa2b_k = 1._q / (lambda_d_k ** 2)
 
 #ifdef debugsol
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'kappa2b_k  = (1/ debye screening length^2) = ', kappa2b_k
 #endif         
-  ENDIF
+       ENDIF
 
-  IF ((IERR/=0).AND.(IERR/=3)) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LAMBDA_D_K''from INCAR.'
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
-     STOP
-  ENDIF
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LAMBDA_D_K''from INCAR.'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
 
-  !---------------------------------------------------------------
-  !EDIFFSOL
-  !---------------------------------------------------------------
-  CALL RDATAB(LOPEN,'INCAR',IO%IU5,'EDIFFSOL','=','#',';','F',IDUM,EDIFFSOL,CDUM,LDUM,CHARAC,N,1,IERR)
+       !---------------------------------------------------------------
+       !EDIFFSOL
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'EDIFFSOL','=','#',';','F',IDUM,EDIFFSOL,CDUM,LDUM,CHARAC,N,1,IERR)
 #ifdef debugsol
-  IF (IERR == 3 ) THEN
+       IF (IERR == 3 ) THEN
       
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'EDIFFSOL = ', EDIFFSOL          
-         
-  ELSE IF (IERR == 0 ) THEN
-      
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : EDIFFSOL = ', EDIFFSOL 
-         
-  ENDIF
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''EDIFFSOL'', solvation convergence tolerance, not specified, using the default(EDIFF/100)'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'EDIFFSOL = ', EDIFFSOL  
+       ELSE IF (IERR == 0 ) THEN
+          
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : EDIFFSOL = ', EDIFFSOL 
+          
+       ENDIF
 #endif
 
-  IF ((IERR/=0).AND.(IERR/=3)) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''EDIFFSOL''from INCAR.'
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
-     STOP
-  ENDIF
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''EDIFFSOL''from INCAR.'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
 
-  !---------------------------------------------------------------
-  !LRHOB
-  !---------------------------------------------------------------
-  CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LRHOB','=','#',';','L',IDUM, &
-       &  RDUM,CDUM, LRHOB, CHARAC,N,1,IERR)
+       !---------------------------------------------------------------
+       !LRHOB
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LRHOB','=','#',';','L',IDUM, &
+            &  RDUM,CDUM, LRHOB, CHARAC,N,1,IERR)
 #ifdef debugsol
-  IF (IERR == 3 ) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LRHOB'', write the bound charge density or not'
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'LRHOB = ', LRHOB                  
-  ELSE IF (IERR == 0 ) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : LRHOB = ', LRHOB
-  ENDIF
+       IF (IERR == 3 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LRHOB'', write the bound charge density or not'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'LRHOB = ', LRHOB                  
+       ELSE IF (IERR == 0 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : LRHOB = ', LRHOB
+       ENDIF
 #endif
-  IF ((IERR/=0).AND.(IERR/=3)) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LRHOB''from INCAR.'
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
-     STOP
-  ENDIF
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LRHOB''from INCAR.'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
 
-  !---------------------------------------------------------------
-  !LRHOION
-  !---------------------------------------------------------------
-  CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LRHOION','=','#',';','L',IDUM, &
-       &  RDUM,CDUM, LRHOION, CHARAC,N,1,IERR)
+       !---------------------------------------------------------------
+       !LRHOION
+       !---------------------------------------------------------------
+       CALL RDATAB(LOPEN,'INCAR',IO%IU5,'LRHOION','=','#',';','L',IDUM, &
+            &  RDUM,CDUM, LRHOION, CHARAC,N,1,IERR)
 #ifdef debugsol
-  IF (IERR == 3 ) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LRHOION'', write the ionic charge density or not'
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'LRHOION = ', LRHOION                 
-  ELSE IF (IERR == 0 ) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : LRHOION = ', LRHOION
-  ENDIF
+       IF (IERR == 3 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) '''LRHOION'', write the ionic charge density or not'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'LRHOION = ', LRHOION                 
+       ELSE IF (IERR == 0 ) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Found : LRHOION = ', LRHOION
+       ENDIF
 #endif
-  IF ((IERR/=0).AND.(IERR/=3)) THEN
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LRHOION''from INCAR.'
-     IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
-     STOP
-  ENDIF
+       IF ((IERR/=0).AND.(IERR/=3)) THEN
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) 'Error reading ''LRHOION''from INCAR.'
+          IF (IO_1%IU0>=0) WRITE(IO_1%IU0,*) ' Error code = ', IERR
+          STOP
+       ENDIF
+
+    ENDIF ! close lsol
       
-  CLOSE(IO%IU5)
+       CLOSE(IO%IU5)
 
     RETURN
 
   END SUBROUTINE SOL_READER
-
 
 
 !******************** SUBROUTINE SOL_WRITER ***************************
