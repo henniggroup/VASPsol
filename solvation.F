@@ -40,7 +40,7 @@ MODULE solvation
   PUBLIC :: SOL_READER, SOL_WRITER, XML_WRITE_SOL, SOL_VCORRECTION
   ! vaclevel
 #ifdef debugsol_pbz
-  PUBLIC :: GET_FERMISHIFT
+  PUBLIC :: GET_FERMISHIFT, LSOL
 #endif
   ! vaclevel
 
