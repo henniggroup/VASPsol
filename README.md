@@ -17,14 +17,17 @@ Compiler and library requirements are the same as that of VASP ([vasp wiki] (htt
 
 Installation
 =============
-**For VASP versions >= 5.4.1:**
+
+For VASP versions >= 5.4.1:
+----------------------------
 
 These versions of VASP support solvation calculations out of the box.
 The only thing that the user needs to do is to update the solvation routines by copying 
 the **VASPsol/src/solvation.F** file to the src/ folder in the original VASP folder, **vasp.5.4.X/src/** and 
 follow the install instructions for the compilation of the original VASP.
 
-**For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:**
+For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:
+----------------------------------------------
 
 **Note:**
 
