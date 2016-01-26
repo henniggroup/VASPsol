@@ -26,6 +26,15 @@ The only thing that the user needs to do is to update the solvation routines by 
 the **VASPsol/src/solvation.F** file to the src/ folder in the original VASP folder, **vasp.5.4.X/src/** and 
 follow the install instructions for the compilation of the original VASP.
 
+**Note:**
+
+*VASP.5.4.1 by default compiles all the three binaries: standard one(vasp_std), gamma version(vasp_gamma) and 
+the one for noncollinear calculations(vasp_ncl). Some users have reported in the past that the version 5.4.1 
+compilation fails after updating the solvation related files. This was due to the fact that the solvation 
+modules were written and tested using the real to complex FFTs(same as vasp_std and vasp_gamma) whereas 
+the non-collinear compilation uses complex to complex FFTs. The issue has been fixed and all three binaries 
+will compile fine without any errors.*
+
 For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:
 ----------------------------------------------
 
