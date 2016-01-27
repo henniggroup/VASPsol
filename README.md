@@ -42,7 +42,7 @@ For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:
 
 *VASP license prohibits us from distributing the patch files on a public platform like github.
 If you would like to use VASPsol with VASP versions 5.2.12, 5.3.3 or 5.3.5, please contact 
-Dr. Richard Hennig (rhennig[at]mse.ufl.edu) to obtain the required patch file.
+Dr. Richard Hennig (rhennig[at]mse.ufl.edu) or me (km468[at]cornell.edu) to obtain the required patch file.
 Sorry for the inconvenience*
 
 - Apply the appropriate interface patch to the original VASP source code. There are 3 interface_patch files 
@@ -77,7 +77,7 @@ License
 =========
 VASPSol is released under the terms of Apache version 2.0 license:
 
-*Copyright 2013-2015 Kiran Mathew and Richard Hennig
+Copyright 2013-2015 Kiran Mathew and Richard Hennig
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License.*
+limitations under the License.
 
 For discussions and feedback
 =============================
