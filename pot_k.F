@@ -44,10 +44,8 @@ MODULE POT_K
 
  PUBLIC :: SOL_INIT, Vcorrection
  ! vaclevel
-#ifdef debugsol_pbz
-  PUBLIC :: GET_FERMISHIFT
-#endif
-  ! vaclevel
+ PUBLIC :: GET_FERMISHIFT
+ ! vaclevel
 
  PRIVATE :: IONIC_CHARGE, GETRCORE, Fcorrection, JDFTX_INTERFACE
 
@@ -977,7 +975,6 @@ END SUBROUTINE JDFTX_INTERFACE
 
 
 ! vaclevel
-#ifdef debugsol_pbz
 !>==========================SUBROUTINE GET_FERMISHIFT=================
 !!
 !! compute the fermi shift
@@ -1078,7 +1075,6 @@ SUBROUTINE GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CVPSP, CHTOT)
   RETURN 
 
 END SUBROUTINE GET_FERMISHIFT
-#endif
 ! vaclevel
 
 END MODULE POT_K

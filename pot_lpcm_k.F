@@ -81,10 +81,8 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  REAL(q) :: tau1,ediffs
  REAL(q), INTENT(IN) :: sigma_rc_k1(SP_T_INFO%NTYP), CORE_C1(SP_T_INFO%NTYP)
  !vacuum level
-#ifdef debugsol_pbz
  RGRID,ALLOCATABLE :: RWORK_PHI(:), RWORK_CHG(:)
  COMPLEX(q),ALLOCATABLE :: CWORK_K(:)
-#endif
  !vacuum level
  RGRID,ALLOCATABLE :: RHOB(:), RHOION(:)
 
@@ -93,11 +91,9 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
  ALLOCATE(phi_tilda(SP_GRIDC%MPLWV), phi(SP_GRIDC%MPLWV))
  ALLOCATE(Vcav(SP_GRIDC%MPLWV), RWORK(DIMREAL(SP_GRIDC%MPLWV)))
  !vacuum level
-#ifdef debugsol_pbz
  ALLOCATE(RWORK_PHI(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(RWORK_CHG(DIMREAL(SP_GRIDC%MPLWV)))
  ALLOCATE(CWORK_K(SP_GRIDC%MPLWV))
-#endif
  !vacuum level
  ALLOCATE(RHOB(DIMREAL(SP_GRIDC%MPLWV)) )
  ALLOCATE(RHOION(DIMREAL(SP_GRIDC%MPLWV)) )
@@ -247,8 +243,6 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
       & SP_KAPPA2, PHI_TILDA, RHOION)
  
  !vacuum level
-#ifdef debugsol_pbz
-
  !phi to real space
  CALL FFT3D(phi, SP_GRIDC, 1) 
  CALL UNPACK_C2R(phi, 1.0_q, phi, 0.0_q, RWORK_PHI, SP_GRIDC)
@@ -265,19 +259,15 @@ SUBROUTINE Vcorrection_lpcm(SP_GRIDC, SP_LATT_CUR, SP_P, &
 #ifdef debugsol
  IF (SP_IO%IU0>=0)   WRITE(SP_IO%IU0,*) 'VACPOT_POIS = ', VACPOT_POIS
 #endif
-
-#endif
  !vacuum level
 
  PK_COUNTER = PK_COUNTER + 1
       
  DEALLOCATE(SP_d_eps, SP_kappa2, phi_tilda, phi, Vcav, RWORK)
  !vacuum level
-#ifdef debugsol_pbz
  DEALLOCATE(RWORK_PHI)
  DEALLOCATE(RWORK_CHG)
  DEALLOCATE(CWORK_K)
-#endif
  !vacuum level
  DEALLOCATE(RHOB, RHOION)
 
