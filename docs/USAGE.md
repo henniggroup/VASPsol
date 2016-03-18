@@ -27,3 +27,12 @@
   The file is named RHOB.
 
 - For examples, please see the Examples folder
+
+- Set LAMBDA_D_K(the debye length in Angstroms) parameter in the INCAR to use the linearized Poisson-Boltzmann model(electrolyte model)
+```
+	The constant, FERMI_SHIFT, printed out to the stdout needs to be added to 
+	the fermi level to get the alignment right(the sign of the shift becomes 
+	apparent once you plot the x-y averaged local potential  in the z direction. 
+	Without the shift the the electrostatic potential would not go to zero in 
+	the bulk of the electrolyte as expected from the poisson-boltzmann solution).
+```
