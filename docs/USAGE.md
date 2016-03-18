@@ -28,7 +28,7 @@
 
 - For examples, please see the Examples folder
 
-- Set LAMBDA_D_K(the debye length in Angstroms) parameter in the INCAR to use the linearized Poisson-Boltzmann model(electrolyte model)
+- Set LAMBDA_D_K(the debye length in Angstroms) parameter in the INCAR file to use the linearized Poisson-Boltzmann model(electrolyte model)
 ```
 	The constant, FERMI_SHIFT, printed out to the stdout needs to be added to 
 	the fermi level to get the alignment right(the sign of the shift becomes 
