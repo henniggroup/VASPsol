@@ -12,7 +12,7 @@
     This corresponds to the default case where the solvent is water with a 
     relative permittivity of 80. Note, The cavitation energy in the solvation 
     model requires a higher resolution than neeed for vacuum calculations. 
-    So pleae make sure that ENCUT is large enough and also set PREC=Accurate.
+    So please make sure that ENCUT is large enough and also set PREC=Accurate.
 ```
 
 - The relative permittivity of the solvent can be changed from the default value of 78.4 for water 
@@ -23,8 +23,17 @@
   increase the cutoff energy to converge the caviation energy because the grid must be fine enough 
   to resolve the cavity surface. 
 
-- Set LRHOB = .TRUE. if you would like to write out the bound charge density in the CHGCAR format.
-  The file is named RHOB.
+- Set LRHOB = .TRUE. if you would like to write out the bound charge density in the CHGCAR format. The file is named RHOB.
+```
+    Note: Inorder to keep the interface between the vaspsol and the rest 
+    of the vasp ecosystem simple, the RHOB fileio is done within the module. This 
+    means the RHOB file will be written in each scf iteration. This could slow down 
+    the calculations for bigger systems. So it is reccomended that you do the solvation 
+    calculations without this parameter and do another static calculation(starting from the converged WAVECAR)with RHOB=.TRUE. if 
+    you wish to visualize the bound charge. Sorry for the inconvenience. I will try 
+    to isolate the file io without creating too much of a mess in the rest of the 
+    VASP code.
+```
 
 - For examples, please see the Examples folder
 
