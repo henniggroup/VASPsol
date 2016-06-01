@@ -29,10 +29,11 @@
     of the vasp ecosystem simple, the RHOB fileio is done within the module. This 
     means the RHOB file will be written in each scf iteration. This could slow down 
     the calculations for bigger systems. So it is reccomended that you do the solvation 
-    calculations without this parameter and do another static calculation(starting from the converged WAVECAR)with RHOB=.TRUE. if 
-    you wish to visualize the bound charge. Sorry for the inconvenience. I will try 
-    to isolate the file io without creating too much of a mess in the rest of the 
-    VASP code.
+    calculations without this parameter and do another static calculation(starting 
+    from the converged WAVECAR)with RHOB=.TRUE. if 
+    you wish to visualize the bound charge. Sorry for the inconvenience. I will 
+    try to isolate the file io without creating too much of a mess in the rest of 
+    the VASP code.
 ```
 
 - For examples, please see the Examples folder
