@@ -1,0 +1,10 @@
+351a352,360
+> 
+> ! solvation__
+> ! vaclevel
+> #ifdef debugsol_pbz
+>       IF (LSOL) CALL GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
+> #endif
+> ! vaclevel
+> ! solvation__
+> 

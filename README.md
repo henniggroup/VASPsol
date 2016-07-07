@@ -18,23 +18,6 @@ Compiler and library requirements are the same as that of VASP ([vasp wiki] (htt
 Installation
 =============
 
-For VASP versions >= 5.4.1:
-----------------------------
-
-These versions of VASP support solvation calculations out of the box.
-The only thing that the user needs to do is to update the solvation routines by copying 
-the **VASPsol/src/solvation.F** file to the src/ folder in the original VASP folder, **vasp.5.4.X/src/** and 
-follow the install instructions for the compilation of the original VASP.
-
-**Note:**
-
-*VASP.5.4.1 by default compiles all the three binaries: standard one(vasp_std), gamma version(vasp_gamma) and 
-the one for noncollinear calculations(vasp_ncl). Some users have reported in the past that the version 5.4.1 
-compilation fails after updating the solvation related files. This was due to the fact that the solvation 
-modules were written and tested using the real to complex FFTs(same as vasp_std and vasp_gamma) whereas 
-the non-collinear compilation uses complex to complex FFTs. The issue has been fixed and all three binaries 
-will compile fine without any errors.*
-
 For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:
 ----------------------------------------------
 
@@ -61,6 +44,34 @@ available in the **VASPsol/patches** folder, one for each supported versions of 
 The file **VASPsol/src/solvation.F** combines all the modules defined in the files in the folder 
 **VASPsol/src/modules** so as to conform with the new builtin interface for solvation in vasp(versions >= 5.4.1).
 The files in the **VASPsol/src/modules** folder do not play any role in the installation procedure.
+
+
+For VASP versions >= 5.4.1:
+----------------------------
+
+These versions of VASP support solvation calculations out of the box.
+The only thing that the user needs to do is to update the solvation routines by copying 
+the **VASPsol/src/solvation.F** file to the src/ folder in the original VASP folder, **vasp.5.4.X/src/** and 
+follow the install instructions for the compilation of the original VASP.
+
+**Note on binaries:**
+
+*VASP.5.4.1 by default compiles all the three binaries: standard one(vasp_std), gamma version(vasp_gamma) and 
+the one for noncollinear calculations(vasp_ncl). Some users have reported in the past that the version 5.4.1 
+compilation fails after updating the solvation related files. This was due to the fact that the solvation 
+modules were written and tested using the real to complex FFTs(same as vasp_std and vasp_gamma) whereas 
+the non-collinear compilation uses complex to complex FFTs. The issue has been fixed and all three binaries 
+will compile fine without any errors.*
+
+**Note on running Poisson-Boltzmann solver with 5.4.1:**
+
+*To compute the FERMI_SHIFT as mentioned in the documentation in version 5.4.1, minor modification is required
+to the pot.F file. This can be done by applying the patch file pbz_patch_541 provided in the src/patches folder
+as follows.*
+```   
+    cd vasp.5.4.1
+    patch src/pot.F < <path to the pbz_patch_541 patch file>
+```
 
 Usage
 ======
