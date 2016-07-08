@@ -30,9 +30,7 @@ MODULE POT_K
 
  PUBLIC :: READ_FROM_INCAR, SOL_INIT, VCORRECTION
 ! vaclevel
-#ifdef debugsol_pbz
  PUBLIC :: GET_FERMISHIFT
-#endif
 ! vaclevel
 
  PRIVATE :: SOL_READER, IONIC_CHARGE, GETRCORE
@@ -974,7 +972,6 @@ END SUBROUTINE READ_FROM_INCAR
 
 
 ! vaclevel
-#ifdef debugsol_pbz
 !>==========================SUBROUTINE GET_FERMISHIFT=================
 !!
 !! compute the fermi shift
@@ -1037,7 +1034,6 @@ SUBROUTINE GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CVPSP, CHTOT)
   RETURN 
 
 END SUBROUTINE GET_FERMISHIFT
-#endif
 ! vaclevel
 
 END MODULE POT_K
