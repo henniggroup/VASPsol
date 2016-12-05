@@ -3135,8 +3135,8 @@ CONTAINS
              '   NC_K    =',F10.6,  '     cutoff charge density' /&
              '   TAU     =',F10.6,  '     cavity surface tension' /&
              '   LAMBDA_D_K    =',F10.6,  '     Debye length in Angstroms' /&
-             '   LRHOB     =',F10.6,  '     write boundcharge  density' /&
-             '   LRHOION     =',F10.6,  '     write ioniccharge density' /)
+             '   LRHOB     =',L6,  '     write boundcharge  density' /&
+             '   LRHOION     =',L6,  '     write ioniccharge density' /)
 
 
     RETURN
