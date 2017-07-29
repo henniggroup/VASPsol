@@ -27,6 +27,9 @@ MODULE POT_LPCM_K
  USE lattice, ONLY : latt, DIRKAR 
  USE mgrid, ONLY : grid_3d
  USE pseudo, ONLY : potcar
+#ifdef sol_compat
+ USE c2f_interface, ONLY : ERRFC
+#endif
 
  PUBLIC :: Vcorrection_lpcm, MY_D_PROD, GET_VAC_LEVEL
  PUBLIC :: PACK_R2C, UNPACK_C2R, WRITE_TO_FILE, SimplePoisson
@@ -308,8 +311,10 @@ SUBROUTINE CREATECAVITY(CE_GRIDC, CE_LATT_CUR, CE_P, CE_T_INFO, &
  REAL(q),ALLOCATABLE :: CE_term1(:) ! grad shape func wrt n
  ! REAL(q), ALLOCATABLE       :: RWORK(:)
  RGRID, ALLOCATABLE :: RWORK(:)
- !compimentary error function implemented in errf.F in vasp.5.lib
- REAL(q), EXTERNAL :: ERRFC 
+ ! compimentary error function implemented in errf.F in vasp.5.lib
+#ifndef sol_compat
+ REAL(q), EXTERNAL :: ERRFC
+#endif
  INTEGER(q)             :: I, J, NPC, NPR, RLNP, RCNP
  REAL(q)                :: Acav,CE_qs,dv,tmp,tmp1,tmp2
  !! test 7/8/14
