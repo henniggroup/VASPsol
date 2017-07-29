@@ -11,7 +11,7 @@ projector-augmented wave potential libraries.
 
 Prerequisites
 ===============
-[VASP](http://www.vasp.at/) versions 5.2.12 or 5.3.3 or 5.3.5 or 5.4.1.
+[VASP](http://www.vasp.at/) versions 5.2.12 or 5.3.3 or 5.3.5 or >=5.4.1.
 
 Compiler and library requirements are the same as that of VASP ([vasp wiki] (http://cms.mpi.univie.ac.at/wiki/index.php/Installing_VASP))
 
@@ -53,6 +53,12 @@ These versions of VASP support solvation calculations out of the box.
 The only thing that the user needs to do is to update the solvation routines by copying 
 the **VASPsol/src/solvation.F** file to the src/ folder in the original VASP folder, **vasp.5.4.X/src/** and 
 follow the install instructions for the compilation of the original VASP.
+
+**Note on versions >=5.4.4:**
+
+It seems like the complementary error function definition has been refactored a bit in the newer versions. Inorder 
+to ensure the solvation module's compatibility with the newer versions of vasp please add **-Dsol_compat** option 
+to the list of precompiler options(CPP_OPTIONS) in the makefile.
 
 **Note on binaries:**
 
