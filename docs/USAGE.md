@@ -39,6 +39,15 @@
 
 - Set LAMBDA_D_K (the Debye length in Angstroms) parameter in the INCAR file to use the linearized Poisson-Boltzmann model(electrolyte model)
 ```
-The VASP choice of the electrostatic reference potential sets the average potential in the simulation cell to zero, not the potential in the electrolyte region. To correct the reference electrostatic reference potential, the constant, FERMI_SHIFT, which is printed out to stdout, needs to be added to the Fermi level. The sign of the shift becomes apparent once you plot the x-y averaged local potential in the z-direction. Without the shift, the electrostatic potential would not go to zero in the bulk of the electrolyte as expected from the Poisson-Boltzmann solution.
-Furthermore, if you shift the electrostatic potential to align the potential in the electrolyte region to zero, or any other value, you also need to add a correction to the energy of your system. This correction is given by Q V, where  Q is the net charge of the simulation cell and V the shift in reference potential, e.g., V = FERMI_SHIFT. 
+The VASP choice of the electrostatic reference potential sets the average potential
+in the simulation cell to zero, not the potential in the electrolyte region. To correct
+the reference electrostatic reference potential, the constant, FERMI_SHIFT, which is
+printed out to stdout, needs to be added to the Fermi level. The sign of the shift
+becomes apparent once you plot the x-y averaged local potential in the z-direction.
+Without the shift, the electrostatic potential would not go to zero in the bulk of the
+electrolyte as expected from the Poisson-Boltzmann solution.
+Furthermore, if you shift the electrostatic potential to align the potential in the
+electrolyte region to zero, or any other value, you also need to add a correction to
+the energy of your system. This correction is given by Q V, where  Q is the net charge
+of the simulation cell and V the shift in reference potential, e.g., V = FERMI_SHIFT. 
 ```
