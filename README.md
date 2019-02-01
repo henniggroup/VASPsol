@@ -135,6 +135,7 @@ Implicit self-consistent description of electrolyte in plane-wave density-functi
 
 BibTex entry for the Github repository and the publication::
 
+```
    @misc{VASPsol,
      title        = {VASPsol: Implicit solvation and electrolyte model for density-functional theory},
      author       = {K. Mathew and V. S. Chaitanya Kolluru and R. G. Hennig},
@@ -157,4 +158,4 @@ BibTex entry for the Github repository and the publication::
      pages        = {183 - 190},
      doi          = {10.1016/j.commatsci.2016.05.020}
    }
-
+```
