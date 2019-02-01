@@ -120,7 +120,7 @@ Dr. Richard Hennig
 How to cite
 ===========
 
-DOI for the MPInterfaces Github repository:
+DOI for the VASPsol Github repository:
 
 [![DOI](https://zenodo.org/badge/23792558.svg)](https://doi.org/10.5281/zenodo.2555053)
 
