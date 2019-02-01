@@ -83,14 +83,6 @@ Usage
 ======
 Please see the file USAGE.md in the docs folder for instructions and the examples folder for some sample calculations.
 
-References
-===========
-If you use the VASPsol package in your research, please cite the following papers:
-
-Implicit solvation model for density-functional study of nanocrystal surfaces and reaction pathways.
- K. Mathew, R. Sundararaman, K. Letchworth-Weaver, T. A. Arias, and R. G. Hennig, J. Chem. Phys. 140, 084106 (2014), [doi:10.1063/1.4865107] (http://dx.doi.org/10.1063/1.4865107).
-
-Implicit self-consistent description of electrolyte in plane-wave density-functional theory. K. Mathew and R. G. Hennig, arXiv (2016), [arXiv:1601.03346] (http://arxiv.org/abs/1601.03346).
 
 License
 =========
@@ -123,3 +115,46 @@ Authors
 Kiran Mathew
 
 Dr. Richard Hennig
+
+
+How to cite
+===========
+
+DOI for the MPInterfaces Github repository:
+
+.. image:: https://zenodo.org/badge/23792558.svg
+   :target: https://doi.org/10.5281/zenodo.2555053
+
+
+If you use the VASPsol package in your research, please cite the following papers:
+
+Implicit solvation model for density-functional study of nanocrystal surfaces and reaction pathways.
+ K. Mathew, R. Sundararaman, K. Letchworth-Weaver, T. A. Arias, and R. G. Hennig, J. Chem. Phys. 140, 084106 (2014), [doi:10.1063/1.4865107] (http://dx.doi.org/10.1063/1.4865107).
+
+Implicit self-consistent description of electrolyte in plane-wave density-functional theory. K. Mathew and R. G. Hennig, arXiv (2016), [arXiv:1601.03346] (http://arxiv.org/abs/1601.03346).
+
+BibTex entry for the Github repository and the publication::
+
+   @misc{VASPsol,
+     title        = {VASPsol: Implicit solvation and electrolyte model for density-functional theory},
+     author       = {K. Mathew and V. S. Chaitanya Kolluru and R. G. Hennig},
+     year         = 2018,
+     publisher    = {GitHub},
+     journal      = {GitHub repository},
+     howpublished = {\url{https://github.com/henniggroup/MPInterfaces}},
+     url          = {https://github.com/henniggroup/MPInterfaces},
+     doi          = {10.5281/zenodo.2555053}
+   }
+   
+   @article{Mathew2016,
+     title        = {MPInterfaces: A Materials Project based Python tool for
+                     high-throughput computational screening of interfacial systems},
+     author       = {K. Mathew and A. K. Singh and J. J. Gabriel and K. Choudhary and
+                     S. B. Sinnott and A. V. Davydov and F. Tavazza and R. G. Hennig",
+     year         = 2016,
+     journal      = {Comp. Mater. Sci.},
+     volume       = 122,
+     pages        = {183 - 190},
+     doi          = {10.1016/j.commatsci.2016.05.020}
+   }
+
