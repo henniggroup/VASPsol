@@ -147,8 +147,10 @@ BibTex entry for the Github repository and the publication::
    }
    
    @article{VASPsol2014,
-     title        = {Implicit solvation model for density-functional study of nanocrystal surfaces and reaction pathways.},
-     author       = {K. Mathew and R. Sundararaman and K. Letchworth-Weaver and T. A. Arias and R. G. Hennig},
+     title        = {Implicit solvation model for density-functional study of nanocrystal surfaces
+                     and reaction pathways.},
+     author       = {K. Mathew and R. Sundararaman and K. Letchworth-Weaver and T. A. Arias
+                     and R. G. Hennig},
      year         = 2014,
      journal      = {J. Chem. Phys.},
      volume       = 140,
