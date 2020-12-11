@@ -128,14 +128,16 @@ DOI for the VASPsol Github repository:
 If you use the VASPsol package in your research, please cite the following papers:
 
 - Implicit solvation model for density-functional study of nanocrystal surfaces and reaction pathways.
- K. Mathew, R. Sundararaman, K. Letchworth-Weaver, T. A. Arias, and R. G. Hennig, J. Chem. Phys. 140, 084106 (2014), [doi:10.1063/1.4865107] (http://dx.doi.org/10.1063/1.4865107).
+ K. Mathew, R. Sundararaman, K. Letchworth-Weaver, T. A. Arias, and R. G. Hennig, J. Chem. Phys. 140, 084106 (2014), [doi:10.1063/1.4865107] (https://doi.org/10.1063/1.4865107).
 
-- Implicit self-consistent description of electrolyte in plane-wave density-functional theory. K. Mathew and R. G. Hennig, arXiv (2016), [arXiv:1601.03346] (http://arxiv.org/abs/1601.03346).
+- Implicit self-consistent electrolyte model in plane-wave density-functional theory.
+ K. Mathew, V. S. C. Kolluru, S. Mula, S. N. Steinmann, and R. G. Hennig, J. Chem. Phys. 151, 234101 (2019), [doi:10.1063/1.5132354]
+ (https://doi.org/10.1063/1.5132354).
 
-BibTex entry for the Github repository and the publication::
+BibTex entry for the Github repository and the publications::
 
 ```
-   @misc{VASPsol,
+   @misc{VASPsol-Software,
      title        = {VASPsol: Implicit solvation and electrolyte model for density-functional theory},
      author       = {K. Mathew and V. S. Chaitanya Kolluru and R. G. Hennig},
      year         = 2018,
@@ -146,7 +148,7 @@ BibTex entry for the Github repository and the publication::
      doi          = {10.5281/zenodo.2555053}
    }
    
-   @article{VASPsol2014,
+   @article{VASPsol2014-Dielectric,
      title        = {Implicit solvation model for density-functional study of nanocrystal surfaces
                      and reaction pathways.},
      author       = {K. Mathew and R. Sundararaman and K. Letchworth-Weaver and T. A. Arias and
@@ -156,5 +158,15 @@ BibTex entry for the Github repository and the publication::
      volume       = 140,
      pages        = {084106},
      doi          = {10.1063/1.4865107}
+   }
+   
+   @article{VASPsol2019-Electrolyte,
+     title        = {Implicit self-consistent electrolyte model in plane-wave density-functional theory.},
+     author       = {K. Mathew and V. S. C. Kolluru and S. Mula and S. N. Steinmann and R. G. Hennig},
+     year         = 2019,
+     journal      = {J. Chem. Phys.},
+     volume       = 151,
+     pages        = {234101},
+     doi          = {10.1063/1.5132354}
    }
 ```
