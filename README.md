@@ -78,6 +78,16 @@ as follows.*
     cd vasp.5.4.1
     patch src/pot.F < <path to the pbz_patch_541 patch file>
 ```
+For VASP6 versions >= 6.1.0:
+----------------------------
+For VASP versions > 6.1.0 there is currently a patch in /VASPsol/patches/VASPsol6.patch. This patch applies the
+FERMI_SHIFT patch to the pot.F as well as providing additional subroutines. This patch was developed by user 
+shk11 in Issue #43. 
+
+```   
+    cd vasp.6.1.0
+    patch -p0 < <path to the pbz_patch_610 patch file>
+```
 
 Usage
 ======
