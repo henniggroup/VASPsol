@@ -1,5 +1,17 @@
 [![vaspsol](docs/logo.jpeg)](http://vaspsol.mse.ufl.edu/)
 
+New VASPsol ++ 
+===============
+VASPsol is a community driven code implementing implicit solvents described by 
+ontinuum models. A new version VASPsol++, has been released.This page will be 
+maintained, however, all updates to VASPsol's code will now feature
+at this new repository : https://github.com/VASPsol/VASPsol/
+
+
+VAPSsol ++ Paper : https://pubs.aip.org/aip/jcp/article-abstract/159/23/234117/2930317/An-implicit-electrolyte-model-for-plane-wave?redirectedFrom=fulltext
+
+VASPsol (2014)
+===============
 We have implemented an implicit solvation model that describes the effect of 
 electrostatics, cavitation, and dispersion on the interaction between a solute 
 and solvent into the plane-wave DFT code VASP. Our implementation provides a 
