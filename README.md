@@ -3,7 +3,7 @@
 New VASPsol ++ 
 ===============
 VASPsol is a community driven code implementing implicit solvents described by 
-ontinuum models. A new version VASPsol++, has been released.This page will be 
+continuum models. A new version VASPsol++, has been released.This page will be 
 maintained, however, all updates to VASPsol's code will now feature
 at this new repository : https://github.com/VASPsol/VASPsol/
 
