@@ -1,0 +1,8 @@
+351a352,358
+> 
+> ! solvation__
+> ! vaclevel
+>       IF (LSOL) CALL GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
+> ! vaclevel
+> ! solvation__
+> 
