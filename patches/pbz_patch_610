@@ -1,0 +1,71 @@
+--- mpi.F_org	2020-01-28 14:26:25.000000000 +0100
++++ mpi.F	2020-09-30 17:24:30.885684000 +0200
+@@ -2023,6 +2023,30 @@
+       END
+ #endif
+ 
++! Subroutine for VASPsol - Added by D. Gaissmaier
++!----------------------------------------------------------------------
++!
++! Global sum function - required for VASPsol
++!
++!----------------------------------------------------------------------
++
++      SUBROUTINE M_sum_1(COMM, v1)
++      USE mpimy
++      IMPLICIT NONE
++
++      TYPE(communic) COMM
++      REAL(q) vec(1),v1
++
++      vec(1)=v1
++
++      CALL M_sumb_d(COMM, vec, 1)
++
++      v1=vec(1)
++
++      RETURN
++      END SUBROUTINE
++! End of VASPsol subroutine
++
+ !----------------------------------------------------------------------
+ !
+ ! to make live easier, a global sum for 2 scalars
+ 
+--- solvation.F_org	2019-02-21 15:56:46.000000000 +0100
++++ solvation.F	2020-09-30 17:19:41.821342000 +0200
+@@ -2203,7 +2203,7 @@
+ !test
+    CALL MY_D_PROD(Ecorr3, SP_CHTOT(1,1), Vcorr, SP_GRIDC)
+ !   CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr3,1))
+-   CALLMPI( M_sum_s(SP_GRIDC%COMM,1,Ecorr3,0,0,0))
++   CALLMPI( M_sum_1(SP_GRIDC%COMM,Ecorr3))
+ 
+ !-------------------------------------------------------------
+ !Ecorr4 = Vdiel*n, 
+@@ -2214,7 +2214,7 @@
+ !test
+    CALL MY_D_PROD(Ecorr4, SP_CHTOT(1,1), Vdiel, SP_GRIDC)
+ !   CALLMPI( M_sum_d(SP_GRIDC%COMM,Ecorr4,1))
+-   CALLMPI( M_sum_s(SP_GRIDC%COMM,1,Ecorr4,0,0,0))
++   CALLMPI( M_sum_1(SP_GRIDC%COMM,Ecorr4))
+ 
+ !-------------------------------------------------------------
+ !calculate force correction,flag=5(not used)
+--- pot.F	2020-06-19 11:10:27.000000000 +0200
++++ pot.F_mod	2020-10-15 18:01:03.868144000 +0200
+@@ -393,6 +393,13 @@
+       IF (LBEXTERNAL()) CALL BEXT_ADDV(CVTOT,GRIDC,SIZE(CVTOT,2))
+ ! bexternal__
+       CALL POT_FLIP(CVTOT, GRIDC,WDES%NCDIJ )
++
++! solvation__
++! vaclevel
++      IF (LSOL) CALL GET_FERMISHIFT(LATT_CUR, T_INFO, GRIDC, WDES, CWORK, CHTOT)
++! vaclevel
++! solvation__
++
+ !=======================================================================
+ ! if overlap is used :
+ ! copy CVTOT to SV and set contribution of unbalanced lattice-vectors
+
