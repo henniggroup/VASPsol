@@ -35,11 +35,6 @@ For VASP versions = 5.2.12 or 5.3.3 or 5.3.5:
 
 **Note:**
 
-*VASP license prohibits us from distributing the patch files on a public platform like github.
-If you would like to use VASPsol with VASP versions 5.2.12, 5.3.3 or 5.3.5, please contact 
-Dr. Richard Hennig (rhennig[at]mse.ufl.edu) or me (km468[at]cornell.edu) to obtain the required patch file.
-Sorry for the inconvenience*
-
 - Apply the appropriate interface patch to the original VASP source code. There are 3 interface_patch files 
 available in the **VASPsol/patches** folder, one for each supported versions of VASP.
 ```   
